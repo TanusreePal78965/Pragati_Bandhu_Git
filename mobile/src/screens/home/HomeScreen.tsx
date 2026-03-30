@@ -14,6 +14,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 export default function HomeScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -21,29 +22,15 @@ export default function HomeScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
+            <ScreenHeader 
+                title="Dashboard"
+                isMainTab={false}
+                onNotificationPress={() => {}}
+            />
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Header Section */}
-                <View style={styles.header}>
-                    <View style={styles.headerLeft}>
-                        <View style={styles.shopIconContainer}>
-                            <Ionicons name="storefront" size={24} color={colors.primary} />
-                        </View>
-                        <View style={styles.shopTextContainer}>
-                            <Text style={styles.shopName}>Pragati General Store</Text>
-                            <View style={styles.syncStatus}>
-                                <Ionicons name="cloud-done" size={14} color={colors.success} />
-                                <Text style={styles.syncText}>SYNCED</Text>
-                            </View>
-                        </View>
-                    </View>
-                    <TouchableOpacity style={styles.notificationButton}>
-                        <Ionicons name="notifications" size={26} color={colors.textSecondary} />
-                        <View style={styles.notificationDot} />
-                    </TouchableOpacity>
-                </View>
 
                 {/* Main Stats Section */}
                 <View style={styles.mainStatsContainer}>
@@ -166,11 +153,21 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#F8FAFC",
+        backgroundColor: colors.background,
+    },
+    titleSection: {
+        paddingHorizontal: spacing.md,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.sm,
+    },
+    titleText: {
+        fontSize: 28,
+        fontWeight: "700",
+        color: colors.text,
     },
     scrollContent: {
         paddingHorizontal: spacing.md,
-        paddingBottom: spacing.xxl,
+        paddingBottom: spacing.tabBarOffset,
     },
     header: {
         flexDirection: "row",

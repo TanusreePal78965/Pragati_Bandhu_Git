@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -10,7 +10,12 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 export default function ReportsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-            <ScreenHeader title="Business Reports" />
+            <StatusBar barStyle="dark-content" />
+            <ScreenHeader 
+                title="Business Reports"
+                isMainTab={false}
+                onNotificationPress={() => {}}
+            />
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
@@ -105,7 +110,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: spacing.md,
-        paddingBottom: spacing.xxl,
+        paddingBottom: spacing.tabBarOffset,
     },
     rangeSelector: {
         flexDirection: "row",

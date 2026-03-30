@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     ScrollView,
     Alert,
+    StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,7 @@ import ProductCard from "../../components/products/ProductCard";
 import UpdateStockModal from "../../components/products/UpdateStockModal";
 import UpdateCategoryModal from "../../components/products/UpdateCategoryModal";
 import { useNavigation } from "@react-navigation/native";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 const INITIAL_PRODUCTS = [
     {
@@ -96,6 +98,8 @@ const INITIAL_PRODUCTS = [
 
 const CATEGORIES = ["All", "Grocery", "Personal Care", "Dairy", "Household", "Bakery", "Beverages"];
 
+
+
 export default function ProductsScreen() {
     const navigation = useNavigation<any>();
     const [products, setProducts] = useState(INITIAL_PRODUCTS);
@@ -149,27 +153,12 @@ export default function ProductsScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-            {/* Top Navigation Mock */}
-            <View style={styles.navBar}>
-                <View style={styles.navLeft}>
-                    <View style={styles.shopIcon}>
-                        <Ionicons name="storefront" size={20} color="#fff" />
-                    </View>
-                    <Text style={styles.navTitle}>Pragati Bandhu</Text>
-                </View>
-                <View style={styles.navRight}>
-                    <TouchableOpacity style={styles.navIconButton}>
-                        <Ionicons name="notifications-outline" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>JD</Text>
-                    </View>
-                </View>
-            </View>
-
-            <View style={styles.header}>
-                <Text style={styles.title}>Product Management</Text>
-            </View>
+            <StatusBar barStyle="dark-content" />
+            <ScreenHeader 
+                title="Inventory"
+                isMainTab={false}
+                onNotificationPress={() => {}}
+            />
 
             <View style={styles.searchContainer}>
                 <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
@@ -316,62 +305,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    navBar: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-    },
-    navLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    shopIcon: {
-        width: 36,
-        height: 36,
-        backgroundColor: colors.primary,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    navTitle: {
-        fontSize: 18,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    navRight: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 16,
-    },
-    navIconButton: {
-        padding: 4,
-    },
-    avatar: {
-        width: 36,
-        height: 36,
-        backgroundColor: "#dbeafe",
-        borderRadius: 18,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    avatarText: {
-        color: colors.primary,
-        fontWeight: "700",
-        fontSize: 14,
-    },
-    header: {
-        paddingHorizontal: spacing.md,
-        paddingTop: spacing.md,
-        marginBottom: spacing.md,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: "700",
-        color: colors.text,
-    },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
@@ -449,7 +382,7 @@ const styles = StyleSheet.create({
         color: colors.primary,
     },
     listContent: {
-        paddingBottom: 100,
+        paddingBottom: spacing.tabBarOffset,
     },
     emptyContainer: {
         alignItems: "center",
@@ -464,7 +397,7 @@ const styles = StyleSheet.create({
     fab: {
         position: "absolute",
         right: spacing.md,
-        bottom: spacing.xl,
+        bottom: spacing.tabBarOffset + spacing.md,
         width: 64,
         height: 64,
         borderRadius: 32,
@@ -479,7 +412,7 @@ const styles = StyleSheet.create({
     },
     selectionOverlay: {
         position: "absolute",
-        bottom: spacing.md,
+        bottom: spacing.tabBarOffset + spacing.md,
         left: spacing.md,
         right: spacing.md,
         backgroundColor: "#111827",

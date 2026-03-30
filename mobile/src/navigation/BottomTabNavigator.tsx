@@ -54,6 +54,8 @@ export default function BottomTabNavigator() {
                     shadowRadius: 10,
                     // Elevation for Android
                     elevation: 8,
+                    // Ensure transparency for the floating effect
+                    borderTopColor: 'transparent',
                 },
                 tabBarItemStyle: {
                     height: 56,

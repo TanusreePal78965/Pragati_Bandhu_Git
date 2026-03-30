@@ -5,5 +5,6 @@ export const spacing = {
     lg: 24,
     xl: 32,
     xxl: 40,
+    tabBarOffset: 100, // Enough to clear the floating bottom tab bar
     roundness: 8, // Stitch ROUND_EIGHT
 };

@@ -14,6 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 const SectionHeader = ({ title }: { title: string }) => (
     <View style={styles.sectionHeader}>
@@ -83,15 +84,14 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
             
-            {/* Custom Header to match other screen styles */}
-            <View style={styles.header}>
-                <TouchableOpacity 
-                    onPress={() => navigation.goBack()}
-                    style={styles.backButton}
-                >
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.title}>Settings</Text>
+            <ScreenHeader 
+                isMainTab={true} 
+                shopName="Pragati Bandhu"
+                showSyncBadge={true}
+                onNotificationPress={() => {}}
+            />
+            <View style={styles.titleSection}>
+                <Text style={styles.titleText}>Settings</Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -192,7 +192,7 @@ export default function SettingsScreen() {
                     <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
 
-                <View style={{ height: 40 }} />
+                <View style={{ height: spacing.tabBarOffset }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -203,20 +203,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
+    titleSection: {
         paddingHorizontal: spacing.md,
         paddingTop: spacing.md,
         paddingBottom: spacing.sm,
     },
-    backButton: {
-        padding: spacing.xs,
-        marginRight: spacing.sm,
-        marginLeft: -spacing.xs,
-    },
-    title: {
-        fontSize: typography.sizes.xxl,
+    titleText: {
+        fontSize: 28,
         fontWeight: "700",
         color: colors.text,
     },

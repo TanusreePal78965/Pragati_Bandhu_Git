@@ -15,6 +15,7 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { useNavigation } from "@react-navigation/native";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 const CATEGORIES = ["Grocery", "Dairy", "Beverages", "Snacks", "Personal Care", "Household"];
 const BRANDS = ["Aashirvaad", "Amul", "Dove", "Britannia"];
@@ -29,18 +30,6 @@ export default function AddProductScreen() {
     const [purchasePrice, setPurchasePrice] = useState("");
     const [sellingPrice, setSellingPrice] = useState("");
     const [initialStock, setInitialStock] = useState("");
-
-    const renderHeader = () => (
-        <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.primary} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Add New Product</Text>
-            <View style={styles.brandBadge}>
-                <Text style={styles.brandBadgeText}>PRAGATI BANDHU</Text>
-            </View>
-        </View>
-    );
 
     const renderChipSelector = (
         title: string,
@@ -68,7 +57,10 @@ export default function AddProductScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-            {renderHeader()}
+            <ScreenHeader 
+                title="Add New Product"
+                showBack={true}
+            />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
@@ -172,36 +164,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: "#f9fafb",
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
-        backgroundColor: "#fff",
-        borderBottomWidth: 1,
-        borderBottomColor: "#f3f4f6",
-    },
-    backButton: {
-        padding: 8,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: "700",
-        color: colors.text,
-        marginLeft: 8,
-        flex: 1,
-    },
-    brandBadge: {
-        backgroundColor: "#eef2ff",
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    brandBadgeText: {
-        color: colors.primary,
-        fontSize: 10,
-        fontWeight: "700",
     },
     scroll: {
         padding: spacing.md,

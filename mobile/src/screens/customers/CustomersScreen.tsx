@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 const MOCK_CUSTOMERS = [
     { id: "1", name: "Rahul Sharma", initial: "RS", balance: "₹ 1,250.00", lastTrans: "2 hours ago", initialColor: "#DBEAFE", phone: "9876543210" },
@@ -33,14 +34,11 @@ export default function CustomersScreen() {
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
             
-            {/* Header Area */}
-            <View style={styles.header}>
-                <Text style={styles.title}>Customers</Text>
-                <View style={styles.syncedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                    <Text style={styles.syncedText}>SYNCED</Text>
-                </View>
-            </View>
+            <ScreenHeader 
+                title="Customers"
+                isMainTab={false}
+                onNotificationPress={() => {}}
+            />
 
             {/* Search Box */}
             <View style={styles.searchBar}>
@@ -119,19 +117,7 @@ export default function CustomersScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#FFFFFF",
-    },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingHorizontal: spacing.md,
-        paddingTop: spacing.md,
-    },
-    title: {
-        fontSize: typography.sizes.xxl,
-        fontWeight: "700",
-        color: colors.text,
+        backgroundColor: colors.background,
     },
     syncedBadge: {
         flexDirection: "row",
@@ -247,7 +233,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingHorizontal: spacing.md,
-        paddingBottom: 100,
+        paddingBottom: spacing.tabBarOffset,
     },
     listItem: {
         flexDirection: "row",
@@ -312,7 +298,7 @@ const styles = StyleSheet.create({
     fab: {
         position: "absolute",
         right: 20,
-        bottom: Platform.OS === 'ios' ? 110 : 90,
+        bottom: spacing.tabBarOffset + spacing.md,
         width: 60,
         height: 60,
         borderRadius: 30,
