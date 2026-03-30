@@ -6,7 +6,6 @@ import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
 
 import HomeScreen from "../screens/home/HomeScreen";
-import NewBillScreen from "../screens/billing/NewBillScreen"; // Or Add Screen
 import ProductsScreen from "../screens/products/ProductsScreen";
 import CustomersScreen from "../screens/customers/CustomersScreen";
 import ReportsScreen from "../screens/reports/ReportsScreen";
@@ -30,74 +29,109 @@ export default function BottomTabNavigator() {
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.tabInactive,
                 tabBarLabelStyle: {
-                    fontSize: 10,
-                    fontWeight: "700",
-                    marginBottom: Platform.OS === 'ios' ? 0 : 6,
-                    textTransform: "uppercase"
+                    fontSize: 11,
+                    fontWeight: "600",
+                    marginBottom: Platform.OS === 'ios' ? 0 : 4,
                 },
                 tabBarStyle: {
-                    height: Platform.OS === 'ios' ? 88 : 64,
+                    position: 'absolute',
+                    bottom: Platform.OS === 'ios' ? 34 : 20,
+                    left: 20,
+                    right: 20,
+                    height: 64,
                     backgroundColor: colors.surface,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
+                    borderRadius: 20,
+                    borderTopWidth: 0,
                     paddingTop: 8,
+                    paddingBottom: 8,
+                    // Shadow for iOS
+                    shadowColor: "#000",
+                    shadowOffset: {
+                        width: 0,
+                        height: 5,
+                    },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 10,
+                    // Elevation for Android
+                    elevation: 8,
+                },
+                tabBarItemStyle: {
+                    height: 56,
                 },
                 tabBarIcon: ({ focused, color }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
 
                     switch (route.name) {
                         case "Home":
-                            iconName = focused ? "home" : "home-outline";
+                            iconName = focused ? "grid" : "grid-outline";
                             break;
                         case "Inventory":
-                            iconName = focused ? "archive" : "archive-outline";
+                            iconName = focused ? "cube" : "cube-outline";
                             break;
                         case "Customers":
-                            iconName = focused ? "people" : "people-outline";
+                            iconName = focused ? "people-circle" : "people-circle-outline";
                             break;
                         case "Reports":
                             iconName = focused ? "stats-chart" : "stats-chart-outline";
                             break;
                         case "Settings":
-                            iconName = focused ? "settings" : "settings-outline";
+                            iconName = focused ? "options" : "options-outline";
                             break;
                         default:
                             iconName = "ellipse";
                     }
 
-                    return <Ionicons name={iconName} size={22} color={color} />;
+                    return (
+                        <View style={[
+                            styles.iconContainer,
+                            focused && styles.activeIconContainer
+                        ]}>
+                            <Ionicons name={iconName} size={focused ? 24 : 22} color={color} />
+                        </View>
+                    );
                 },
             })}
         >
             <Tab.Screen
                 name="Home"
                 component={HomeScreen}
-                options={{ tabBarLabel: "HOME" }}
+                options={{ tabBarLabel: "Home" }}
             />
             <Tab.Screen
                 name="Inventory"
                 component={ProductsScreen}
-                options={{ tabBarLabel: "INVENTORY" }}
+                options={{ tabBarLabel: "Inventory" }}
             />
             <Tab.Screen
                 name="Customers"
                 component={CustomersScreen}
-                options={{ tabBarLabel: "CUSTOMERS" }}
+                options={{ tabBarLabel: "Customers" }}
             />
             <Tab.Screen
                 name="Reports"
                 component={ReportsScreen}
-                options={{ tabBarLabel: "REPORTS" }}
+                options={{ tabBarLabel: "Reports" }}
             />
             <Tab.Screen
                 name="Settings"
                 component={SettingsScreen}
-                options={{ tabBarLabel: "SETTINGS" }}
+                options={{ tabBarLabel: "Settings" }}
             />
         </Tab.Navigator>
     );
 }
 
 const styles = StyleSheet.create({
-    // Keep this for later if needed for FAB implementation
+    iconContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+    },
+    activeIconContainer: {
+        // Option to add a background pill or something for the focused icon
+        // Currently just making it pop a bit more via icon size and weight
+    },
 });
+

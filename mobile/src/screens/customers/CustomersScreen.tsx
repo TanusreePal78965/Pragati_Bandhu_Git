@@ -11,19 +11,22 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 
 const MOCK_CUSTOMERS = [
-    { id: "1", name: "Rahul Sharma", initial: "RS", balance: "₹ 1,250.00", lastTrans: "2 hours ago", initialColor: "#DBEAFE" },
-    { id: "2", name: "Amit Kumar", initial: "AK", balance: "₹ 500.00", lastTrans: "Yesterday", initialColor: "#FFEDD5" },
-    { id: "3", name: "Priya Singh", initial: "PS", balance: "₹ 0.00", lastTrans: "3 days ago", initialColor: "#F3E8FF" },
-    { id: "4", name: "Vikram Mehra", initial: "VM", balance: "₹ 8,420.00", lastTrans: "4 days ago", initialColor: "#DBEAFE" },
-    { id: "5", name: "Suresh Jain", initial: "SJ", balance: "₹ 12,150.00", lastTrans: "1 week ago", initialColor: "#FCE7F3" },
+    { id: "1", name: "Rahul Sharma", initial: "RS", balance: "₹ 1,250.00", lastTrans: "2 hours ago", initialColor: "#DBEAFE", phone: "9876543210" },
+    { id: "2", name: "Amit Kumar", initial: "AK", balance: "₹ 500.00", lastTrans: "Yesterday", initialColor: "#FFEDD5", phone: "8765432109" },
+    { id: "3", name: "Priya Singh", initial: "PS", balance: "₹ 0.00", lastTrans: "3 days ago", initialColor: "#F3E8FF", phone: "7654321098" },
+    { id: "4", name: "Vikram Mehra", initial: "VM", balance: "₹ 8,420.00", lastTrans: "4 days ago", initialColor: "#DBEAFE", phone: "6543210987" },
+    { id: "5", name: "Suresh Jain", initial: "SJ", balance: "₹ 12,150.00", lastTrans: "1 week ago", initialColor: "#FCE7F3", phone: "5432109876" },
 ];
 
 export default function CustomersScreen() {
+    const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [search, setSearch] = useState("");
 
     return (
@@ -88,7 +91,11 @@ export default function CustomersScreen() {
                         </View>
                         <View style={styles.itemMain}>
                             <Text style={styles.itemName}>{item.name}</Text>
-                            <Text style={styles.itemLastTrans}>Last Trans: {item.lastTrans}</Text>
+                            <View style={styles.itemSecondaryRow}>
+                                <Text style={styles.itemPhone}>{item.phone}</Text>
+                                <Text style={styles.bullet}>•</Text>
+                                <Text style={styles.itemLastTrans}>{item.lastTrans}</Text>
+                            </View>
                         </View>
                         <View style={styles.itemRight}>
                             <Text style={styles.itemBalance}>{item.balance}</Text>
@@ -99,7 +106,10 @@ export default function CustomersScreen() {
             />
 
             {/* FAB - Floating Action Button */}
-            <TouchableOpacity style={styles.fab}>
+            <TouchableOpacity 
+                style={styles.fab}
+                onPress={() => navigation.navigate("AddCustomer")}
+            >
                 <Ionicons name="add" size={32} color="#fff" />
             </TouchableOpacity>
         </SafeAreaView>
@@ -273,7 +283,21 @@ const styles = StyleSheet.create({
     itemLastTrans: {
         fontSize: 12,
         color: colors.textSecondary,
+    },
+    itemSecondaryRow: {
+        flexDirection: "row",
+        alignItems: "center",
         marginTop: 2,
+    },
+    itemPhone: {
+        fontSize: 12,
+        color: colors.secondary,
+        fontWeight: "500",
+    },
+    bullet: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginHorizontal: 4,
     },
     itemRight: {
         flexDirection: "row",

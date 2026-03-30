@@ -11,7 +11,11 @@ interface ProductCardProps {
     stock: number;
     threshold: number;
     unit: string;
+    price: number;
+    selected?: boolean;
     onPress: () => void;
+    onEdit?: () => void;
+    onDelete?: () => void;
 }
 
 export default function ProductCard({
@@ -20,32 +24,60 @@ export default function ProductCard({
     stock,
     threshold,
     unit,
+    price,
+    selected,
     onPress,
+    onEdit,
+    onDelete,
 }: ProductCardProps) {
-    const isLowStock = stock <= threshold;
+    const isOut = stock === 0;
+    const isLowStock = stock > 0 && stock <= threshold;
 
     return (
         <TouchableOpacity style={styles.container} onPress={onPress}>
             <View style={styles.content}>
+                {/* Checkbox */}
+                <View style={styles.checkboxContainer}>
+                    <Ionicons
+                        name={selected ? "checkbox" : "square-outline"}
+                        size={22}
+                        color={selected ? colors.primary : colors.border}
+                    />
+                </View>
+
+                {/* Name & Category */}
                 <View style={styles.info}>
                     <Text style={styles.name}>{name}</Text>
-                    <Text style={styles.category}>{category}</Text>
+                    <Text style={styles.category}>{category.toUpperCase()}</Text>
                 </View>
+
+                {/* Price & Stock Status */}
                 <View style={styles.stockInfo}>
-                    <Text style={[styles.stockValue, isLowStock && styles.lowStock]}>
-                        {stock} {unit}
+                    <Text style={styles.price}>₹{price}</Text>
+                    <Text
+                        style={[
+                            styles.stockText,
+                            isOut || isLowStock ? styles.lowStock : styles.normalStock,
+                        ]}
+                    >
+                        {isOut
+                            ? "Out"
+                            : isLowStock
+                            ? `${stock} Left`
+                            : `${stock} ${unit}`}
                     </Text>
-                    <Text style={styles.stockLabel}>Available</Text>
                 </View>
-                <TouchableOpacity style={styles.editButton}>
-                    <Ionicons name="create-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
+
+                {/* Edit & Delete Actions */}
+                <View style={styles.actions}>
+                    <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+                        <Ionicons name="pencil" size={20} color={colors.secondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                        <Ionicons name="trash-outline" size={20} color={colors.secondary} />
+                    </TouchableOpacity>
+                </View>
             </View>
-            {isLowStock && (
-                <View style={[styles.badge, { backgroundColor: colors.error }]}>
-                    <Text style={styles.badgeText}>LOW STOCK</Text>
-                </View>
-            )}
         </TouchableOpacity>
     );
 }
@@ -53,21 +85,20 @@ export default function ProductCard({
 const styles = StyleSheet.create({
     container: {
         backgroundColor: colors.surface,
-        borderRadius: spacing.roundness,
-        padding: spacing.md,
-        marginBottom: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        position: "relative",
-        overflow: "hidden",
+        paddingVertical: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
     },
     content: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
+        paddingHorizontal: spacing.md,
+    },
+    checkboxContainer: {
+        marginRight: spacing.sm,
     },
     info: {
-        flex: 2,
+        flex: 1,
     },
     name: {
         fontSize: typography.sizes.md,
@@ -75,41 +106,36 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     category: {
-        fontSize: typography.sizes.xs,
+        fontSize: 10,
+        fontWeight: "600",
         color: colors.textSecondary,
         marginTop: 2,
     },
     stockInfo: {
-        flex: 1,
-        alignItems: "center",
+        alignItems: "flex-end",
+        marginRight: spacing.md,
     },
-    stockValue: {
-        fontSize: typography.sizes.lg,
+    price: {
+        fontSize: typography.sizes.md,
         fontWeight: "700",
         color: colors.text,
+    },
+    stockText: {
+        fontSize: 12,
+        fontWeight: "600",
+        marginTop: 2,
+    },
+    normalStock: {
+        color: colors.success,
     },
     lowStock: {
         color: colors.error,
     },
-    stockLabel: {
-        fontSize: 10,
-        color: colors.textSecondary,
-        textTransform: "uppercase",
+    actions: {
+        flexDirection: "row",
+        gap: 8,
     },
-    editButton: {
-        padding: spacing.xs,
-    },
-    badge: {
-        position: "absolute",
-        top: 0,
-        right: 0,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderBottomLeftRadius: 8,
-    },
-    badgeText: {
-        color: "#fff",
-        fontSize: 10,
-        fontWeight: "800",
+    actionButton: {
+        padding: 4,
     },
 });
