@@ -1,4 +1,4 @@
-# ShopAI — Inventory Tracker with AI Reorder Suggestions
+# ShopAI/Pragati Bandhu — Inventory Tracker with AI Reorder Suggestions
 ### Project Document v1.0
 
 ---
