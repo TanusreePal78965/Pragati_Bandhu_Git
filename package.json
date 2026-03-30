@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^7.10.0",
     "@react-navigation/native": "^7.1.28",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "pdfreader": "^3.0.8",
     "typescript": "~5.9.2"
   },
   "private": true
