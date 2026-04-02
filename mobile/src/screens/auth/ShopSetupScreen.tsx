@@ -16,6 +16,7 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import TextInputField from "../../components/common/TextInputField";
 import PrimaryButton from "../../components/common/PrimaryButton";
+import { setHasConsent } from "../../utils/storage";
 
 export default function ShopSetupScreen() {
     const navigation = useNavigation<any>();
@@ -23,10 +24,14 @@ export default function ShopSetupScreen() {
     const [ownerName, setOwnerName] = useState("");
     const [category, setCategory] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
+    const [aiConsent, setAiConsent] = useState(true);
 
     const handleCompleteSetup = () => {
+        // Save consent choice to local fast storage
+        setHasConsent(aiConsent);
+        
         // Logic to save to Supabase/Firebase goes here
-        console.log("Setup complete:", { shopName, ownerName, category });
+        console.log("Setup complete:", { shopName, ownerName, category, aiConsent });
 
         // After saving, navigate to the main app flow
         navigation.navigate("MainTabs" as any); 
@@ -84,10 +89,61 @@ export default function ShopSetupScreen() {
                             keyboardType="phone-pad"
                         />
 
+                        {/* Privacy & Setup Choice */}
+                        <Text style={styles.sectionTitle}>App Experience</Text>
+                        
+                        <TouchableOpacity 
+                            style={[styles.consentCard, aiConsent && styles.consentCardActive]}
+                            onPress={() => setAiConsent(true)}
+                        >
+                            <View style={styles.consentIcon}>
+                                <Ionicons 
+                                    name="sparkles" 
+                                    size={20} 
+                                    color={aiConsent ? colors.primary : colors.textSecondary} 
+                                />
+                            </View>
+                            <View style={styles.consentTextCont}>
+                                <Text style={[styles.consentTitle, aiConsent && styles.consentTitleActive]}>
+                                    AI suggestions chahiye
+                                </Text>
+                                <Text style={styles.consentSub}>Smart reordering & analytics (Recommended)</Text>
+                            </View>
+                            <Ionicons 
+                                name={aiConsent ? "radio-button-on" : "radio-button-off"} 
+                                size={22} 
+                                color={aiConsent ? colors.primary : colors.border} 
+                            />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={[styles.consentCard, !aiConsent && styles.consentCardActive]}
+                            onPress={() => setAiConsent(false)}
+                        >
+                            <View style={styles.consentIcon}>
+                                <Ionicons 
+                                    name="phone-portrait-outline" 
+                                    size={20} 
+                                    color={!aiConsent ? colors.primary : colors.textSecondary} 
+                                />
+                            </View>
+                            <View style={styles.consentTextCont}>
+                                <Text style={[styles.consentTitle, !aiConsent && styles.consentTitleActive]}>
+                                    Sirf mere phone pe
+                                </Text>
+                                <Text style={styles.consentSub}>Basic stock tracking only, no internet data share</Text>
+                            </View>
+                            <Ionicons 
+                                name={!aiConsent ? "radio-button-on" : "radio-button-off"} 
+                                size={22} 
+                                color={!aiConsent ? colors.primary : colors.border} 
+                            />
+                        </TouchableOpacity>
+
                         <View style={styles.infoBox}>
-                            <Ionicons name="information-circle" size={18} color={colors.primary} />
+                            <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
                             <Text style={styles.infoText}>
-                                This information will appear on your digital bills.
+                                Your privacy is important. We never share your shop's location or name with third parties.
                             </Text>
                         </View>
 
@@ -188,5 +244,56 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontSize: typography.sizes.sm,
         fontWeight: "600",
+    },
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: colors.text,
+        marginTop: spacing.lg,
+        marginBottom: spacing.md,
+        textTransform: "uppercase",
+        letterSpacing: 1,
+    },
+    consentCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: colors.background,
+        padding: spacing.md,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: colors.border,
+        marginBottom: spacing.sm,
+        gap: 12,
+    },
+    consentCardActive: {
+        borderColor: colors.primary,
+        backgroundColor: colors.primary + "05",
+    },
+    consentIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.surface,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    consentTextCont: {
+        flex: 1,
+    },
+    consentTitle: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: colors.textSecondary,
+    },
+    consentTitleActive: {
+        color: colors.text,
+        fontWeight: "700",
+    },
+    consentSub: {
+        fontSize: 11,
+        color: colors.textSecondary,
+        marginTop: 2,
     },
 });
