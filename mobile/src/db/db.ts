@@ -5,6 +5,56 @@ import { addToSyncQueue } from './syncQueue';
 const genId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+// ─── Shop ─────────────────────────────────────────────────────────────────────
+
+export interface ShopInfo {
+  shopName: string;
+  ownerName: string;
+  category?: string;
+  whatsappNumber?: string;
+  phone?: string;
+  aiConsent?: boolean;
+}
+
+export const insertShop = (data: ShopInfo): void => {
+  try {
+    db.runSync(
+      `INSERT OR REPLACE INTO shop
+         (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        genId(),
+        data.shopName,
+        data.ownerName,
+        data.phone ?? '',
+        data.whatsappNumber ?? '',
+        data.category ?? '',
+        data.aiConsent ? 1 : 0,
+      ]
+    );
+  } catch (e) {
+    console.error('insertShop error:', e);
+  }
+};
+
+export const getShop = (): ShopInfo | null => {
+  try {
+    const row = db.getFirstSync('SELECT * FROM shop LIMIT 1') as any;
+    if (!row) return null;
+    return {
+      shopName: row.shop_name,
+      ownerName: row.owner_name,
+      phone: row.phone,
+      whatsappNumber: row.whatsapp_number,
+      category: row.business_category,
+      aiConsent: row.ai_consent === 1,
+    };
+  } catch (e) {
+    console.error('getShop error:', e);
+    return null;
+  }
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Category {

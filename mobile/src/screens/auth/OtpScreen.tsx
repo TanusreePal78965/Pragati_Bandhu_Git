@@ -8,6 +8,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -15,6 +16,9 @@ import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
+import { useAuth } from "../../context/AuthContext";
+import { verifyOtp, sendOtp } from "../../services/authService";
+import { getShopInfo } from "../../utils/storage";
 
 type OtpScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Otp">;
 type OtpScreenRouteProp = RouteProp<AuthStackParamList, "Otp">;
@@ -25,7 +29,10 @@ const RESEND_TIMER = 30;
 export default function OtpScreen() {
     const navigation = useNavigation<OtpScreenNavigationProp>();
     const route = useRoute<OtpScreenRouteProp>();
-    const phoneNumber = route.params?.phoneNumber || "";
+    const phoneNumber = route.params?.phoneNumber ?? "";
+    const devOtp = route.params?.devOtp;
+
+    const { login } = useAuth();
 
     const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
     const [error, setError] = useState("");
@@ -35,10 +42,22 @@ export default function OtpScreen() {
 
     const inputRefs = useRef<(TextInput | null)[]>([]);
 
-    // Countdown timer for resend
+    // Auto-fill dev OTP on mount and trigger verification after a short delay
+    useEffect(() => {
+        if (devOtp && devOtp.length === OTP_LENGTH) {
+            const digits = devOtp.split("");
+            setOtp(digits);
+            // Small delay so the user sees the digits appear before auto-verify
+            const timer = setTimeout(() => handleVerifyOtp(devOtp), 700);
+            return () => clearTimeout(timer);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Countdown timer for resend button
     useEffect(() => {
         if (resendTimer > 0) {
-            const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+            const timer = setTimeout(() => setResendTimer((t) => t - 1), 1000);
             return () => clearTimeout(timer);
         } else {
             setCanResend(true);
@@ -53,9 +72,7 @@ export default function OtpScreen() {
     };
 
     const handleOtpChange = (value: string, index: number) => {
-        // Only allow single digit
         const digit = value.replace(/\D/g, "").slice(-1);
-
         const newOtp = [...otp];
         newOtp[index] = digit;
         setOtp(newOtp);
@@ -65,8 +82,7 @@ export default function OtpScreen() {
         if (digit && index < OTP_LENGTH - 1) {
             inputRefs.current[index + 1]?.focus();
         }
-
-        // Auto-verify when all digits entered
+        // Auto-verify when last digit entered
         if (digit && index === OTP_LENGTH - 1) {
             const fullOtp = newOtp.join("");
             if (fullOtp.length === OTP_LENGTH) {
@@ -82,35 +98,53 @@ export default function OtpScreen() {
     };
 
     const handleVerifyOtp = async (otpCode?: string) => {
-        // const code = otpCode || otp.join("");
+        const code = otpCode ?? otp.join("");
+        if (code.length !== OTP_LENGTH) {
+            setError("Please enter the complete 6-digit OTP");
+            return;
+        }
 
-        // if (code.length !== OTP_LENGTH) {
-        //     setError("Please enter complete OTP");
-        //     return;
-        // }
+        setIsVerifying(true);
+        setError("");
 
-        // setIsVerifying(true);
-        // setError("");
+        try {
+            await verifyOtp(phoneNumber, code);
 
-        // TODO: Replace with actual Firebase OTP verification
-        // Simulating verification delay
-        setTimeout(() => {
+            // Flip auth state — RootNavigator will re-render the authenticated stack
+            login();
+
+            // If this is a new user (no shop info saved), show setup screen.
+            // For a returning user the navigator switches to MainTabs automatically.
+            const shopInfo = await getShopInfo();
+            if (!shopInfo) {
+                navigation.navigate("ShopSetup");
+            }
+        } catch (e: any) {
+            const msg = e?.response?.data?.error ?? "Incorrect OTP. Please try again.";
+            setError(msg);
             setIsVerifying(false);
-            // For now, navigate to ShopSetup (first-time user)
-            // In real app, check if user exists and has shop setup
-            navigation.navigate("ShopSetup");
-        }, 1500);
+        }
     };
 
-    const handleResendOtp = () => {
+    const handleResendOtp = async () => {
         if (!canResend) return;
-
-        // TODO: Replace with actual Firebase resend OTP
         setCanResend(false);
         setResendTimer(RESEND_TIMER);
         setOtp(Array(OTP_LENGTH).fill(""));
         setError("");
         inputRefs.current[0]?.focus();
+
+        try {
+            const data = await sendOtp(phoneNumber);
+            // In dev mode: auto-fill the new OTP
+            if (data.__dev_otp) {
+                const digits = data.__dev_otp.split("");
+                setOtp(digits);
+                setTimeout(() => handleVerifyOtp(data.__dev_otp), 700);
+            }
+        } catch {
+            setError("Could not resend OTP. Please try again.");
+        }
     };
 
     const handleChangeNumber = () => {
@@ -142,7 +176,7 @@ export default function OtpScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* OTP Illustration */}
+                    {/* Icon */}
                     <View style={styles.illustrationSection}>
                         <View style={styles.iconContainer}>
                             <Text style={styles.iconText}>📲</Text>
@@ -154,23 +188,19 @@ export default function OtpScreen() {
                         <Text style={styles.title}>Verify OTP</Text>
                         <Text style={styles.titleBengali}>OTP যাচাই করুন</Text>
 
-                        <Text style={styles.subtitle}>
-                            We sent a 6-digit code to
-                        </Text>
-                        <Text style={styles.phoneNumber}>
-                            {formatPhoneNumber(phoneNumber)}
-                        </Text>
+                        <Text style={styles.subtitle}>We sent a 6-digit code to</Text>
+                        <Text style={styles.phoneNumber}>{formatPhoneNumber(phoneNumber)}</Text>
 
                         {/* OTP Input Boxes */}
                         <View style={styles.otpContainer}>
                             {otp.map((digit, index) => (
                                 <TextInput
                                     key={index}
-                                    ref={(ref) => (inputRefs.current[index] = ref)}
+                                    ref={(ref) => { inputRefs.current[index] = ref; }}
                                     style={[
                                         styles.otpInput,
-                                        digit && styles.otpInputFilled,
-                                        error && styles.otpInputError,
+                                        digit ? styles.otpInputFilled : null,
+                                        error ? styles.otpInputError : null,
                                     ]}
                                     value={digit}
                                     onChangeText={(value) => handleOtpChange(value, index)}
@@ -178,15 +208,14 @@ export default function OtpScreen() {
                                     keyboardType="number-pad"
                                     maxLength={1}
                                     selectTextOnFocus
-                                    autoFocus={index === 0}
+                                    autoFocus={index === 0 && !devOtp}
+                                    editable={!isVerifying}
                                 />
                             ))}
                         </View>
 
                         {/* Error Message */}
-                        {error ? (
-                            <Text style={styles.errorText}>{error}</Text>
-                        ) : null}
+                        {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                         {/* Verify Button */}
                         <TouchableOpacity
@@ -198,24 +227,22 @@ export default function OtpScreen() {
                             disabled={isVerifying}
                             activeOpacity={0.8}
                         >
-                            <Text style={styles.verifyButtonText}>
-                                {isVerifying ? "Verifying..." : "Verify & Continue"}
-                            </Text>
+                            {isVerifying ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <Text style={styles.verifyButtonText}>Verify & Continue</Text>
+                            )}
                         </TouchableOpacity>
 
                         {/* Resend Section */}
                         <View style={styles.resendSection}>
-                            <Text style={styles.resendText}>
-                                Didn't receive the code?
-                            </Text>
+                            <Text style={styles.resendText}>Didn't receive the code?</Text>
                             {canResend ? (
                                 <TouchableOpacity onPress={handleResendOtp}>
                                     <Text style={styles.resendLink}>Resend OTP</Text>
                                 </TouchableOpacity>
                             ) : (
-                                <Text style={styles.timerText}>
-                                    Resend in {resendTimer}s
-                                </Text>
+                                <Text style={styles.timerText}>Resend in {resendTimer}s</Text>
                             )}
                         </View>
 
@@ -224,9 +251,7 @@ export default function OtpScreen() {
                             style={styles.changeNumberButton}
                             onPress={handleChangeNumber}
                         >
-                            <Text style={styles.changeNumberText}>
-                                Change Mobile Number
-                            </Text>
+                            <Text style={styles.changeNumberText}>Change Mobile Number</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -244,20 +269,10 @@ export default function OtpScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#F8FAFC",
-    },
-    keyboardView: {
-        flex: 1,
-    },
-    scrollContent: {
-        flexGrow: 1,
-        padding: 24,
-    },
-    header: {
-        marginBottom: 16,
-    },
+    container: { flex: 1, backgroundColor: "#F8FAFC" },
+    keyboardView: { flex: 1 },
+    scrollContent: { flexGrow: 1, padding: 24 },
+    header: { marginBottom: 16 },
     backButton: {
         flexDirection: "row",
         alignItems: "center",
@@ -279,15 +294,8 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
-    backButtonText: {
-        fontSize: 16,
-        color: "#475569",
-        fontWeight: "500",
-    },
-    illustrationSection: {
-        alignItems: "center",
-        marginBottom: 32,
-    },
+    backButtonText: { fontSize: 16, color: "#475569", fontWeight: "500" },
+    illustrationSection: { alignItems: "center", marginBottom: 32 },
     iconContainer: {
         width: 100,
         height: 100,
@@ -296,9 +304,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
-    iconText: {
-        fontSize: 48,
-    },
+    iconText: { fontSize: 48 },
     formSection: {
         backgroundColor: "#FFFFFF",
         borderRadius: 20,
@@ -309,23 +315,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 3,
     },
-    title: {
-        fontSize: 24,
-        fontWeight: "700",
-        color: "#0F172A",
-        textAlign: "center",
-    },
-    titleBengali: {
-        fontSize: 18,
-        color: "#64748B",
-        textAlign: "center",
-        marginBottom: 16,
-    },
-    subtitle: {
-        fontSize: 15,
-        color: "#64748B",
-        textAlign: "center",
-    },
+    title: { fontSize: 24, fontWeight: "700", color: "#0F172A", textAlign: "center" },
+    titleBengali: { fontSize: 18, color: "#64748B", textAlign: "center", marginBottom: 16 },
+    subtitle: { fontSize: 15, color: "#64748B", textAlign: "center" },
     phoneNumber: {
         fontSize: 18,
         fontWeight: "600",
@@ -351,20 +343,9 @@ const styles = StyleSheet.create({
         color: "#0F172A",
         backgroundColor: "#F8FAFC",
     },
-    otpInputFilled: {
-        borderColor: "#2563EB",
-        backgroundColor: "#EEF2FF",
-    },
-    otpInputError: {
-        borderColor: "#DC2626",
-        backgroundColor: "#FEF2F2",
-    },
-    errorText: {
-        color: "#DC2626",
-        fontSize: 14,
-        marginBottom: 12,
-        textAlign: "center",
-    },
+    otpInputFilled: { borderColor: "#2563EB", backgroundColor: "#EEF2FF" },
+    otpInputError: { borderColor: "#DC2626", backgroundColor: "#FEF2F2" },
+    errorText: { color: "#DC2626", fontSize: 14, marginBottom: 12, textAlign: "center" },
     verifyButton: {
         backgroundColor: "#2563EB",
         paddingVertical: 18,
@@ -377,14 +358,8 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
-    verifyButtonDisabled: {
-        backgroundColor: "#93C5FD",
-    },
-    verifyButtonText: {
-        color: "#FFFFFF",
-        fontSize: 18,
-        fontWeight: "700",
-    },
+    verifyButtonDisabled: { backgroundColor: "#93C5FD" },
+    verifyButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "700" },
     resendSection: {
         flexDirection: "row",
         justifyContent: "center",
@@ -392,30 +367,11 @@ const styles = StyleSheet.create({
         marginTop: 20,
         gap: 6,
     },
-    resendText: {
-        fontSize: 14,
-        color: "#64748B",
-    },
-    resendLink: {
-        fontSize: 14,
-        color: "#2563EB",
-        fontWeight: "600",
-    },
-    timerText: {
-        fontSize: 14,
-        color: "#94A3B8",
-        fontWeight: "500",
-    },
-    changeNumberButton: {
-        marginTop: 16,
-        paddingVertical: 12,
-        alignItems: "center",
-    },
-    changeNumberText: {
-        fontSize: 14,
-        color: "#64748B",
-        textDecorationLine: "underline",
-    },
+    resendText: { fontSize: 14, color: "#64748B" },
+    resendLink: { fontSize: 14, color: "#2563EB", fontWeight: "600" },
+    timerText: { fontSize: 14, color: "#94A3B8", fontWeight: "500" },
+    changeNumberButton: { marginTop: 16, paddingVertical: 12, alignItems: "center" },
+    changeNumberText: { fontSize: 14, color: "#64748B", textDecorationLine: "underline" },
     securityNote: {
         flexDirection: "row",
         justifyContent: "center",
@@ -423,11 +379,6 @@ const styles = StyleSheet.create({
         marginTop: 32,
         gap: 8,
     },
-    securityIcon: {
-        fontSize: 16,
-    },
-    securityText: {
-        fontSize: 13,
-        color: "#94A3B8",
-    },
+    securityIcon: { fontSize: 16 },
+    securityText: { fontSize: 13, color: "#94A3B8" },
 });

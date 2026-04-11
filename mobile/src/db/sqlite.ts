@@ -90,6 +90,17 @@ export const initDatabase = () => {
       created_at TEXT DEFAULT (datetime('now')),
       attempts INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS shop (
+      id TEXT PRIMARY KEY NOT NULL,
+      shop_name TEXT NOT NULL,
+      owner_name TEXT NOT NULL,
+      phone TEXT,
+      whatsapp_number TEXT,
+      business_category TEXT,
+      ai_consent INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 };
 

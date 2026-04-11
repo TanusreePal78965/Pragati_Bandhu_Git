@@ -157,7 +157,6 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: colors.background,
         marginHorizontal: spacing.md,
         marginTop: spacing.lg,
         paddingHorizontal: spacing.md,

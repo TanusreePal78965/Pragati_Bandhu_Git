@@ -1,22 +1,26 @@
-import axios from 'axios';
+import axios from "axios";
+import { getAuthToken } from "../utils/storage";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+// Android emulator: 10.0.2.2 resolves to host machine localhost (where backend runs).
+// Physical device or production: set EXPO_PUBLIC_API_URL in .env.local to the Railway URL or ngrok tunnel.
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000";
 
-const client = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+const apiClient = axios.create({
+  baseURL: API_BASE,
+  timeout: 10000,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Add Interceptors if needed (for Auth tokens)
-client.interceptors.request.use(
+// Attach stored JWT to every request automatically
+apiClient.interceptors.request.use(
   async (config) => {
-    // const token = await MMKV.get('supabase_token');
-    // if (token) config.headers.Authorization = `Bearer ${token}`;
+    const token = await getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
-export default client;
+export default apiClient;

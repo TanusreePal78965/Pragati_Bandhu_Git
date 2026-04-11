@@ -8,12 +8,13 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    Image,
+    ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
+import { sendOtp } from "../../services/authService";
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">;
 
@@ -21,37 +22,43 @@ export default function LoginScreen() {
     const navigation = useNavigation<LoginScreenNavigationProp>();
     const [phoneNumber, setPhoneNumber] = useState("");
     const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
-    const validatePhoneNumber = (number: string): boolean => {
-        // Remove any non-digit characters
-        const cleaned = number.replace(/\D/g, "");
-        // Indian phone numbers are 10 digits
-        return cleaned.length === 10;
-    };
+    const handleGetOtp = async () => {
+        const clean = phoneNumber.replace(/\D/g, "");
+        if (!clean) {
+            setError("Please enter your mobile number");
+            return;
+        }
+        if (clean.length !== 10) {
+            setError("Please enter a valid 10-digit mobile number");
+            return;
+        }
 
-    const handleGetOtp = () => {
-        // setError("");
+        setIsLoading(true);
+        setError("");
 
-        // if (!phoneNumber.trim()) {
-        //     setError("Please enter your mobile number");
-        //     return;
-        // }
-
-        // if (!validatePhoneNumber(phoneNumber)) {
-        //     setError("Please enter a valid 10-digit mobile number");
-        //     return;
-        // }
-
-        // Navigate to OTP screen with phone number
-        navigation.navigate("Otp", { phoneNumber: phoneNumber.replace(/\D/g, "") });
+        try {
+            const data = await sendOtp(clean);
+            // Navigate and pass devOtp for auto-fill during development
+            navigation.navigate("Otp", { phoneNumber: clean, devOtp: data.__dev_otp });
+        } catch (e: any) {
+            const msg =
+                e?.response?.data?.error ??
+                "Could not send OTP. Please check your connection.";
+            setError(msg);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handlePhoneNumberChange = (text: string) => {
-        // Only allow digits and limit to 10 characters
         const cleaned = text.replace(/\D/g, "").slice(0, 10);
         setPhoneNumber(cleaned);
         if (error) setError("");
     };
+
+    const isButtonDisabled = isLoading || phoneNumber.length < 10;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -83,7 +90,7 @@ export default function LoginScreen() {
                         </Text>
 
                         {/* Phone Input */}
-                        <View style={styles.inputContainer}>
+                        <View style={[styles.inputContainer, error ? styles.inputError : null]}>
                             <View style={styles.countryCode}>
                                 <Text style={styles.countryCodeText}>+91</Text>
                             </View>
@@ -95,6 +102,7 @@ export default function LoginScreen() {
                                 value={phoneNumber}
                                 onChangeText={handlePhoneNumberChange}
                                 maxLength={10}
+                                editable={!isLoading}
                             />
                         </View>
 
@@ -107,12 +115,17 @@ export default function LoginScreen() {
                         <TouchableOpacity
                             style={[
                                 styles.otpButton,
-                                !phoneNumber && styles.otpButtonDisabled,
+                                isButtonDisabled && styles.otpButtonDisabled,
                             ]}
                             onPress={handleGetOtp}
                             activeOpacity={0.8}
+                            disabled={isButtonDisabled}
                         >
-                            <Text style={styles.otpButtonText}>Get OTP</Text>
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <Text style={styles.otpButtonText}>Get OTP</Text>
+                            )}
                         </TouchableOpacity>
 
                         {/* Terms */}
@@ -229,6 +242,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         overflow: "hidden",
         marginBottom: 12,
+    },
+    inputError: {
+        borderColor: "#FCA5A5",
     },
     countryCode: {
         backgroundColor: "#F1F5F9",

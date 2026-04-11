@@ -16,25 +16,40 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import TextInputField from "../../components/common/TextInputField";
 import PrimaryButton from "../../components/common/PrimaryButton";
-import { setHasConsent } from "../../utils/storage";
+import { setHasConsent, setShopInfo } from "../../utils/storage";
+import { useAuth } from "../../context/AuthContext";
+import { insertShop } from "../../db/db";
 
 export default function ShopSetupScreen() {
     const navigation = useNavigation<any>();
+    const { completeSetup } = useAuth();
     const [shopName, setShopName] = useState("");
     const [ownerName, setOwnerName] = useState("");
     const [category, setCategory] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
     const [aiConsent, setAiConsent] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleCompleteSetup = async () => {
-        // Save consent choice to local fast storage
-        await setHasConsent(aiConsent);
-        
-        // Logic to save to Supabase/Firebase goes here
-        console.log("Setup complete:", { shopName, ownerName, category, aiConsent });
+        if (!shopName.trim() || !ownerName.trim()) return;
+        setIsSaving(true);
+        try {
+            // Persist consent flag
+            await setHasConsent(aiConsent);
 
-        // After saving, navigate to the main app flow
-        navigation.navigate("MainTabs" as any); 
+            // Persist shop info to AsyncStorage (fast reads across app)
+            await setShopInfo({ shopName, ownerName, category, whatsappNumber, aiConsent });
+
+            // Persist to SQLite (available for sync queue later)
+            insertShop({ shopName, ownerName, category, whatsappNumber, aiConsent });
+
+            // Flip AuthContext → RootNavigator shows MainTabs
+            completeSetup();
+        } catch (e) {
+            console.error("ShopSetup save error:", e);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -148,9 +163,10 @@ export default function ShopSetupScreen() {
                         </View>
 
                         <PrimaryButton
-                            title="Create My Shop"
+                            title={isSaving ? "Saving..." : "Create My Shop"}
                             onPress={handleCompleteSetup}
                             style={styles.button}
+                            disabled={isSaving || !shopName.trim() || !ownerName.trim()}
                         />
                     </View>
 

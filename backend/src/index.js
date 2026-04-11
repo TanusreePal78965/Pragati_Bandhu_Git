@@ -16,6 +16,9 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Auth routes
+app.use('/api/auth', require('./routes/auth'));
+
 // Future Route Mounts:
 // app.use('/api/shops', require('./routes/shops'));
 // app.use('/api/products', require('./routes/products'));

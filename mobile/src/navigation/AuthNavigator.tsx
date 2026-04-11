@@ -6,7 +6,7 @@ import ShopSetupScreen from "../screens/auth/ShopSetupScreen";
 
 export type AuthStackParamList = {
     Login: undefined;
-    Otp: { phoneNumber: string } | undefined;
+    Otp: { phoneNumber: string; devOtp?: string } | undefined;
     ShopSetup: undefined;
 };
 

@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Switch,
     StatusBar,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { colors } from "../../theme/colors";
 import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
+import { useAuth } from "../../context/AuthContext";
 
 const SectionHeader = ({ title }: { title: string }) => (
     <View style={styles.sectionHeader}>
@@ -79,6 +81,22 @@ const SettingsInfoRow = ({
 export default function SettingsScreen() {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const navigation = useNavigation();
+    const { logout } = useAuth();
+
+    const handleLogout = () => {
+        Alert.alert(
+            "Logout",
+            "Are you sure you want to logout?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Logout",
+                    style: "destructive",
+                    onPress: async () => { await logout(); },
+                },
+            ]
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
@@ -183,7 +201,7 @@ export default function SettingsScreen() {
                 />
 
                 {/* Logout Button */}
-                <TouchableOpacity style={styles.logoutButton}>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                     <Ionicons
                         name="log-out-outline"
                         size={24}
