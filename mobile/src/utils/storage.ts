@@ -1,6 +1,4 @@
-import { MMKV } from 'react-native-mmkv';
-
-export const storage = new MMKV();
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const StorageKeys = {
   HAS_CONSENT: 'has_consent',
@@ -9,18 +7,20 @@ export const StorageKeys = {
   SHOP_ID: 'shop_id',
 };
 
-export const setHasConsent = (value: boolean) => {
-  storage.set(StorageKeys.HAS_CONSENT, value);
+export const setHasConsent = async (value: boolean): Promise<void> => {
+  await AsyncStorage.setItem(StorageKeys.HAS_CONSENT, JSON.stringify(value));
 };
 
-export const getHasConsent = (): boolean => {
-  return storage.getBoolean(StorageKeys.HAS_CONSENT) ?? false;
+export const getHasConsent = async (): Promise<boolean> => {
+  const val = await AsyncStorage.getItem(StorageKeys.HAS_CONSENT);
+  return val !== null ? JSON.parse(val) : false;
 };
 
-export const setLastSync = (value: string) => {
-  storage.set(StorageKeys.LAST_SYNC, value);
+export const setLastSync = async (value: string): Promise<void> => {
+  await AsyncStorage.setItem(StorageKeys.LAST_SYNC, value);
 };
 
-export const getLastSync = (): string | undefined => {
-  return storage.getString(StorageKeys.LAST_SYNC);
+export const getLastSync = async (): Promise<string | undefined> => {
+  const val = await AsyncStorage.getItem(StorageKeys.LAST_SYNC);
+  return val ?? undefined;
 };

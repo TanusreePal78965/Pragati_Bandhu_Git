@@ -462,17 +462,84 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
-## 14. Pending / In-Progress for v1 Completion
+## 14. Implementation Progress Tracker
+
+> **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
+>
+> **Last updated:** April 2026
+
+---
+
+### 14.1 Mobile — Wire Screens to SQLite (local data)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 1 | Products → SQLite | 🔲 | Save/load/delete in AddProduct & ProductsScreen |
+| 2 | Categories → SQLite | 🔲 | Manage Categories & Add Category wired to real data |
+| 3 | Brands → SQLite | 🔲 | Manage Brands & Add Brand wired to real data |
+| 4 | Link categories + brands to Add Product form | 🔲 | Chip selectors pull from SQLite, not hardcoded arrays |
+| 5 | Customers → SQLite | 🔲 | CustomersScreen & AddCustomer form wired |
+| 6 | Bills → SQLite | 🔲 | NewBillScreen saves bill + bill_items, deducts stock |
+| 7 | Sales log → SQLite | 🔲 | Write to `sales` table on every bill checkout |
+| 8 | Reports → SQLite | 🔲 | Replace mock numbers with real queries |
+| 9 | Dashboard → SQLite | 🔲 | Today's sales, low stock count from real data |
+| 10 | Low stock detection (local) | 🔲 | Compute `stock < min_threshold` on device, show alert |
+
+---
+
+### 14.2 Mobile — Sync Layer
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 11 | `authService.ts` | 🔲 | OTP login via Supabase Auth, store JWT in MMKV |
+| 12 | `client.js` — auth header | 🔲 | Inject JWT from MMKV into every Axios request |
+| 13 | `syncQueue.ts` — flush logic | 🔲 | Complete route-by-table + operation dispatch |
+| 14 | `syncService.ts` — listeners | 🔲 | AppState + NetInfo listeners triggering flushSyncQueue |
+| 15 | Add `axios` to package.json | 🔲 | Currently imported but not in dependencies |
+
+---
+
+### 14.3 Backend — API Routes
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 16 | `middleware/auth.js` | 🔲 | Verify Supabase JWT on every request |
+| 17 | `routes/shops.js` | 🔲 | POST create/update shop on setup |
+| 18 | `routes/products.js` | 🔲 | POST, PUT, DELETE → upsert to Supabase |
+| 19 | `routes/customers.js` | 🔲 | POST, PUT → upsert to Supabase |
+| 20 | `routes/sales.js` | 🔲 | POST bills + bill_items + sales_log to Supabase |
+| 21 | `index.js` — mount routes | 🔲 | Uncomment and register all route files |
+
+---
+
+### 14.4 Backend — AI & Alerts
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 22 | `jobs/dailySuggestions.js` | 🔲 | Cron: sales_log → Claude API → suggestions_log |
+| 23 | `routes/suggestions.js` | 🔲 | GET endpoint for mobile to fetch suggestions |
+| 24 | `services/watiService.js` | 🔲 | WhatsApp alerts via shared WATI account |
+| 25 | `services/smsService.js` | 🔲 | SMS fallback via Fast2SMS |
+| 26 | `services/stockService.js` | 🔲 | Server-side low stock detection → trigger alerts |
+
+---
+
+### 14.5 Mobile — Fetch from Cloud
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 27 | AI suggestions → dashboard | 🔲 | Fetch from `/api/suggestions`, cache in SQLite, display card |
+| 28 | Settings screen — real data | 🔲 | Load shop name/owner from MMKV or Supabase |
+
+---
+
+### 14.6 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
 |---|---|---|
-| Dedicated AI Suggestions screen | 🔲 Planned | Currently only a teaser card on dashboard |
-| Alert Settings screen | 🔲 Planned | WhatsApp number, alert prefs, consent toggle |
-| Sync status detail on dashboard | 🔲 Planned | ScreenHeader has sync badge, but no queue detail |
-| Wire billing to SQLite | 🔲 Planned | Bill creation currently uses mock data |
-| Wire customer management to SQLite | 🔲 Planned | Customer list currently uses mock data |
-| Wire reports to real data | 🔲 Planned | Reports currently show static mock numbers |
-| Connect categories/brands to product creation | 🔲 Planned | Category/brand CRUD exists but not linked to product form dynamically |
+| Dedicated AI Suggestions screen | 🔲 | Currently only a teaser card on dashboard |
+| Alert Settings screen | 🔲 | WhatsApp number, alert prefs, consent toggle |
+| Sync status detail on dashboard | 🔲 | ScreenHeader has sync badge, but no queue detail |
 
 ---
 

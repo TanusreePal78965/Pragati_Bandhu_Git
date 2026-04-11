@@ -26,9 +26,9 @@ export default function ShopSetupScreen() {
     const [whatsappNumber, setWhatsappNumber] = useState("");
     const [aiConsent, setAiConsent] = useState(true);
 
-    const handleCompleteSetup = () => {
+    const handleCompleteSetup = async () => {
         // Save consent choice to local fast storage
-        setHasConsent(aiConsent);
+        await setHasConsent(aiConsent);
         
         // Logic to save to Supabase/Firebase goes here
         console.log("Setup complete:", { shopName, ownerName, category, aiConsent });
@@ -105,7 +105,7 @@ export default function ShopSetupScreen() {
                             </View>
                             <View style={styles.consentTextCont}>
                                 <Text style={[styles.consentTitle, aiConsent && styles.consentTitleActive]}>
-                                    AI suggestions chahiye
+                                    Need AI suggestions
                                 </Text>
                                 <Text style={styles.consentSub}>Smart reordering & analytics (Recommended)</Text>
                             </View>
@@ -129,7 +129,7 @@ export default function ShopSetupScreen() {
                             </View>
                             <View style={styles.consentTextCont}>
                                 <Text style={[styles.consentTitle, !aiConsent && styles.consentTitleActive]}>
-                                    Sirf mere phone pe
+                                    Only on my phone
                                 </Text>
                                 <Text style={styles.consentSub}>Basic stock tracking only, no internet data share</Text>
                             </View>
