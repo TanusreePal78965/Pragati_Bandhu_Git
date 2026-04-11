@@ -10,6 +10,8 @@ import ManageBrandsScreen from "../screens/settings/ManageBrandsScreen";
 import AddCategoryScreen from "../screens/settings/AddCategoryScreen";
 import AddBrandScreen from "../screens/settings/AddBrandScreen";
 import AddCustomerScreen from "../screens/customers/AddCustomerScreen";
+import BillsScreen from "../screens/billing/BillsScreen";
+import BillDetailScreen from "../screens/billing/BillDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +33,8 @@ export default function RootNavigator() {
                 <Stack.Screen name="ManageBrands" component={ManageBrandsScreen} />
                 <Stack.Screen name="AddBrand" component={AddBrandScreen} />
                 <Stack.Screen name="AddCustomer" component={AddCustomerScreen} />
+                <Stack.Screen name="Bills" component={BillsScreen} />
+                <Stack.Screen name="BillDetail" component={BillDetailScreen} />
             </Stack.Navigator>
         </NavigationContainer>
     );

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -7,45 +7,50 @@ import {
     TouchableOpacity,
     TextInput,
     StatusBar,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
+import FAB from "../../components/common/FAB";
+import { getAllCategories, deleteCategory, Category } from "../../db/db";
 
-const CATEGORIES = [
-    { id: "1", name: "Grocery", products: 24, icon: "cart", iconColor: "#1a57db", type: "Ionicons" },
-    { id: "2", name: "Dairy", products: 12, icon: "water", iconColor: "#3b82f6", type: "Ionicons" },
-    { id: "3", name: "Beverages", products: 45, icon: "coffee", iconColor: "#6366f1", type: "MaterialCommunityIcons" },
-    { id: "4", name: "Snacks", products: 30, icon: "cookie", iconColor: "#8b5cf6", type: "MaterialCommunityIcons" },
-    { id: "5", name: "Personal Care", products: 18, icon: "content-cut", iconColor: "#a855f7", type: "MaterialCommunityIcons" },
-    { id: "6", name: "Household", products: 10, icon: "briefcase", iconColor: "#d946ef", type: "Ionicons" },
-];
+/** icon stored as "Ionicons:cart" or "MCI:coffee" */
+const renderIcon = (iconField: string, color: string, size = 24) => {
+    const [type, name] = iconField?.includes(":") ? iconField.split(":") : ["Ionicons", iconField ?? "grid-outline"];
+    if (type === "MCI") {
+        return <MaterialCommunityIcons name={name as any} size={size} color={color} />;
+    }
+    return <Ionicons name={name as any} size={size} color={color} />;
+};
 
-const CategoryCard = ({ item }: { item: any }) => (
+const CategoryCard = ({
+    item,
+    onDelete,
+}: {
+    item: Category & { product_count?: number };
+    onDelete: (id: string) => void;
+}) => (
     <View style={styles.card}>
         <View style={styles.cardLeft}>
-            <View style={[styles.iconContainer, { backgroundColor: item.iconColor + "15" }]}>
-                {item.type === "Ionicons" ? (
-                    <Ionicons name={item.icon as any} size={24} color={item.iconColor} />
-                ) : (
-                    <MaterialCommunityIcons name={item.icon as any} size={24} color={item.iconColor} />
-                )}
+            <View style={[styles.iconContainer, { backgroundColor: item.icon_color + "15" }]}>
+                {renderIcon(item.icon, item.icon_color)}
             </View>
             <View style={styles.categoryInfo}>
                 <Text style={styles.categoryName}>{item.name}</Text>
-                <Text style={styles.productCount}>{item.products} Products</Text>
+                <Text style={styles.productCount}>{item.product_count ?? 0} Products</Text>
             </View>
         </View>
         <View style={styles.cardRight}>
-            <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="pencil" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
+            <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => onDelete(item.id)}
+            >
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
             </TouchableOpacity>
         </View>
     </View>
@@ -53,17 +58,43 @@ const CategoryCard = ({ item }: { item: any }) => (
 
 export default function ManageCategoriesScreen() {
     const navigation = useNavigation();
+    const [categories, setCategories] = useState<Category[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
+
+    const loadCategories = useCallback(() => {
+        const data = getAllCategories();
+        setCategories(data);
+    }, []);
+
+    useFocusEffect(loadCategories);
+
+    const handleDelete = (id: string) => {
+        Alert.alert("Delete Category", "Are you sure? Products in this category will be uncategorised.", [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => {
+                    deleteCategory(id);
+                    setCategories((prev) => prev.filter((c) => c.id !== id));
+                },
+            },
+        ]);
+    };
+
+    const filtered = searchQuery.trim()
+        ? categories.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : categories;
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
-            
-            <ScreenHeader 
-                title="Manage Categories" 
+
+            <ScreenHeader
+                title="Manage Categories"
                 showBack={true}
                 rightElement={
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.headerPlusButton}
                         onPress={() => navigation.navigate("AddCategory" as never)}
                     >
@@ -85,38 +116,42 @@ export default function ManageCategoriesScreen() {
                 </View>
 
                 <FlatList
-                    data={CATEGORIES}
+                    data={filtered}
                     keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => <CategoryCard item={item} />}
+                    renderItem={({ item }) => (
+                        <CategoryCard item={item} onDelete={handleDelete} />
+                    )}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
-                    ListFooterComponent={
-                        <View style={styles.footer}>
-                            <Text style={styles.footerText}>Showing {CATEGORIES.length} categories total</Text>
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="grid-outline" size={48} color={colors.border} />
+                            <Text style={styles.emptyText}>No categories yet</Text>
+                            <Text style={styles.emptySubText}>Tap + to add your first category</Text>
                         </View>
+                    }
+                    ListFooterComponent={
+                        filtered.length > 0 ? (
+                            <View style={styles.footer}>
+                                <Text style={styles.footerText}>
+                                    Showing {filtered.length} categor{filtered.length === 1 ? "y" : "ies"}
+                                </Text>
+                            </View>
+                        ) : null
                     }
                 />
             </View>
 
-            <TouchableOpacity 
-                style={styles.fab}
+            <FAB
                 onPress={() => navigation.navigate("AddCategory" as never)}
-            >
-                <Ionicons name="add" size={32} color="#fff" />
-            </TouchableOpacity>
+            />
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    content: {
-        flex: 1,
-        paddingHorizontal: spacing.md,
-    },
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { flex: 1, paddingHorizontal: spacing.md },
     headerPlusButton: {
         width: 32,
         height: 32,
@@ -133,7 +168,6 @@ const styles = StyleSheet.create({
         marginVertical: spacing.md,
         paddingHorizontal: spacing.sm,
         height: 50,
-        // Shadow
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -148,9 +182,7 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.md,
         color: colors.text,
     },
-    listContent: {
-        paddingBottom: 100, // For FAB
-    },
+    listContent: { paddingBottom: 100 },
     card: {
         flexDirection: "row",
         alignItems: "center",
@@ -165,10 +197,7 @@ const styles = StyleSheet.create({
         shadowRadius: 5,
         elevation: 2,
     },
-    cardLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
+    cardLeft: { flexDirection: "row", alignItems: "center" },
     iconContainer: {
         width: 48,
         height: 48,
@@ -176,9 +205,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
-    categoryInfo: {
-        marginLeft: spacing.md,
-    },
+    categoryInfo: { marginLeft: spacing.md },
     categoryName: {
         fontSize: typography.sizes.md,
         fontWeight: "700",
@@ -189,13 +216,23 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: 2,
     },
-    cardRight: {
-        flexDirection: "row",
+    cardRight: { flexDirection: "row", alignItems: "center" },
+    actionButton: { padding: spacing.xs, marginLeft: spacing.sm },
+    emptyState: {
         alignItems: "center",
+        paddingTop: 60,
+        paddingBottom: 40,
     },
-    actionButton: {
-        padding: spacing.xs,
-        marginLeft: spacing.sm,
+    emptyText: {
+        fontSize: typography.sizes.lg,
+        fontWeight: "700",
+        color: colors.textSecondary,
+        marginTop: spacing.md,
+    },
+    emptySubText: {
+        fontSize: typography.sizes.sm,
+        color: colors.textSecondary,
+        marginTop: spacing.xs,
     },
     footer: {
         alignItems: "center",
@@ -206,21 +243,5 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.sm,
         color: colors.textSecondary,
         fontStyle: "italic",
-    },
-    fab: {
-        position: "absolute",
-        right: spacing.lg,
-        bottom: spacing.lg,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: colors.primary,
-        alignItems: "center",
-        justifyContent: "center",
-        elevation: 5,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
     },
 });

@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v2.1 | April 2026
+### Project Scope Document v2.2 | April 2026
 
 ---
 
@@ -124,7 +124,7 @@ ShopAI is designed to work fully offline and sync when internet is available. Th
 
 #### Local storage (on device)
 - `expo-sqlite` stores all transactional data: products, sales_log, suggestions_cache, sync_queue
-- `MMKV` (react-native-mmkv) stores fast key-value flags: consent setting, auth token, plan type
+- `@react-native-async-storage/async-storage` stores key-value flags: consent setting, auth token, plan type *(Note: originally planned as `react-native-mmkv` but replaced — MMKV v4.3+ requires a native build and is incompatible with Expo Go)*
 - All user actions write to SQLite first — the app is always responsive regardless of connectivity
 
 #### Sync queue mechanism
@@ -203,6 +203,8 @@ When consent is given, only statistical patterns are sent — never product name
 | Add Category | Manage Categories → FAB | New category with name, icon, and colour theme |
 | Manage Brands | Settings | Brand list with logos, product counts, edit/delete, search, FAB to add |
 | Add Brand | Manage Brands → FAB | New brand entry |
+| Bills (All Transactions) | Reports → "View All Transactions" | Full paginated bill list with search by customer name and filter chips (All / Cash / Udhar); shows running total of filtered bills |
+| Bill Detail | Bills list row or Reports recent transaction row | Receipt-style view: payment mode badge, total, date/time, customer, itemised list with unit price × qty and line totals, grand total |
 
 ---
 
@@ -228,7 +230,7 @@ shopai/
     │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen
     │   │   ├── home/        # HomeScreen (Dashboard)
     │   │   ├── products/    # ProductsScreen, AddProductScreen
-    │   │   ├── billing/     # NewBillScreen
+    │   │   ├── billing/     # NewBillScreen, BillsScreen, BillDetailScreen
     │   │   ├── customers/   # CustomersScreen, AddCustomerScreen
     │   │   ├── reports/     # ReportsScreen
     │   │   └── settings/    # SettingsScreen, ManageCategoriesScreen, AddCategoryScreen, ManageBrandsScreen, AddBrandScreen
@@ -241,7 +243,7 @@ shopai/
     │   ├── navigation/      # RootNavigator, AuthNavigator, BottomTabNavigator
     │   ├── services/        # authService, syncService
     │   ├── theme/           # colors, spacing, typography
-    │   └── utils/           # storage (MMKV helpers)
+    │   └── utils/           # storage (AsyncStorage helpers)
     └── App.tsx
 ```
 
@@ -255,7 +257,7 @@ shopai/
 | Navigation | React Navigation v6 (Bottom Tabs + Stack) | Industry standard |
 | State management | Zustand | Lightweight, simple |
 | Local DB | expo-sqlite | Offline-first storage, sync queue |
-| Local prefs | react-native-mmkv | Fast key-value: consent flag, auth token |
+| Local prefs | @react-native-async-storage/async-storage | Key-value: consent flag, auth token *(MMKV replaced — incompatible with Expo Go)* |
 | Connectivity | @react-native-community/netinfo | Online/offline detection for sync |
 | Icons | @expo/vector-icons (Ionicons, MaterialCommunityIcons) | Rich icon set |
 | Backend | Node.js + Express | Simple REST API |
@@ -466,7 +468,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 2026
+> **Last updated:** April 2026 — v2.2
 
 ---
 
@@ -474,16 +476,16 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 1 | Products → SQLite | 🔲 | Save/load/delete in AddProduct & ProductsScreen |
-| 2 | Categories → SQLite | 🔲 | Manage Categories & Add Category wired to real data |
-| 3 | Brands → SQLite | 🔲 | Manage Brands & Add Brand wired to real data |
-| 4 | Link categories + brands to Add Product form | 🔲 | Chip selectors pull from SQLite, not hardcoded arrays |
-| 5 | Customers → SQLite | 🔲 | CustomersScreen & AddCustomer form wired |
-| 6 | Bills → SQLite | 🔲 | NewBillScreen saves bill + bill_items, deducts stock |
-| 7 | Sales log → SQLite | 🔲 | Write to `sales` table on every bill checkout |
-| 8 | Reports → SQLite | 🔲 | Replace mock numbers with real queries |
-| 9 | Dashboard → SQLite | 🔲 | Today's sales, low stock count from real data |
-| 10 | Low stock detection (local) | 🔲 | Compute `stock < min_threshold` on device, show alert |
+| 1 | Products → SQLite | ✅ | ProductsScreen + AddProductScreen wired; `useFocusEffect` refreshes list on nav return |
+| 2 | Categories → SQLite | ✅ | ManageCategoriesScreen + AddCategoryScreen wired; icons encoded as `"Ionicons:cart"` in DB |
+| 3 | Brands → SQLite | ✅ | ManageBrandsScreen + AddBrandScreen wired |
+| 4 | Link categories + brands to Add Product form | ✅ | Category + brand chip selectors pull live from SQLite |
+| 5 | Customers → SQLite | ✅ | CustomersScreen + AddCustomerScreen wired; udhar balance tracked |
+| 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance |
+| 7 | Sales log → SQLite | ✅ | `sales_log` row written per product on every bill checkout |
+| 8 | Reports → SQLite | ✅ | ReportsScreen queries real `getTodaySales`, `getSalesByRange`, `getTopProducts`; also shows last 10 transactions |
+| 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` |
+| 10 | Low stock detection (local) | ✅ | `getLowStockProducts()` computes `stock < min_threshold` on device; shown as attention card on HomeScreen |
 
 ---
 
@@ -491,8 +493,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 11 | `authService.ts` | 🔲 | OTP login via Supabase Auth, store JWT in MMKV |
-| 12 | `client.js` — auth header | 🔲 | Inject JWT from MMKV into every Axios request |
+| 11 | `authService.ts` | 🔲 | OTP login via Supabase Auth, store JWT in AsyncStorage |
+| 12 | `client.js` — auth header | 🔲 | Inject JWT from AsyncStorage into every Axios request |
 | 13 | `syncQueue.ts` — flush logic | 🔲 | Complete route-by-table + operation dispatch |
 | 14 | `syncService.ts` — listeners | 🔲 | AppState + NetInfo listeners triggering flushSyncQueue |
 | 15 | Add `axios` to package.json | 🔲 | Currently imported but not in dependencies |
@@ -533,13 +535,26 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
-### 14.6 Future Screens (UI not yet built)
+### 14.6 Additional Screens Built (beyond original v1 scope)
+
+| Item | Status | Notes |
+|---|---|---|
+| Bills / All Transactions screen | ✅ | `BillsScreen`: search by customer name, filter by All/Cash/Udhar, running total of filtered bills, empty state |
+| Bill Detail screen | ✅ | `BillDetailScreen`: receipt-style view with payment badge, itemised list, grand total; reached from ReportsScreen or BillsScreen |
+| Recent Transactions section in Reports | ✅ | Last 10 bills shown in ReportsScreen; each row tappable → BillDetail; "View All" button → BillsScreen |
+
+---
+
+### 14.7 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
 |---|---|---|
 | Dedicated AI Suggestions screen | 🔲 | Currently only a teaser card on dashboard |
 | Alert Settings screen | 🔲 | WhatsApp number, alert prefs, consent toggle |
 | Sync status detail on dashboard | 🔲 | ScreenHeader has sync badge, but no queue detail |
+| Edit Product screen | 🔲 | Tap product → pre-filled form to update price, stock threshold, category |
+| Edit Customer screen | 🔲 | Tap customer → pre-filled form; record udhar payments |
+| Udhar payment recording | 🔲 | Mark partial or full udhar payment against a customer |
 
 ---
 
@@ -599,5 +614,27 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 
 ---
 
+---
+
+## 19. Changelog
+
+### v2.2 — April 2026
+- **All Phase 1 SQLite wiring complete** (tasks 1–10 in §14.1): all screens read/write live data from local SQLite, no mock data remains
+- **`react-native-mmkv` replaced with `@react-native-async-storage/async-storage`** — MMKV v4.3+ requires a native build and crashes in Expo Go; AsyncStorage is fully compatible
+- **`expo-dev-client` removed** — was causing an unresolvable Intent error on `expo start --android`; not needed for Expo Go workflow
+- **Critical bug fixed**: `initDatabase()` was exported from `src/db/sqlite.ts` but never called; all table-creation DDL was silently skipped on every launch. Fixed by adding `useEffect(() => { initDatabase(); }, [])` in `App.tsx`
+- **New screens added beyond original scope**:
+  - `BillsScreen` — all transactions list with search + payment-mode filter
+  - `BillDetailScreen` — receipt-style itemised bill view
+  - Both registered in `RootNavigator.tsx`
+- **ReportsScreen enhanced**: new "Recent Transactions" section (last 10 bills, each tappable) and "View All Transactions" navigation button
+- **`src/db/db.ts` additions**: `getAllBills()`, `getBillItems(billId)`, `getRecentBills(n)`, `getTodaySales()`, `getSalesByRange()`, `getTopProducts()`
+- **Tech stack table updated**: MMKV → AsyncStorage entry corrected in §8
+
+### v2.1 — April 2026
+- Initial scope document with full feature spec, DB schema, pricing model, and build timeline
+
+---
+
 *Document prepared: April 2026*
-*Version: 2.1 — Updated to reflect actual mobile implementation*
+*Version: 2.2 — Reflects completed Phase 1 SQLite wiring, bug fixes, and new transactions screens*

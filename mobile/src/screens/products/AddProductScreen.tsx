@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -8,59 +8,116 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
+import { getAllCategories, getAllBrands, insertProduct, Category, Brand } from "../../db/db";
 
-const CATEGORIES = ["Grocery", "Dairy", "Beverages", "Snacks", "Personal Care", "Household"];
-const BRANDS = ["Aashirvaad", "Amul", "Dove", "Britannia"];
-const UOMS = ["kg", "Liter", "Pcs", "gm", "Pack"];
+const UOMS = ["kg", "Liter", "Pcs", "gm", "Pack", "Box", "Dozen"];
 
 export default function AddProductScreen() {
     const navigation = useNavigation();
     const [name, setName] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState("Grocery");
-    const [selectedBrand, setSelectedBrand] = useState("Aashirvaad");
-    const [selectedUom, setSelectedUom] = useState("kg");
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [brands, setBrands] = useState<Brand[]>([]);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+    const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+    const [selectedUom, setSelectedUom] = useState("Pcs");
     const [purchasePrice, setPurchasePrice] = useState("");
     const [sellingPrice, setSellingPrice] = useState("");
     const [initialStock, setInitialStock] = useState("");
+    const [minThreshold, setMinThreshold] = useState("5");
+    const [saving, setSaving] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            const cats = getAllCategories();
+            const brnds = getAllBrands();
+            setCategories(cats);
+            setBrands(brnds);
+            if (cats.length > 0 && !selectedCategoryId) {
+                setSelectedCategoryId(cats[0].id);
+            }
+        }, [])
+    );
 
     const renderChipSelector = (
         title: string,
-        items: string[],
-        selected: string,
-        onSelect: (val: string) => void
+        items: { id: string; label: string }[],
+        selectedId: string | null,
+        onSelect: (id: string) => void
     ) => (
         <View style={styles.section}>
             <Text style={styles.label}>{title}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                {items.map((item) => (
-                    <TouchableOpacity
-                        key={item}
-                        style={[styles.chip, selected === item && styles.activeChip]}
-                        onPress={() => onSelect(item)}
-                    >
-                        <Text style={[styles.chipText, selected === item && styles.activeChipText]}>
-                            {item}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            {items.length === 0 ? (
+                <Text style={styles.noItemsText}>
+                    No {title.toLowerCase()} found. Add one in Settings first.
+                </Text>
+            ) : (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chipScroll}
+                >
+                    {items.map((item) => (
+                        <TouchableOpacity
+                            key={item.id}
+                            style={[styles.chip, selectedId === item.id && styles.activeChip]}
+                            onPress={() => onSelect(item.id)}
+                        >
+                            <Text
+                                style={[
+                                    styles.chipText,
+                                    selectedId === item.id && styles.activeChipText,
+                                ]}
+                            >
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            )}
         </View>
     );
 
+    const handleSave = () => {
+        if (!name.trim()) {
+            Alert.alert("Validation", "Product name is required.");
+            return;
+        }
+        if (!sellingPrice || isNaN(Number(sellingPrice))) {
+            Alert.alert("Validation", "Please enter a valid selling price.");
+            return;
+        }
+        setSaving(true);
+        try {
+            insertProduct({
+                name: name.trim(),
+                category_id: selectedCategoryId,
+                brand_id: selectedBrandId,
+                purchase_price: parseFloat(purchasePrice) || 0,
+                selling_price: parseFloat(sellingPrice) || 0,
+                stock_quantity: parseInt(initialStock) || 0,
+                min_stock_threshold: parseInt(minThreshold) || 5,
+                uom: selectedUom,
+            });
+            navigation.goBack();
+        } catch (e) {
+            Alert.alert("Error", "Could not save product. Please try again.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-            <ScreenHeader 
-                title="Add New Product"
-                showBack={true}
-            />
+            <ScreenHeader title="Add New Product" showBack={true} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
@@ -68,9 +125,9 @@ export default function AddProductScreen() {
                 <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                     {/* Basic Information */}
                     <Text style={styles.sectionTitle}>BASIC INFORMATION</Text>
-                    
+
                     <View style={styles.section}>
-                        <Text style={styles.label}>Product Name</Text>
+                        <Text style={styles.label}>Product Name *</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="e.g. Basmati Rice"
@@ -80,8 +137,19 @@ export default function AddProductScreen() {
                         />
                     </View>
 
-                    {renderChipSelector("Category", CATEGORIES, selectedCategory, setSelectedCategory)}
-                    {renderChipSelector("Brand", BRANDS, selectedBrand, setSelectedBrand)}
+                    {renderChipSelector(
+                        "Category",
+                        categories.map((c) => ({ id: c.id, label: c.name })),
+                        selectedCategoryId,
+                        setSelectedCategoryId
+                    )}
+
+                    {renderChipSelector(
+                        "Brand",
+                        brands.map((b) => ({ id: b.id, label: b.name })),
+                        selectedBrandId,
+                        setSelectedBrandId
+                    )}
 
                     <View style={styles.separator} />
 
@@ -104,7 +172,7 @@ export default function AddProductScreen() {
                     </View>
 
                     <View style={styles.section}>
-                        <Text style={styles.label}>Selling Price</Text>
+                        <Text style={styles.label}>Selling Price *</Text>
                         <View style={[styles.inputWithIcon, styles.inputActive]}>
                             <Ionicons name="pricetag" size={20} color={colors.primary} />
                             <TextInput
@@ -134,9 +202,29 @@ export default function AddProductScreen() {
                         <Text style={styles.helperText}>Current quantity available in your store</Text>
                     </View>
 
-                    {renderChipSelector("Unit of Measurement (UOM)", UOMS, selectedUom, setSelectedUom)}
+                    <View style={styles.section}>
+                        <Text style={styles.label}>Low Stock Alert Threshold</Text>
+                        <View style={styles.inputWithIcon}>
+                            <Ionicons name="warning-outline" size={20} color="#f59e0b" />
+                            <TextInput
+                                style={styles.flexInput}
+                                placeholder="5"
+                                value={minThreshold}
+                                onChangeText={setMinThreshold}
+                                keyboardType="numeric"
+                                placeholderTextColor="#9ca3af"
+                            />
+                        </View>
+                        <Text style={styles.helperText}>Alert when stock falls below this number</Text>
+                    </View>
 
-                    {/* Stock Alert Box */}
+                    {renderChipSelector(
+                        "Unit of Measurement (UOM)",
+                        UOMS.map((u) => ({ id: u, label: u })),
+                        selectedUom,
+                        setSelectedUom
+                    )}
+
                     <View style={styles.alertBox}>
                         <Ionicons name="information-circle" size={24} color={colors.primary} />
                         <View style={styles.alertContent}>
@@ -149,11 +237,14 @@ export default function AddProductScreen() {
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* Footer Action */}
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.saveButton} onPress={() => navigation.goBack()}>
+                <TouchableOpacity
+                    style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
+                    onPress={handleSave}
+                    disabled={!name.trim() || saving}
+                >
                     <Ionicons name="save" size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>Save Product</Text>
+                    <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Product"}</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -161,13 +252,8 @@ export default function AddProductScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#f9fafb",
-    },
-    scroll: {
-        padding: spacing.md,
-    },
+    container: { flex: 1, backgroundColor: "#f9fafb" },
+    scroll: { padding: spacing.md },
     sectionTitle: {
         fontSize: 12,
         fontWeight: "700",
@@ -176,15 +262,9 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         marginTop: 8,
     },
-    section: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.text,
-        marginBottom: 8,
-    },
+    section: { marginBottom: 20 },
+    label: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
+    noItemsText: { fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
     input: {
         backgroundColor: "#fff",
         borderWidth: 1,
@@ -205,46 +285,15 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
     },
-    inputActive: {
-        borderColor: colors.primary,
-        backgroundColor: "#eff6ff",
-    },
-    flexInput: {
-        flex: 1,
-        marginLeft: 12,
-        fontSize: 16,
-        color: colors.text,
-    },
-    helperText: {
-        fontSize: 12,
-        color: "#6b7280",
-        marginTop: 4,
-    },
-    chipScroll: {
-        gap: 8,
-    },
-    chip: {
-        backgroundColor: "#e5e7eb",
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-    },
-    activeChip: {
-        backgroundColor: colors.primary,
-    },
-    chipText: {
-        fontSize: 14,
-        fontWeight: "500",
-        color: colors.text,
-    },
-    activeChipText: {
-        color: "#fff",
-    },
-    separator: {
-        height: 1,
-        backgroundColor: "#f3f4f6",
-        marginVertical: 12,
-    },
+    inputActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
+    flexInput: { flex: 1, marginLeft: 12, fontSize: 16, color: colors.text },
+    helperText: { fontSize: 12, color: "#6b7280", marginTop: 4 },
+    chipScroll: { gap: 8 },
+    chip: { backgroundColor: "#e5e7eb", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+    activeChip: { backgroundColor: colors.primary },
+    chipText: { fontSize: 14, fontWeight: "500", color: colors.text },
+    activeChipText: { color: "#fff" },
+    separator: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
     alertBox: {
         backgroundColor: "#eff6ff",
         borderRadius: 12,
@@ -253,20 +302,9 @@ const styles = StyleSheet.create({
         gap: 12,
         marginBottom: 40,
     },
-    alertContent: {
-        flex: 1,
-    },
-    alertTitle: {
-        fontSize: 14,
-        fontWeight: "700",
-        color: colors.text,
-        marginBottom: 2,
-    },
-    alertText: {
-        fontSize: 12,
-        color: "#4b5563",
-        lineHeight: 18,
-    },
+    alertContent: { flex: 1 },
+    alertTitle: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 2 },
+    alertText: { fontSize: 12, color: "#4b5563", lineHeight: 18 },
     footer: {
         padding: spacing.md,
         backgroundColor: "#fff",
@@ -282,9 +320,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         gap: 8,
     },
-    saveButtonText: {
-        color: "#fff",
-        fontSize: 18,
-        fontWeight: "700",
-    },
+    saveButtonDisabled: { backgroundColor: colors.tabInactive },
+    saveButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
 });

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -9,29 +9,46 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
+import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, Bill, Product } from "../../db/db";
 
 export default function HomeScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
+    const [todaySales, setTodaySales] = useState({ total: 0, count: 0 });
+    const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
+    const [totalProducts, setTotalProducts] = useState(0);
+    const [recentBills, setRecentBills] = useState<Bill[]>([]);
+
+    const loadData = useCallback(() => {
+        setTodaySales(getTodaySales());
+        setLowStockItems(getLowStockProducts());
+        setTotalProducts(getAllProducts().length);
+        setRecentBills(getRecentBills(5));
+    }, []);
+
+    useFocusEffect(loadData);
+
+    const formatCurrency = (amount: number) =>
+        `₹ ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+
+    const formatTime = (dateStr: string) => {
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
-            <ScreenHeader 
-                title="Dashboard"
-                isMainTab={false}
-                onNotificationPress={() => {}}
-            />
+            <ScreenHeader title="Dashboard" isMainTab={false} onNotificationPress={() => { }} />
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-
                 {/* Main Stats Section */}
                 <View style={styles.mainStatsContainer}>
                     <View style={styles.salesCard}>
@@ -39,33 +56,67 @@ export default function HomeScreen() {
                             <Text style={styles.salesLabel}>TODAY'S TOTAL SALES</Text>
                             <Ionicons name="cash-outline" size={40} color={colors.primary + "20"} style={styles.salesIconBg} />
                         </View>
-                        <Text style={styles.salesValue}>₹ 12,450.00</Text>
+                        <Text style={styles.salesValue}>{formatCurrency(todaySales.total)}</Text>
                         <View style={styles.trendRow}>
-                            <Ionicons name="trending-up" size={16} color={colors.success} />
-                            <Text style={styles.trendText}>12% from yesterday</Text>
+                            <Ionicons name="receipt-outline" size={16} color={colors.success} />
+                            <Text style={styles.trendText}>{todaySales.count} bill{todaySales.count !== 1 ? "s" : ""} today</Text>
                         </View>
                     </View>
 
-                    <View style={[styles.alertCard, { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-                        <Text style={[styles.alertLabel, { color: '#B45309' }]}>ATTENTION REQUIRED</Text>
-                        <View style={styles.alertMain}>
-                            <View>
-                                <Text style={styles.alertValue}>5 Items</Text>
-                                <Text style={styles.alertSub}>Running Low on Stock</Text>
+                    {totalProducts === 0 ? (
+                        <View style={[styles.alertCard, { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0" }]}>
+                            <Text style={[styles.alertLabel, { color: "#64748B" }]}>STOCK STATUS</Text>
+                            <View style={styles.alertMain}>
+                                <View>
+                                    <Text style={[styles.alertValue, { color: "#64748B" }]}>No Products</Text>
+                                    <Text style={styles.alertSub}>Add products to track stock</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.alertAction}
+                                    onPress={() => navigation.navigate("AddProduct")}
+                                >
+                                    <Text style={styles.alertActionText}>Add Stock</Text>
+                                </TouchableOpacity>
                             </View>
-                            <TouchableOpacity style={styles.alertAction}>
-                                <Text style={styles.alertActionText}>Restock</Text>
-                            </TouchableOpacity>
                         </View>
-                    </View>
+                    ) : lowStockItems.length > 0 ? (
+                        <View style={[styles.alertCard, { backgroundColor: "#FFFBEB", borderColor: "#FEF3C7" }]}>
+                            <Text style={[styles.alertLabel, { color: "#B45309" }]}>ATTENTION REQUIRED</Text>
+                            <View style={styles.alertMain}>
+                                <View>
+                                    <Text style={styles.alertValue}>{lowStockItems.length} Items</Text>
+                                    <Text style={styles.alertSub}>Running Low on Stock</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.alertAction}
+                                    onPress={() => navigation.navigate("Inventory")}
+                                >
+                                    <Text style={styles.alertActionText}>Restock</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={[styles.alertCard, { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" }]}>
+                            <Text style={[styles.alertLabel, { color: "#065F46" }]}>ALL GOOD</Text>
+                            <View style={styles.alertMain}>
+                                <View>
+                                    <Text style={[styles.alertValue, { color: colors.success }]}>
+                                        Stock OK
+                                    </Text>
+                                    <Text style={styles.alertSub}>No low stock items</Text>
+                                </View>
+                                <Ionicons name="checkmark-circle" size={32} color={colors.success} />
+                            </View>
+                        </View>
+                    )}
                 </View>
 
-                {/* Quick Actions Section */}
+                {/* Quick Actions */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
                 </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.primaryAction}
                     onPress={() => navigation.navigate("NewBill")}
                 >
@@ -74,167 +125,120 @@ export default function HomeScreen() {
                 </TouchableOpacity>
 
                 <View style={styles.secondaryActionsRow}>
-                    <TouchableOpacity style={styles.secondaryActionCard}>
+                    <TouchableOpacity
+                        style={styles.secondaryActionCard}
+                        onPress={() => navigation.navigate("Inventory")}
+                    >
                         <View style={[styles.secondaryActionIcon, { backgroundColor: colors.primary + "10" }]}>
                             <Ionicons name="cube-outline" size={24} color={colors.primary} />
                         </View>
                         <Text style={styles.secondaryActionText}>Inventory</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.secondaryActionCard}>
-                        <View style={[styles.secondaryActionIcon, { backgroundColor: '#EEF2FF' }]}>
+                    <TouchableOpacity
+                        style={styles.secondaryActionCard}
+                        onPress={() => navigation.navigate("Customers")}
+                    >
+                        <View style={[styles.secondaryActionIcon, { backgroundColor: "#EEF2FF" }]}>
                             <Ionicons name="people-outline" size={24} color="#4F46E5" />
                         </View>
                         <Text style={styles.secondaryActionText}>Customers</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* AI Reorder Suggestions Section */}
+                {/* AI Reorder Suggestions */}
                 <View style={styles.aiSection}>
                     <View style={styles.aiHeader}>
                         <View style={styles.aiTitleRow}>
                             <Ionicons name="sparkles" size={18} color={colors.primary} />
                             <Text style={styles.aiTitle}>AI Reorder Insights</Text>
                         </View>
-                        <TouchableOpacity>
-                            <Text style={styles.aiViewAll}>View Suggestions</Text>
-                        </TouchableOpacity>
                     </View>
-                    
-                    <View style={styles.aiCard}>
-                        <Text style={styles.aiMessage}>
-                            "Paracetamol 500mg" is selling 3x faster this week. Reorder at
-                            least 50 strips to avoid stockout by Friday.
-                        </Text>
-                        <View style={styles.aiFooter}>
-                            <View style={styles.aiBadge}>
-                                <Text style={styles.aiBadgeText}>URGENT</Text>
+
+                    {lowStockItems.length > 0 ? (
+                        lowStockItems.slice(0, 2).map((item) => (
+                            <View key={item.id} style={styles.aiCard}>
+                                <Text style={styles.aiMessage}>
+                                    "{item.name}" is low on stock ({item.stock_quantity} left, threshold: {item.min_stock_threshold}). Consider restocking soon.
+                                </Text>
+                                <View style={styles.aiFooter}>
+                                    <View style={[styles.aiBadge, item.stock_quantity === 0 && { backgroundColor: colors.error }]}>
+                                        <Text style={styles.aiBadgeText}>
+                                            {item.stock_quantity === 0 ? "OUT OF STOCK" : "LOW STOCK"}
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.aiTime}>{item.uom}</Text>
+                                </View>
                             </View>
-                            <Text style={styles.aiTime}>2h ago</Text>
+                        ))
+                    ) : (
+                        <View style={styles.aiCard}>
+                            <Text style={styles.aiMessage}>
+                                All products have sufficient stock. AI suggestions will appear here when stock runs low.
+                            </Text>
+                            <View style={styles.aiFooter}>
+                                <View style={[styles.aiBadge, { backgroundColor: colors.success }]}>
+                                    <Text style={styles.aiBadgeText}>ALL GOOD</Text>
+                                </View>
+                            </View>
                         </View>
-                    </View>
+                    )}
                 </View>
 
-                {/* Recent Activity Section */}
+                {/* Recent Activity */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.seeAll}>View All</Text>
-                    </TouchableOpacity>
                 </View>
 
-                <View style={styles.activityList}>
-                    <View style={styles.activityItem}>
-                        <View style={[styles.activityIcon, { backgroundColor: '#DCFCE7' }]}>
-                            <Ionicons name="receipt-outline" size={20} color={colors.success} />
-                        </View>
-                        <View style={styles.activityContent}>
-                            <Text style={styles.activityTitle}>Sold 5 items to Rahul S.</Text>
-                            <Text style={styles.activitySubtitle}>10:45 AM • Bill #PB-1024</Text>
-                        </View>
-                        <Text style={styles.activityAmount}>₹ 850.00</Text>
+                {recentBills.length === 0 ? (
+                    <View style={styles.emptyActivity}>
+                        <Text style={styles.emptyActivityText}>No bills yet. Create your first bill!</Text>
                     </View>
-
-                    <View style={styles.activityItem}>
-                        <View style={[styles.activityIcon, { backgroundColor: '#FEF3C7' }]}>
-                            <Ionicons name="wallet-outline" size={20} color="#D97706" />
-                        </View>
-                        <View style={styles.activityContent}>
-                            <Text style={styles.activityTitle}>Stock Updated</Text>
-                            <Text style={styles.activitySubtitle}>09:15 AM • 10kg Rice added</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                ) : (
+                    <View style={styles.activityList}>
+                        {recentBills.map((bill) => (
+                            <View key={bill.id} style={styles.activityItem}>
+                                <View
+                                    style={[
+                                        styles.activityIcon,
+                                        {
+                                            backgroundColor:
+                                                bill.payment_mode === "udhar" ? "#FEF3C7" : "#DCFCE7",
+                                        },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name={bill.payment_mode === "udhar" ? "wallet-outline" : "receipt-outline"}
+                                        size={20}
+                                        color={bill.payment_mode === "udhar" ? "#D97706" : colors.success}
+                                    />
+                                </View>
+                                <View style={styles.activityContent}>
+                                    <Text style={styles.activityTitle}>
+                                        {bill.customer_name
+                                            ? `Bill for ${bill.customer_name}`
+                                            : "Walk-in Customer"}
+                                    </Text>
+                                    <Text style={styles.activitySubtitle}>
+                                        {formatTime(bill.bill_date)} · {bill.total_items} items ·{" "}
+                                        {bill.payment_mode === "udhar" ? "Udhar" : "Cash"}
+                                    </Text>
+                                </View>
+                                <Text style={styles.activityAmount}>
+                                    ₹{bill.total_amount.toFixed(2)}
+                                </Text>
+                            </View>
+                        ))}
                     </View>
-                </View>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    titleSection: {
-        paddingHorizontal: spacing.md,
-        paddingTop: spacing.md,
-        paddingBottom: spacing.sm,
-    },
-    titleText: {
-        fontSize: 28,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    scrollContent: {
-        paddingHorizontal: spacing.md,
-        paddingBottom: spacing.tabBarOffset,
-    },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingVertical: spacing.lg,
-    },
-    headerLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-    },
-    shopIconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 10,
-        backgroundColor: "#F1F5F9",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    shopTextContainer: {
-        justifyContent: "center",
-    },
-    shopName: {
-        fontSize: 18,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    syncStatus: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        marginTop: 2,
-    },
-    syncText: {
-        fontSize: 10,
-        fontWeight: "700",
-        color: colors.success,
-        letterSpacing: 0.5,
-    },
-    notificationButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: "#fff",
-        alignItems: "center",
-        justifyContent: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
-    },
-    notificationDot: {
-        position: "absolute",
-        top: 10,
-        right: 12,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: "#EF4444",
-        borderWidth: 2,
-        borderColor: "#fff",
-    },
-    mainStatsContainer: {
-        gap: spacing.md,
-    },
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
+    mainStatsContainer: { gap: spacing.md, marginTop: spacing.md },
     salesCard: {
         backgroundColor: "#fff",
         borderRadius: spacing.roundness,
@@ -247,94 +251,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
     },
-    salesHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-    },
-    salesLabel: {
-        fontSize: 12,
-        fontWeight: "600",
-        color: colors.textSecondary,
-        letterSpacing: 1,
-    },
-    salesIconBg: {
-        position: "absolute",
-        right: 0,
-        top: 0,
-    },
-    salesValue: {
-        fontSize: 32,
-        fontWeight: "800",
-        color: colors.primary,
-        marginVertical: spacing.sm,
-    },
-    trendRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-    },
-    trendText: {
-        fontSize: 12,
-        color: colors.success,
-        fontWeight: "600",
-    },
-    alertCard: {
-        borderRadius: spacing.roundness,
-        padding: spacing.lg,
-        borderWidth: 1,
-        borderStyle: "dashed",
-    },
-    alertLabel: {
-        fontSize: 11,
-        fontWeight: "800",
-        letterSpacing: 0.5,
-        marginBottom: spacing.sm,
-    },
-    alertMain: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    alertValue: {
-        fontSize: 20,
-        fontWeight: "700",
-        color: "#1E293B",
-    },
-    alertSub: {
-        fontSize: 13,
-        color: "#64748B",
-        marginTop: 2,
-    },
-    alertAction: {
-        backgroundColor: "#B45309",
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 8,
-    },
-    alertActionText: {
-        color: "#fff",
-        fontSize: 12,
-        fontWeight: "700",
-    },
-    sectionHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: spacing.xl,
-        marginBottom: spacing.md,
-    },
-    sectionTitle: {
-        fontSize: 14,
-        fontWeight: "800",
-        color: colors.textSecondary,
-        letterSpacing: 1,
-    },
-    seeAll: {
-        fontSize: 13,
-        color: colors.primary,
-        fontWeight: "700",
-    },
+    salesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+    salesLabel: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, letterSpacing: 1 },
+    salesIconBg: { position: "absolute", right: 0, top: 0 },
+    salesValue: { fontSize: 32, fontWeight: "800", color: colors.primary, marginVertical: spacing.sm },
+    trendRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    trendText: { fontSize: 12, color: colors.success, fontWeight: "600" },
+    alertCard: { borderRadius: spacing.roundness, padding: spacing.lg, borderWidth: 1, borderStyle: "dashed" },
+    alertLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: spacing.sm },
+    alertMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    alertValue: { fontSize: 20, fontWeight: "700", color: "#1E293B" },
+    alertSub: { fontSize: 13, color: "#64748B", marginTop: 2 },
+    alertAction: { backgroundColor: "#B45309", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+    alertActionText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.xl, marginBottom: spacing.md },
+    sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.textSecondary, letterSpacing: 1 },
     primaryAction: {
         backgroundColor: colors.primary,
         borderRadius: spacing.roundness,
@@ -349,134 +280,28 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 6,
     },
-    primaryActionText: {
-        color: "#fff",
-        fontSize: 18,
-        fontWeight: "700",
-    },
-    secondaryActionsRow: {
-        flexDirection: "row",
-        gap: spacing.md,
-        marginTop: spacing.md,
-    },
-    secondaryActionCard: {
-        flex: 1,
-        backgroundColor: "#fff",
-        borderRadius: spacing.roundness,
-        padding: spacing.md,
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    secondaryActionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: spacing.sm,
-    },
-    secondaryActionText: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: colors.text,
-    },
-    aiSection: {
-        marginTop: spacing.xl,
-    },
-    aiHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: spacing.md,
-    },
-    aiTitleRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-    },
-    aiTitle: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    aiViewAll: {
-        fontSize: 13,
-        color: colors.primary,
-        fontWeight: "600",
-    },
-    aiCard: {
-        backgroundColor: "#EEF2FF",
-        borderRadius: spacing.roundness,
-        padding: spacing.lg,
-        borderLeftWidth: 4,
-        borderLeftColor: colors.primary,
-    },
-    aiMessage: {
-        fontSize: 15,
-        color: "#1E293B",
-        lineHeight: 22,
-        fontWeight: "500",
-    },
-    aiFooter: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: spacing.md,
-    },
-    aiBadge: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
-    },
-    aiBadgeText: {
-        color: "#fff",
-        fontSize: 10,
-        fontWeight: "800",
-    },
-    aiTime: {
-        fontSize: 12,
-        color: colors.textSecondary,
-    },
-    activityList: {
-        backgroundColor: "#fff",
-        borderRadius: spacing.roundness,
-        borderWidth: 1,
-        borderColor: colors.border,
-        overflow: "hidden",
-    },
-    activityItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        padding: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    activityIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 10,
-        alignItems: "center",
-        justifyContent: "center",
-        marginRight: spacing.md,
-    },
-    activityContent: {
-        flex: 1,
-    },
-    activityTitle: {
-        fontSize: 15,
-        fontWeight: "600",
-        color: colors.text,
-    },
-    activitySubtitle: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    activityAmount: {
-        fontSize: 15,
-        fontWeight: "700",
-        color: colors.text,
-    },
+    primaryActionText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+    secondaryActionsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
+    secondaryActionCard: { flex: 1, backgroundColor: "#fff", borderRadius: spacing.roundness, padding: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.border },
+    secondaryActionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
+    secondaryActionText: { fontSize: 14, fontWeight: "600", color: colors.text },
+    aiSection: { marginTop: spacing.xl },
+    aiHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
+    aiTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    aiTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+    aiCard: { backgroundColor: "#EEF2FF", borderRadius: spacing.roundness, padding: spacing.lg, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: spacing.sm },
+    aiMessage: { fontSize: 15, color: "#1E293B", lineHeight: 22, fontWeight: "500" },
+    aiFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md },
+    aiBadge: { backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+    aiBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+    aiTime: { fontSize: 12, color: colors.textSecondary },
+    activityList: { backgroundColor: "#fff", borderRadius: spacing.roundness, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+    activityItem: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    activityIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+    activityContent: { flex: 1 },
+    activityTitle: { fontSize: 15, fontWeight: "600", color: colors.text },
+    activitySubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    activityAmount: { fontSize: 15, fontWeight: "700", color: colors.text },
+    emptyActivity: { alignItems: "center", paddingVertical: spacing.xl },
+    emptyActivityText: { fontSize: 14, color: colors.textSecondary },
 });

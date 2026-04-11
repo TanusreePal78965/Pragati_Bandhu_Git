@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -7,46 +7,38 @@ import {
     TouchableOpacity,
     TextInput,
     StatusBar,
-    Image,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
+import FAB from "../../components/common/FAB";
+import { getAllBrands, deleteBrand, Brand } from "../../db/db";
 
-const BRANDS = [
-    { id: "1", name: "Aashirvaad", products: 32, logoType: "text", logo: "AASHIRVAAD", logoBg: "#fef3c7" },
-    { id: "2", name: "Amul", products: 114, logoType: "text", logo: "Amul", logoBg: "#f3f4f6" },
-    { id: "3", name: "Dove", products: 15, logoType: "icon", logo: "image-outline", logoBg: "#f1f5f9" },
-    { id: "4", name: "Britannia", products: 50, logoType: "icon", logo: "image-outline", logoBg: "#f1f5f9" },
-    { id: "5", name: "Fortune", products: 12, logoType: "icon", logo: "image-outline", logoBg: "#f1f5f9" },
-    { id: "6", name: "Tata", products: 88, logoType: "icon", logo: "image-outline", logoBg: "#f1f5f9" },
-];
-
-const BrandItem = ({ item }: { item: typeof BRANDS[0] }) => (
+const BrandItem = ({
+    item,
+    onDelete,
+}: {
+    item: Brand & { product_count?: number };
+    onDelete: (id: string) => void;
+}) => (
     <View style={styles.itemContainer}>
         <View style={styles.itemLeft}>
-            <View style={[styles.logoContainer, { backgroundColor: item.logoBg }]}>
-                {item.logoType === "text" ? (
-                    <Text style={styles.logoText}>{item.logo}</Text>
-                ) : (
-                    <Ionicons name={item.logo as any} size={24} color={colors.textSecondary} />
-                )}
+            <View style={[styles.logoContainer, { backgroundColor: item.color }]}>
+                <Text style={styles.logoText}>{item.name.substring(0, 4).toUpperCase()}</Text>
             </View>
             <View style={styles.brandInfo}>
                 <Text style={styles.brandName}>{item.name}</Text>
-                <Text style={styles.productCount}>{item.products} Products</Text>
+                <Text style={styles.productCount}>{item.product_count ?? 0} Products</Text>
             </View>
         </View>
         <View style={styles.itemRight}>
-            <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="pencil" size={24} color="#1a57db" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="trash" size={24} color="#ef4444" />
+            <TouchableOpacity style={styles.actionButton} onPress={() => onDelete(item.id)}>
+                <Ionicons name="trash" size={24} color={colors.error} />
             </TouchableOpacity>
         </View>
     </View>
@@ -54,16 +46,39 @@ const BrandItem = ({ item }: { item: typeof BRANDS[0] }) => (
 
 export default function ManageBrandsScreen() {
     const navigation = useNavigation();
+    const [brands, setBrands] = useState<Brand[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
+
+    const loadBrands = useCallback(() => {
+        const data = getAllBrands();
+        setBrands(data);
+    }, []);
+
+    useFocusEffect(loadBrands);
+
+    const handleDelete = (id: string) => {
+        Alert.alert("Delete Brand", "Are you sure? Products linked to this brand will be unbranded.", [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => {
+                    deleteBrand(id);
+                    setBrands((prev) => prev.filter((b) => b.id !== id));
+                },
+            },
+        ]);
+    };
+
+    const filtered = searchQuery.trim()
+        ? brands.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : brands;
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
-            
-            <ScreenHeader 
-                title="Manage Brands" 
-                showBack={true}
-            />
+
+            <ScreenHeader title="Manage Brands" showBack={true} />
 
             <View style={styles.content}>
                 <View style={styles.searchContainer}>
@@ -78,33 +93,32 @@ export default function ManageBrandsScreen() {
                 </View>
 
                 <FlatList
-                    data={BRANDS}
+                    data={filtered}
                     keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => <BrandItem item={item} />}
+                    renderItem={({ item }) => <BrandItem item={item} onDelete={handleDelete} />}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="pricetag-outline" size={48} color={colors.border} />
+                            <Text style={styles.emptyText}>No brands yet</Text>
+                            <Text style={styles.emptySubText}>Tap + to add your first brand</Text>
+                        </View>
+                    }
                 />
             </View>
 
-            <TouchableOpacity 
-                style={styles.fab}
+            <FAB
                 onPress={() => navigation.navigate("AddBrand" as never)}
-            >
-                <Ionicons name="add" size={32} color="#fff" />
-            </TouchableOpacity>
+            />
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.surface,
-    },
-    content: {
-        flex: 1,
-    },
+    container: { flex: 1, backgroundColor: colors.surface },
+    content: { flex: 1 },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
@@ -121,20 +135,14 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.md,
         color: colors.text,
     },
-    listContent: {
-        paddingHorizontal: spacing.md,
-        paddingBottom: 100,
-    },
+    listContent: { paddingHorizontal: spacing.md, paddingBottom: 100 },
     itemContainer: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingVertical: spacing.md,
     },
-    itemLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
+    itemLeft: { flexDirection: "row", alignItems: "center" },
     logoContainer: {
         width: 56,
         height: 56,
@@ -148,46 +156,13 @@ const styles = StyleSheet.create({
         color: colors.text,
         textAlign: "center",
     },
-    brandInfo: {
-        marginLeft: spacing.md,
-    },
-    brandName: {
-        fontSize: typography.sizes.lg,
-        fontWeight: "700",
-        color: colors.text,
-    },
-    productCount: {
-        fontSize: typography.sizes.md,
-        color: colors.textSecondary,
-        marginTop: 2,
-    },
-    itemRight: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
-    actionButton: {
-        padding: spacing.xs,
-        marginLeft: spacing.sm,
-    },
-    separator: {
-        height: 1,
-        backgroundColor: colors.border,
-        opacity: 0.5,
-    },
-    fab: {
-        position: "absolute",
-        right: spacing.lg,
-        bottom: spacing.lg,
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: colors.primary,
-        alignItems: "center",
-        justifyContent: "center",
-        elevation: 6,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-    },
+    brandInfo: { marginLeft: spacing.md },
+    brandName: { fontSize: typography.sizes.lg, fontWeight: "700", color: colors.text },
+    productCount: { fontSize: typography.sizes.md, color: colors.textSecondary, marginTop: 2 },
+    itemRight: { flexDirection: "row", alignItems: "center" },
+    actionButton: { padding: spacing.xs, marginLeft: spacing.sm },
+    separator: { height: 1, backgroundColor: colors.border, opacity: 0.5 },
+    emptyState: { alignItems: "center", paddingTop: 60, paddingBottom: 40 },
+    emptyText: { fontSize: typography.sizes.lg, fontWeight: "700", color: colors.textSecondary, marginTop: spacing.md },
+    emptySubText: { fontSize: typography.sizes.sm, color: colors.textSecondary, marginTop: spacing.xs },
 });
