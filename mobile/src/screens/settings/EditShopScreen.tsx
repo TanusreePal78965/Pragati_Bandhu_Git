@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Alert,
     View,
@@ -8,62 +8,129 @@ import {
     KeyboardAvoidingView,
     Platform,
     TouchableOpacity,
+    ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import TextInputField from "../../components/common/TextInputField";
 import PrimaryButton from "../../components/common/PrimaryButton";
-import { setHasConsent, setShopInfo } from "../../utils/storage";
-import { useAuth } from "../../context/AuthContext";
-import { insertShop } from "../../db/db";
-import apiClient from "../../api/client";
+import ScreenHeader from "../../components/common/ScreenHeader";
+import { getShopInfo, setShopInfo, setHasConsent } from "../../utils/storage";
+import { updateShop } from "../../db/db";
+import { flushSyncQueue } from "../../db/syncQueue";
 
-export default function ShopSetupScreen() {
-    const { completeSetup, phone } = useAuth();
+export default function EditShopScreen() {
+    const navigation = useNavigation();
+
     const [shopName, setShopName] = useState("");
     const [ownerName, setOwnerName] = useState("");
     const [category, setCategory] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
     const [aiConsent, setAiConsent] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const handleCompleteSetup = async () => {
+    useEffect(() => {
+        getShopInfo().then((info) => {
+            if (info) {
+                setShopName(info.shopName ?? "");
+                setOwnerName(info.ownerName ?? "");
+                setCategory(info.category ?? "");
+                setWhatsappNumber(info.whatsappNumber ?? "");
+                setAiConsent(info.aiConsent ?? true);
+            }
+            setIsLoading(false);
+        });
+    }, []);
+
+    const handleConsentChange = (newValue: boolean) => {
+        if (newValue === aiConsent) return;
+
+        if (!newValue) {
+            Alert.alert(
+                "Turn Off Cloud Backup?",
+                "Your data will no longer be backed up. If you lose this device, your inventory and sales history cannot be recovered.",
+                [
+                    { text: "Keep Cloud Backup", style: "cancel" },
+                    {
+                        text: "Turn Off",
+                        style: "destructive",
+                        onPress: () => setAiConsent(false),
+                    },
+                ]
+            );
+        } else {
+            Alert.alert(
+                "Enable Cloud Backup?",
+                "Your products, sales, and customer data will be securely backed up to the cloud.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Enable", onPress: () => setAiConsent(true) },
+                ]
+            );
+        }
+    };
+
+    const handleSave = async () => {
         if (!shopName.trim() || !ownerName.trim()) return;
         setIsSaving(true);
         try {
-            const shopPhone = phone ?? '';
-
-            // Persist consent flag
+            // 1. Update consent flag
             await setHasConsent(aiConsent);
 
-            // Persist shop info to AsyncStorage (fast reads across app)
-            await setShopInfo({ shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
+            // 2. Update AsyncStorage (fast reads across app)
+            await setShopInfo({
+                shopName: shopName.trim(),
+                ownerName: ownerName.trim(),
+                category: category.trim(),
+                whatsappNumber: whatsappNumber.trim(),
+                aiConsent,
+            });
 
-            // Persist to SQLite (offline-first)
-            insertShop({ shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
+            // 3. Update SQLite + enqueue sync to backend
+            updateShop({
+                shopName: shopName.trim(),
+                ownerName: ownerName.trim(),
+                category: category.trim(),
+                whatsappNumber: whatsappNumber.trim(),
+                aiConsent,
+            });
 
-            // Push shop to backend — required before proceeding since all other data references this record.
-            await apiClient.post('/api/shops', { shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
+            // 4. Flush queue immediately — don't wait for the next foreground/network event
+            await flushSyncQueue();
 
-            // Flip AuthContext → RootNavigator shows MainTabs
-            completeSetup();
+            Alert.alert("Saved", "Your shop details have been updated.", [
+                { text: "OK", onPress: () => navigation.goBack() },
+            ]);
         } catch (e) {
-            console.error("ShopSetup save error:", e);
-            Alert.alert(
-                "Setup Failed",
-                "Could not save your shop to the server. Please check your connection and try again.",
-                [{ text: "OK" }]
-            );
+            console.error("EditShop save error:", e);
+            Alert.alert("Save Failed", "Could not save your changes. Please try again.");
         } finally {
             setIsSaving(false);
         }
     };
 
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top"]}>
+            <ScreenHeader
+                title="Edit Shop"
+                showBack={true}
+            />
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.keyboardView}
@@ -72,18 +139,7 @@ export default function ShopSetupScreen() {
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Progress Header */}
-                    <View style={styles.header}>
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="storefront-outline" size={32} color={colors.primary} />
-                        </View>
-                        <Text style={styles.title}>Setup Your Shop</Text>
-                        <Text style={styles.subtitle}>
-                            Just a few details to get your digital inventory started.
-                        </Text>
-                    </View>
-
-                    {/* Form Section */}
+                    {/* Form */}
                     <View style={styles.form}>
                         <TextInputField
                             label="Shop Name"
@@ -114,12 +170,12 @@ export default function ShopSetupScreen() {
                             keyboardType="phone-pad"
                         />
 
-                        {/* Privacy & Setup Choice */}
+                        {/* AI / Cloud Consent */}
                         <Text style={styles.sectionTitle}>App Experience</Text>
-                        
+
                         <TouchableOpacity
                             style={[styles.consentCard, aiConsent && styles.consentCardActive]}
-                            onPress={() => setAiConsent(true)}
+                            onPress={() => handleConsentChange(true)}
                         >
                             <View style={styles.consentIcon}>
                                 <Ionicons
@@ -132,7 +188,9 @@ export default function ShopSetupScreen() {
                                 <Text style={[styles.consentTitle, aiConsent && styles.consentTitleActive]}>
                                     Cloud Backup + AI Features
                                 </Text>
-                                <Text style={styles.consentSub}>Products, sales & customers backed up online. AI reorder suggestions included. (Recommended)</Text>
+                                <Text style={styles.consentSub}>
+                                    Products, sales & customers backed up online. AI reorder suggestions included.
+                                </Text>
                             </View>
                             <Ionicons
                                 name={aiConsent ? "radio-button-on" : "radio-button-off"}
@@ -143,7 +201,7 @@ export default function ShopSetupScreen() {
 
                         <TouchableOpacity
                             style={[styles.consentCard, !aiConsent && styles.consentCardActive]}
-                            onPress={() => setAiConsent(false)}
+                            onPress={() => handleConsentChange(false)}
                         >
                             <View style={styles.consentIcon}>
                                 <Ionicons
@@ -156,7 +214,9 @@ export default function ShopSetupScreen() {
                                 <Text style={[styles.consentTitle, !aiConsent && styles.consentTitleActive]}>
                                     This Phone Only
                                 </Text>
-                                <Text style={styles.consentSub}>All data stays on this device. No cloud backup, no AI features.</Text>
+                                <Text style={styles.consentSub}>
+                                    All data stays on this device. No cloud backup, no AI features.
+                                </Text>
                             </View>
                             <Ionicons
                                 name={!aiConsent ? "radio-button-on" : "radio-button-off"}
@@ -168,18 +228,17 @@ export default function ShopSetupScreen() {
                         <View style={styles.infoBox}>
                             <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
                             <Text style={styles.infoText}>
-                                Your shop name and phone number are always saved for account recovery. Cloud Backup also secures your inventory, sales, and customer data.
+                                Your phone number is always saved for account recovery and cannot be changed here.
                             </Text>
                         </View>
 
                         <PrimaryButton
-                            title={isSaving ? "Saving..." : "Create My Shop"}
-                            onPress={handleCompleteSetup}
+                            title={isSaving ? "Saving..." : "Save Changes"}
+                            onPress={handleSave}
                             style={styles.button}
                             disabled={isSaving || !shopName.trim() || !ownerName.trim()}
                         />
                     </View>
-
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -191,39 +250,18 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+    },
     keyboardView: {
         flex: 1,
     },
     scrollContent: {
         padding: spacing.xl,
+        paddingTop: spacing.md,
         flexGrow: 1,
-        justifyContent: "center",
-    },
-    header: {
-        alignItems: "center",
-        marginBottom: spacing.xxl,
-    },
-    iconContainer: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: colors.primary + "15",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: spacing.lg,
-    },
-    title: {
-        fontSize: typography.sizes.xxl,
-        fontWeight: "800",
-        color: colors.text,
-        textAlign: "center",
-    },
-    subtitle: {
-        fontSize: typography.sizes.md,
-        color: colors.textSecondary,
-        textAlign: "center",
-        marginTop: spacing.sm,
-        paddingHorizontal: spacing.md,
     },
     form: {
         backgroundColor: colors.surface,
@@ -236,25 +274,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 12,
         elevation: 5,
-    },
-    infoBox: {
-        flexDirection: "row",
-        backgroundColor: colors.primary + "08",
-        padding: spacing.md,
-        borderRadius: 12,
-        alignItems: "center",
-        marginTop: spacing.sm,
-        marginBottom: spacing.xl,
-        gap: 8,
-    },
-    infoText: {
-        flex: 1,
-        fontSize: 12,
-        color: colors.primary,
-        fontWeight: "500",
-    },
-    button: {
-        height: 56,
     },
     sectionTitle: {
         fontSize: 14,
@@ -306,5 +325,24 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: colors.textSecondary,
         marginTop: 2,
+    },
+    infoBox: {
+        flexDirection: "row",
+        backgroundColor: colors.primary + "08",
+        padding: spacing.md,
+        borderRadius: 12,
+        alignItems: "center",
+        marginTop: spacing.sm,
+        marginBottom: spacing.xl,
+        gap: 8,
+    },
+    infoText: {
+        flex: 1,
+        fontSize: 12,
+        color: colors.primary,
+        fontWeight: "500",
+    },
+    button: {
+        height: 56,
     },
 });

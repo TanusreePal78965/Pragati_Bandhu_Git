@@ -39,3 +39,32 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Agent skills — other AI tool configs (not needed for this project)
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.goose/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
+skills/
+skills-lock.json
+
+# Claude Code project memory (machine-specific)
+.claude/
+

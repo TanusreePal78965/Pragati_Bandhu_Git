@@ -11,7 +11,8 @@ interface ScreenHeaderProps {
     showBack?: boolean;
     isMainTab?: boolean;
     shopName?: string;
-    showSyncBadge?: boolean;
+    /** Pass pending sync count to show badge. Undefined = hide badge entirely. 0 = synced. >0 = pending. */
+    syncPendingCount?: number;
     rightElement?: React.ReactNode;
     onNotificationPress?: () => void;
 }
@@ -20,8 +21,8 @@ export default function ScreenHeader({
     title,
     showBack = false,
     isMainTab = false,
-    shopName = "Pragati Bandhu",
-    showSyncBadge = false,
+    shopName,
+    syncPendingCount,
     rightElement,
     onNotificationPress,
 }: ScreenHeaderProps) {
@@ -37,12 +38,24 @@ export default function ScreenHeader({
                         </View>
                         <View style={styles.brandTextContainer}>
                             <Text style={styles.shopNameText}>{shopName}</Text>
-                            {showSyncBadge && (
-                                <View style={styles.syncStatus}>
-                                    <Ionicons name="cloud-done" size={14} color={colors.success} />
-                                    <Text style={styles.syncText}>SYNCED</Text>
-                                </View>
-                            )}
+                            <View style={styles.subtitleRow}>
+                                <Text style={styles.poweredByText}>Powered by Pragati Bandhu</Text>
+                                {syncPendingCount !== undefined && (
+                                    <View style={styles.syncBadge}>
+                                        <Ionicons
+                                            name={syncPendingCount > 0 ? "sync" : "cloud-done"}
+                                            size={11}
+                                            color={syncPendingCount > 0 ? colors.warning : colors.success}
+                                        />
+                                        <Text style={[
+                                            styles.syncText,
+                                            { color: syncPendingCount > 0 ? colors.warning : colors.success },
+                                        ]}>
+                                            {syncPendingCount > 0 ? `${syncPendingCount} PENDING` : "SYNCED"}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
                         </View>
                     </View>
                 ) : (
@@ -119,16 +132,25 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         color: colors.text,
     },
-    syncStatus: {
+    subtitleRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
-        marginTop: 0,
+        gap: 6,
+        marginTop: 1,
+    },
+    poweredByText: {
+        fontSize: 10,
+        color: colors.textSecondary,
+        fontWeight: "400",
+    },
+    syncBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
     },
     syncText: {
         fontSize: 10,
         fontWeight: "700",
-        color: colors.success,
         letterSpacing: 0.5,
     },
     backButton: {

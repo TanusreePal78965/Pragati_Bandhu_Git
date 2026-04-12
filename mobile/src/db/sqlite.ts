@@ -99,9 +99,13 @@ export const initDatabase = () => {
       whatsapp_number TEXT,
       business_category TEXT,
       ai_consent INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  // Migration: add is_active to existing installs that predate this column
+  try { db.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
 };
 
 export default db;

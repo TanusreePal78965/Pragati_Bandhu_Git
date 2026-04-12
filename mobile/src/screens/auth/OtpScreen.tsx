@@ -18,7 +18,6 @@ import type { RouteProp } from "@react-navigation/native";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
 import { useAuth } from "../../context/AuthContext";
 import { verifyOtp, sendOtp } from "../../services/authService";
-import { getShopInfo } from "../../utils/storage";
 
 type OtpScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Otp">;
 type OtpScreenRouteProp = RouteProp<AuthStackParamList, "Otp">;
@@ -110,15 +109,10 @@ export default function OtpScreen() {
         try {
             await verifyOtp(phoneNumber, code);
 
-            // Flip auth state — RootNavigator will re-render the authenticated stack
-            login();
-
-            // If this is a new user (no shop info saved), show setup screen.
-            // For a returning user the navigator switches to MainTabs automatically.
-            const shopInfo = await getShopInfo();
-            if (!shopInfo) {
-                navigation.navigate("ShopSetup");
-            }
+            // Flip auth state — RootNavigator re-renders:
+            //   new user (no shop info) → ShopSetup
+            //   returning user          → MainTabs (login checks backend for existing shop)
+            await login(phoneNumber);
         } catch (e: any) {
             const msg = e?.response?.data?.error ?? "Incorrect OTP. Please try again.";
             setError(msg);

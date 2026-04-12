@@ -12,17 +12,22 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Static Health Check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Auth routes
+// Auth routes (no JWT required)
 app.use('/api/auth', require('./routes/auth'));
 
+// Data routes (JWT required — see middleware/auth.js)
+app.use('/api/shops', require('./routes/shops'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/brands', require('./routes/brands'));
+app.use('/api/customers', require('./routes/customers'));
+app.use('/api/sales', require('./routes/sales'));
+
 // Future Route Mounts:
-// app.use('/api/shops', require('./routes/shops'));
-// app.use('/api/products', require('./routes/products'));
-// app.use('/api/sales', require('./routes/sales'));
 // app.use('/api/suggestions', require('./routes/suggestions'));
 // app.use('/api/alerts', require('./routes/alerts'));
 

@@ -2,12 +2,17 @@ import db from './sqlite';
 import client from '../api/client';
 import NetInfo from '@react-native-community/netinfo';
 
-export const addToSyncQueue = (tableName: string, operation: string, dataId: string, payload: any) => {
-  db.runSync(
-    'INSERT INTO sync_queue (table_name, operation, data_id, payload) VALUES (?, ?, ?, ?)',
-    [tableName, operation, dataId, JSON.stringify(payload)]
-  );
+// Maps SQLite table names to their backend API routes
+const ROUTE_MAP: Record<string, string> = {
+  products: '/api/products',
+  categories: '/api/categories',
+  brands: '/api/brands',
+  customers: '/api/customers',
+  bills: '/api/sales',   // bills carry full payload: { bill, items, salesLog }
+  shop: '/api/shops',
 };
+
+const MAX_ATTEMPTS = 5;
 
 interface SyncItem {
   id: number;
@@ -18,23 +23,64 @@ interface SyncItem {
   attempts: number;
 }
 
+export const addToSyncQueue = (
+  tableName: string,
+  operation: string,
+  dataId: string,
+  payload: any
+) => {
+  db.runSync(
+    'INSERT INTO sync_queue (table_name, operation, data_id, payload) VALUES (?, ?, ?, ?)',
+    [tableName, operation, dataId, JSON.stringify(payload)]
+  );
+};
+
+export const getPendingSyncCount = (): number => {
+  const result = db.getFirstSync(
+    'SELECT COUNT(*) as count FROM sync_queue WHERE attempts < ?',
+    [MAX_ATTEMPTS]
+  ) as { count: number } | null;
+  return result?.count ?? 0;
+};
+
 export const flushSyncQueue = async () => {
   const state = await NetInfo.fetch();
   if (!state.isConnected) return;
 
-  const queue = db.getAllSync('SELECT * FROM sync_queue ORDER BY id ASC') as SyncItem[];
+  const queue = db.getAllSync(
+    'SELECT * FROM sync_queue WHERE attempts < ? ORDER BY id ASC',
+    [MAX_ATTEMPTS]
+  ) as SyncItem[];
+
+  if (queue.length === 0) return;
 
   for (const item of queue) {
+    const route = ROUTE_MAP[item.table_name];
+
+    if (!route) {
+      // Unknown table — drop from queue so it doesn't block others
+      db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
+      continue;
+    }
+
     try {
-      // Logic for each operation (INSERT, UPDATE, DELETE)
-      // Example: await client.post(`/api/${item.table_name.toLowerCase()}`, JSON.parse(item.payload));
-      
-      // If success, remove from queue
+      const payload = JSON.parse(item.payload);
+
+      if (item.operation === 'DELETE') {
+        await client.delete(`${route}/${item.data_id}`);
+      } else {
+        // INSERT and UPDATE both use upsert (POST)
+        await client.post(route, payload);
+      }
+
+      // Success — remove from queue
       db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
     } catch (error) {
-      console.error(`Sync failed for item ${item.id}:`, error);
-      // Increment attempts? If too high, maybe move to "failed_sync" log.
-      db.runSync('UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?', [item.id]);
+      // Failure — increment attempts; item will be retried next flush
+      db.runSync(
+        'UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?',
+        [item.id]
+      );
     }
   }
 };

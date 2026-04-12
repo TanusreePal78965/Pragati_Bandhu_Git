@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
     View,
     Text,
@@ -17,6 +18,8 @@ import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { useAuth } from "../../context/AuthContext";
+import { getShopInfo, StoredShopInfo } from "../../utils/storage";
+import { getPendingSyncCount } from "../../db/syncQueue";
 
 const SectionHeader = ({ title }: { title: string }) => (
     <View style={styles.sectionHeader}>
@@ -80,8 +83,19 @@ const SettingsInfoRow = ({
 
 export default function SettingsScreen() {
     const [isDarkMode, setIsDarkMode] = useState(false);
+    const [shopInfo, setShopInfo] = useState<StoredShopInfo | null>(null);
+    const [syncPendingCount, setSyncPendingCount] = useState(0);
     const navigation = useNavigation();
-    const { logout } = useAuth();
+    const { logout, phone } = useAuth();
+
+    useFocusEffect(
+        useCallback(() => {
+            getShopInfo().then(info => {
+                setShopInfo(info);
+                setSyncPendingCount(getPendingSyncCount());
+            });
+        }, [])
+    );
 
     const handleLogout = () => {
         Alert.alert(
@@ -101,12 +115,12 @@ export default function SettingsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
-            
-            <ScreenHeader 
-                isMainTab={true} 
-                shopName="Pragati Bandhu"
-                showSyncBadge={true}
-                onNotificationPress={() => {}}
+
+            <ScreenHeader
+                isMainTab={true}
+                shopName={shopInfo?.shopName ?? "—"}
+                syncPendingCount={shopInfo?.aiConsent ? syncPendingCount : undefined}
+                onNotificationPress={() => { }}
             />
             <View style={styles.titleSection}>
                 <Text style={styles.titleText}>Settings</Text>
@@ -120,13 +134,13 @@ export default function SettingsScreen() {
                             <Ionicons name="person" size={40} color="#fbbf24" />
                         </View>
                         <View style={styles.profileText}>
-                            <Text style={styles.profileName}>John Doe</Text>
+                            <Text style={styles.profileName}>{shopInfo?.ownerName ?? "—"}</Text>
                             <Text style={styles.profilePhone}>
-                                +91 9876543210
+                                {phone ? `+91 ${phone}` : "—"}
                             </Text>
                         </View>
                     </View>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => (navigation as any).navigate("EditShop")}>
                         <Text style={styles.editProfileLink}>Edit Profile</Text>
                     </TouchableOpacity>
                 </View>
@@ -162,29 +176,51 @@ export default function SettingsScreen() {
                 <View style={styles.infoContainer}>
                     <SettingsInfoRow
                         label="SHOP NAME"
-                        value="Pragati General Store"
+                        value={shopInfo?.shopName ?? "—"}
                     />
                     <SettingsInfoRow
-                        label="GSTIN"
-                        value="Not Provided"
+                        label="BUSINESS CATEGORY"
+                        value={shopInfo?.category || "Not Provided"}
                         isOptional={true}
                     />
                     <SettingsInfoRow
-                        label="SHOP ADDRESS"
-                        value="123, Market Street, Delhi, 110001"
+                        label="WHATSAPP NUMBER"
+                        value={shopInfo?.whatsappNumber || "Not Provided"}
+                        isOptional={true}
                     />
+                    <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>CLOUD BACKUP</Text>
+                        <View style={styles.badgeRow}>
+                            <View style={[
+                                styles.badge,
+                                shopInfo?.aiConsent ? styles.badgeActive : styles.badgeInactive,
+                            ]}>
+                                <Ionicons
+                                    name={shopInfo?.aiConsent ? "cloud-done-outline" : "phone-portrait-outline"}
+                                    size={12}
+                                    color={shopInfo?.aiConsent ? colors.success : colors.textSecondary}
+                                />
+                                <Text style={[
+                                    styles.badgeText,
+                                    { color: shopInfo?.aiConsent ? colors.success : colors.textSecondary },
+                                ]}>
+                                    {shopInfo?.aiConsent ? "Enabled" : "This Device Only"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Inventory Settings */}
                 <SectionHeader title="INVENTORY SETTINGS" />
-                <SettingsItem 
-                    icon="apps" 
-                    title="Manage Categories" 
+                <SettingsItem
+                    icon="apps"
+                    title="Manage Categories"
                     onPress={() => (navigation as any).navigate("ManageCategories")}
                 />
-                <SettingsItem 
-                    icon="pricetag" 
-                    title="Manage Brands" 
+                <SettingsItem
+                    icon="pricetag"
+                    title="Manage Brands"
                     onPress={() => (navigation as any).navigate("ManageBrands")}
                 />
 
@@ -356,5 +392,28 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         marginLeft: spacing.sm,
         fontSize: typography.sizes.md,
+    },
+    badgeRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 4,
+    },
+    badge: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 20,
+        gap: 4,
+    },
+    badgeActive: {
+        backgroundColor: colors.success + "18",
+    },
+    badgeInactive: {
+        backgroundColor: colors.border,
+    },
+    badgeText: {
+        fontSize: 12,
+        fontWeight: "600",
     },
 });

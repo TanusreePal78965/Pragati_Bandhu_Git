@@ -50,9 +50,11 @@ export const clearAuthToken = async (): Promise<void> => {
 export type StoredShopInfo = {
   shopName: string;
   ownerName: string;
+  phone?: string;
   category?: string;
   whatsappNumber?: string;
   aiConsent?: boolean;
+  isActive?: boolean;
 };
 
 export const setShopInfo = async (info: StoredShopInfo): Promise<void> => {

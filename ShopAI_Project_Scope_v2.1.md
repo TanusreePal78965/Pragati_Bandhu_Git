@@ -142,7 +142,7 @@ Every write appends a row to a local `sync_queue` table with fields: table name,
 ShopAI gives shop owners full control over their data. This is presented clearly during onboarding, not buried in a legal wall.
 
 #### Consent flag
-A single boolean (`consent_given`) stored in MMKV controls three behaviours: whether the sync queue flushes to cloud, whether Claude API is called for that shop, and whether WATI alerts are sent (requires WhatsApp number stored server-side).
+A single boolean (`aiConsent`) stored in AsyncStorage controls two behaviours: whether the sync queue flushes operational data to cloud, and whether Claude API is called for AI suggestions. **Shop registration always syncs regardless of consent** — needed for admin visibility and account recovery. WATI alerts (future) will also require consent since they depend on customer data being in the cloud.
 
 #### What works without consent (local-only mode)
 - Full stock tracking, product, category, and brand management
@@ -151,16 +151,20 @@ A single boolean (`consent_given`) stored in MMKV controls three behaviours: whe
 - Business reports (local data only)
 - Local low-stock detection (`stock < threshold` computed on device)
 - Suggestions cache from last sync (if they previously consented)
+- **Shop registration always syncs** (name, owner, phone) — needed for account recovery and admin visibility regardless of consent choice
 
-#### What requires consent
-- Cloud backup and multi-device restore
+#### What requires consent (`aiConsent = true`)
+
+- Cloud backup of products, categories, brands, customers, bills, and sales history
 - AI reorder suggestions (Claude API)
-- WhatsApp and SMS alerts
+- WhatsApp and SMS alerts (require customer data in cloud)
 
 #### Onboarding consent screen
+
 Presented during shop setup as two clear radio-card options:
-- **"AI suggestions chahiye"** — Smart reordering & analytics (Recommended)
-- **"Sirf mere phone pe"** — Basic stock tracking only, no internet data share
+
+- **"Cloud Backup + AI Features"** — Products, sales & customers backed up online. AI reorder suggestions included. (Recommended)
+- **"This Phone Only"** — All data stays on this device. No cloud backup, no AI features.
 
 Privacy info box: *"Your privacy is important. We never share your shop's location or name with third parties."*
 
@@ -191,7 +195,7 @@ When consent is given, only statistical patterns are sent — never product name
 | Inventory | Products | Product list with stock status indicators, category filter chips, search, bulk select with multi-action overlay (Stock / Category / Delete), FAB to add product |
 | Customers | Customers | Customer list with initials, phone, last transaction, total outstanding udhar summary card with trend, search, sort/filter, FAB to add customer |
 | Reports | Business Reports | Time range selector, total sales & net profit, breakdown by payment type, top selling products, PDF export |
-| Settings | Settings | User profile with edit, language selector, dark mode toggle, notification settings, business info (shop name, GSTIN, address), manage categories, manage brands, help center, privacy policy, terms of service, app version, logout |
+| Settings | Settings | User profile with "Edit Profile" → EditShopScreen, language selector, dark mode toggle, notification settings, business info (shop name, category, WhatsApp, cloud backup status badge), manage categories, manage brands, help center, privacy policy, terms of service, app version, logout |
 
 ### 6.3 Stack Screens (navigated from tabs)
 | Screen | Reached From | Purpose |
@@ -205,6 +209,8 @@ When consent is given, only statistical patterns are sent — never product name
 | Add Brand | Manage Brands → FAB | New brand entry |
 | Bills (All Transactions) | Reports → "View All Transactions" | Full paginated bill list with search by customer name and filter chips (All / Cash / Udhar); shows running total of filtered bills |
 | Bill Detail | Bills list row or Reports recent transaction row | Receipt-style view: payment mode badge, total, date/time, customer, itemised list with unit price × qty and line totals, grand total |
+| Edit Shop | Settings → "Edit Profile" | Edit shop name, owner name, category, WhatsApp number, and AI consent; confirmation alerts on consent change; saves to AsyncStorage + SQLite + immediately flushes to backend |
+| Shop Deactivated | Auto (admin control) | Blocking screen shown when `is_active = false`; prevents app access; shows support contact and logout button |
 
 ---
 
@@ -227,13 +233,13 @@ shopai/
     ├── src/
     │   ├── api/             # Axios client → Railway URL
     │   ├── screens/
-    │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen
+    │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen, ShopDeactivatedScreen
     │   │   ├── home/        # HomeScreen (Dashboard)
     │   │   ├── products/    # ProductsScreen, AddProductScreen
     │   │   ├── billing/     # NewBillScreen, BillsScreen, BillDetailScreen
     │   │   ├── customers/   # CustomersScreen, AddCustomerScreen
     │   │   ├── reports/     # ReportsScreen
-    │   │   └── settings/    # SettingsScreen, ManageCategoriesScreen, AddCategoryScreen, ManageBrandsScreen, AddBrandScreen
+    │   │   └── settings/    # SettingsScreen, EditShopScreen, ManageCategoriesScreen, AddCategoryScreen, ManageBrandsScreen, AddBrandScreen
     │   ├── components/
     │   │   ├── common/      # ScreenHeader, PrimaryButton, TextInputField
     │   │   ├── products/    # ProductCard, UpdateStockModal, UpdateCategoryModal
@@ -273,108 +279,113 @@ shopai/
 
 ### 9.1 Supabase (cloud)
 
+> **Note:** IDs are `TEXT` (not uuid) — generated on mobile via `genId()` (timestamp + random base36). This allows offline-first row creation without a round-trip to the server.
+
 ```sql
--- Shops
-create table shops (
-  id uuid primary key default gen_random_uuid(),
-  owner_name text not null,
-  shop_name text not null,
-  whatsapp_number text,
-  shop_address text,
-  gstin text,
-  business_category text,
-  plan text default 'standard',
-  consent_given boolean default false,
-  created_at timestamp default now()
+-- Shops (always synced — required for admin visibility and account recovery)
+CREATE TABLE IF NOT EXISTS shops (
+  id TEXT PRIMARY KEY,
+  shop_name TEXT NOT NULL,
+  owner_name TEXT NOT NULL,
+  phone TEXT UNIQUE NOT NULL,
+  whatsapp_number TEXT,
+  business_category TEXT,
+  ai_consent BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- admin-controlled; false = blocks app access
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Categories
-create table categories (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  name text not null,
-  icon text,
-  icon_color text,
-  created_at timestamp default now()
+-- Categories (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  name TEXT NOT NULL,
+  icon TEXT,
+  icon_color TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Brands
-create table brands (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  name text not null,
-  logo_url text,
-  created_at timestamp default now()
+-- Brands (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS brands (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  name TEXT NOT NULL,
+  color TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Products
-create table products (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  name text not null,
-  category text,
-  brand text,
-  unit text default 'piece',
-  uom text default 'Pcs',
-  stock int default 0,
-  min_threshold int default 5,
-  purchase_price decimal(10,2),
-  selling_price decimal(10,2),
-  created_at timestamp default now()
+-- Products (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  name TEXT NOT NULL,
+  category_id TEXT,
+  brand_id TEXT,
+  purchase_price NUMERIC DEFAULT 0,
+  selling_price NUMERIC DEFAULT 0,
+  stock_quantity INTEGER DEFAULT 0,
+  min_stock_threshold INTEGER DEFAULT 5,
+  uom TEXT DEFAULT 'Pcs',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Customers
-create table customers (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  name text not null,
-  phone text,
-  address text,
-  udhar_balance decimal(10,2) default 0,
-  created_at timestamp default now()
+-- Customers (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  name TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  udhar_balance NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Bills
-create table bills (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  customer_id uuid references customers(id),
-  payment_mode text default 'cash',  -- cash | udhar
-  total_amount decimal(10,2) not null,
-  total_items int not null,
-  bill_date timestamp default now()
+-- Bills (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS bills (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  customer_id TEXT,
+  customer_name TEXT,
+  payment_mode TEXT DEFAULT 'cash',
+  total_amount NUMERIC NOT NULL,
+  total_items INTEGER NOT NULL,
+  bill_date TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Bill Items
-create table bill_items (
-  id uuid primary key default gen_random_uuid(),
-  bill_id uuid references bills(id),
-  product_id uuid references products(id),
-  qty int not null,
-  unit_price decimal(10,2) not null,
-  line_total decimal(10,2) not null
+-- Bill items (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS bill_items (
+  id TEXT PRIMARY KEY,
+  bill_id TEXT NOT NULL REFERENCES bills(id),
+  product_id TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  qty INTEGER NOT NULL,
+  unit_price NUMERIC NOT NULL,
+  line_total NUMERIC NOT NULL
 );
 
--- Daily sales log (aggregated)
-create table sales_log (
-  id uuid primary key default gen_random_uuid(),
-  product_id uuid references products(id),
-  shop_id uuid references shops(id),
-  qty_sold int not null,
-  sold_date date default current_date
+-- Daily sales log — input for Claude AI suggestions (synced only if aiConsent = true)
+CREATE TABLE IF NOT EXISTS sales_log (
+  id TEXT PRIMARY KEY,
+  shop_id TEXT NOT NULL REFERENCES shops(id),
+  product_id TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  qty_sold INTEGER NOT NULL,
+  sale_amount NUMERIC NOT NULL,
+  sold_date DATE DEFAULT CURRENT_DATE
 );
 
--- AI suggestion log
-create table suggestions_log (
-  id uuid primary key default gen_random_uuid(),
-  shop_id uuid references shops(id),
-  product_id uuid references products(id),
-  urgency text,
-  days_left int,
-  suggested_qty int,
-  reason text,
-  created_at timestamp default now()
-);
+-- AI suggestion log (future — populated by dailySuggestions cron job)
+-- CREATE TABLE IF NOT EXISTS suggestions_log (
+--   id TEXT PRIMARY KEY,
+--   shop_id TEXT NOT NULL REFERENCES shops(id),
+--   product_id TEXT NOT NULL,
+--   urgency TEXT,
+--   days_left INTEGER,
+--   suggested_qty INTEGER,
+--   reason TEXT,
+--   created_at TIMESTAMPTZ DEFAULT NOW()
+-- );
 ```
 
 ### 9.2 SQLite (local, on device)
@@ -390,14 +401,27 @@ CREATE TABLE IF NOT EXISTS bill_items ( ...same columns... );
 CREATE TABLE IF NOT EXISTS sales_log ( ...same columns... );
 CREATE TABLE IF NOT EXISTS suggestions_cache ( ...same columns... );
 
+-- Shop (local mirror — is_active added via ALTER TABLE migration for existing installs)
+CREATE TABLE IF NOT EXISTS shop (
+  id TEXT PRIMARY KEY NOT NULL,
+  shop_name TEXT NOT NULL,
+  owner_name TEXT NOT NULL,
+  phone TEXT,
+  whatsapp_number TEXT,
+  business_category TEXT,
+  ai_consent INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,   -- mirrors Supabase is_active; updated by sync on foreground
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Sync queue (local only, never synced to cloud)
 CREATE TABLE IF NOT EXISTS sync_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name TEXT NOT NULL,
-  row_id TEXT NOT NULL,
-  operation TEXT NOT NULL,   -- insert | update | delete
+  data_id TEXT NOT NULL,
+  operation TEXT NOT NULL,   -- INSERT | UPDATE | DELETE
   payload TEXT,              -- JSON of the row data
-  synced INTEGER DEFAULT 0,
+  attempts INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 ```
@@ -468,7 +492,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 2026 — v2.2
+> **Last updated:** April 12, 2026 — v2.2
 
 ---
 
@@ -493,11 +517,11 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 11 | `authService.ts` | 🔲 | OTP login via Supabase Auth, store JWT in AsyncStorage |
-| 12 | `client.js` — auth header | 🔲 | Inject JWT from AsyncStorage into every Axios request |
-| 13 | `syncQueue.ts` — flush logic | 🔲 | Complete route-by-table + operation dispatch |
-| 14 | `syncService.ts` — listeners | 🔲 | AppState + NetInfo listeners triggering flushSyncQueue |
-| 15 | Add `axios` to package.json | 🔲 | Currently imported but not in dependencies |
+| 11 | `authService.ts` | ✅ | `sendOtp`, `verifyOtp`, `getStoredAuth` (JWT expiry via `atob`), `logout`; dev-mode returns `__dev_otp` in response |
+| 12 | `client.js` — auth header | ✅ | Axios instance with `EXPO_PUBLIC_API_URL`; request interceptor auto-attaches `Authorization: Bearer <token>` from AsyncStorage |
+| 13 | `syncQueue.ts` — flush logic | ✅ | `ROUTE_MAP` dispatch (bills → `/api/sales`); DELETE vs POST routing; max 5 retry attempts; removes on success, increments on failure |
+| 14 | `syncService.ts` — listeners | ✅ | Two independent layers: (1) **Admin check** — `checkShopStatus()` calls `GET /api/shops/me` on startup + every foreground for **all users** regardless of consent; fires `onDeactivated()` if `is_active = false`. (2) **Data sync** — AppState + NetInfo flush listeners, consent-gated (basic plan users never sync). Bug fixed: previously `checkShopStatus` was inside the consent gate so no-consent users never got the deactivation check |
+| 15 | Add `axios` to package.json | ✅ | `axios ^1.15.0` confirmed in dependencies |
 
 ---
 
@@ -505,47 +529,65 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 16 | `middleware/auth.js` | 🔲 | Verify Supabase JWT on every request |
-| 17 | `routes/shops.js` | 🔲 | POST create/update shop on setup |
-| 18 | `routes/products.js` | 🔲 | POST, PUT, DELETE → upsert to Supabase |
-| 19 | `routes/customers.js` | 🔲 | POST, PUT → upsert to Supabase |
-| 20 | `routes/sales.js` | 🔲 | POST bills + bill_items + sales_log to Supabase |
-| 21 | `index.js` — mount routes | 🔲 | Uncomment and register all route files |
+| 16 | `middleware/auth.js` | ✅ | Verifies custom JWT (`JWT_SECRET`); attaches `req.user = { phone, iat, exp }` |
+| 17 | `routes/auth.js` | ✅ | `POST /api/auth/send-otp` (dev returns `__dev_otp`); `POST /api/auth/verify-otp` (returns 30-day JWT); in-memory Map with 10-min TTL + cleanup interval |
+| 18 | `routes/shops.js` | ✅ | POST upsert (user-editable fields only; `is_active` excluded — admin-owned); `GET /me` returns full shop record incl. `is_active` for deactivation checks |
+| 19 | `routes/products.js` | ✅ | POST upsert + DELETE `/products/:id` (scoped to `shop_id`) |
+| 20 | `routes/categories.js` | ✅ | POST upsert + DELETE `/categories/:id` |
+| 21 | `routes/brands.js` | ✅ | POST upsert + DELETE `/brands/:id` |
+| 22 | `routes/customers.js` | ✅ | POST upsert + DELETE `/customers/:id` |
+| 23 | `routes/sales.js` | ✅ | POST inserts `bill` + `bill_items` + `sales_log` atomically via Supabase upsert |
+| 24 | `index.js` — mount routes | ✅ | All 6 data routes + auth route mounted; Supabase proxy handles missing credentials gracefully |
 
 ---
 
-### 14.4 Backend — AI & Alerts
+### 14.4 Mobile — Auth Flow
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 22 | `jobs/dailySuggestions.js` | 🔲 | Cron: sales_log → Claude API → suggestions_log |
-| 23 | `routes/suggestions.js` | 🔲 | GET endpoint for mobile to fetch suggestions |
-| 24 | `services/watiService.js` | 🔲 | WhatsApp alerts via shared WATI account |
-| 25 | `services/smsService.js` | 🔲 | SMS fallback via Fast2SMS |
-| 26 | `services/stockService.js` | 🔲 | Server-side low stock detection → trigger alerts |
+| 25 | `AuthContext.tsx` | ✅ | `isReady` splash guard; `isAuthenticated` + `isShopSetup` + `isShopActive` state; `login()`, `completeSetup()`, `logout()`, `setShopActive()` methods. On mount reads last-known `isActive` from AsyncStorage (defaults `true` — backwards compatible) for instant blocking on reopen. `setShopActive()` is called by `syncService` after the live `GET /api/shops/me` result arrives, so the navigator reacts in real-time to admin changes |
+| 26 | `RootNavigator.tsx` — auth guard | ✅ | Shows `ActivityIndicator` while `!isReady`; 4-way guard: Auth → ShopSetup → ShopDeactivated → MainTabs |
+| 27 | `LoginScreen.tsx` | ✅ | 10-digit validation; calls `sendOtp`; passes `devOtp` to OTP screen; loading + error states |
+| 28 | `OtpScreen.tsx` | ✅ | Auto-fills + auto-verifies `devOtp` after 700ms; resend re-fetches new `__dev_otp` |
+| 29 | `ShopSetupScreen.tsx` | ✅ | Saves consent + shop info to AsyncStorage + SQLite; fires non-fatal POST `/api/shops`; calls `completeSetup()` |
+| 30 | Logout — `SettingsScreen.tsx` | ✅ | Confirmation alert; calls `logout()` (clears JWT + shop info); `AuthContext` flips → RootNavigator re-renders to Auth stack |
 
 ---
 
-### 14.5 Mobile — Fetch from Cloud
+### 14.5 Backend — AI & Alerts
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 27 | AI suggestions → dashboard | 🔲 | Fetch from `/api/suggestions`, cache in SQLite, display card |
-| 28 | Settings screen — real data | 🔲 | Load shop name/owner from MMKV or Supabase |
+| 31 | `jobs/dailySuggestions.js` | 🔲 | Cron: sales_log → Claude API → suggestions_log |
+| 32 | `routes/suggestions.js` | 🔲 | GET endpoint for mobile to fetch suggestions |
+| 33 | `services/watiService.js` | 🔲 | WhatsApp alerts via shared WATI account |
+| 34 | `services/smsService.js` | 🔲 | SMS fallback via Fast2SMS |
+| 35 | `services/stockService.js` | 🔲 | Server-side low stock detection → trigger alerts |
 
 ---
 
-### 14.6 Additional Screens Built (beyond original v1 scope)
+### 14.6 Mobile — Fetch from Cloud
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 36 | AI suggestions → dashboard | 🔲 | Fetch from `/api/suggestions`, cache in SQLite, display card |
+| 37 | Settings screen — real data | ✅ | Loads shop name/owner/category/WhatsApp/aiConsent from AsyncStorage; cloud backup status badge; uses `useFocusEffect` to refresh after EditShop returns |
+
+---
+
+### 14.7 Additional Screens Built (beyond original v1 scope)
 
 | Item | Status | Notes |
 |---|---|---|
 | Bills / All Transactions screen | ✅ | `BillsScreen`: search by customer name, filter by All/Cash/Udhar, running total of filtered bills, empty state |
 | Bill Detail screen | ✅ | `BillDetailScreen`: receipt-style view with payment badge, itemised list, grand total; reached from ReportsScreen or BillsScreen |
 | Recent Transactions section in Reports | ✅ | Last 10 bills shown in ReportsScreen; each row tappable → BillDetail; "View All" button → BillsScreen |
+| Edit Shop screen | ✅ | `EditShopScreen`: edit shop name, owner name, category, WhatsApp, and AI consent; confirmation alerts on consent toggle; saves to AsyncStorage + SQLite + immediately flushes sync queue to backend |
+| Shop Deactivated screen | ✅ | `ShopDeactivatedScreen`: blocking fullscreen shown when admin sets `is_active = false`; shows support contact + logout; detected via `checkShopStatus()` on every app foreground |
 
 ---
 
-### 14.7 Future Screens (UI not yet built)
+### 14.8 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -555,6 +597,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Edit Product screen | 🔲 | Tap product → pre-filled form to update price, stock threshold, category |
 | Edit Customer screen | 🔲 | Tap customer → pre-filled form; record udhar payments |
 | Udhar payment recording | 🔲 | Mark partial or full udhar payment against a customer |
+| Admin panel / API | 🔲 | Endpoint to toggle `is_active` on a shop; currently done directly in Supabase dashboard |
 
 ---
 
@@ -617,6 +660,41 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v2.4 — 12th April 2026
+
+- **`aiConsent` scope clarified**: Single flag controls two things — (1) cloud sync of operational data and (2) Claude AI suggestions. Shop registration always syncs regardless of consent for admin visibility and account recovery.
+- **ShopSetupScreen consent cards rewritten**: Card 1 now reads "Cloud Backup + AI Features" (cloud-upload icon) with subtitle explaining data backup. Card 2 reads "This Phone Only" with subtitle clarifying no cloud, no AI. Info box updated to explain shop registration is always saved.
+- **§5.8 Privacy & Data Consent updated** in project scope: consent flag description corrected, "What works without consent" lists shop registration as always-on, "What requires consent" explicitly lists data backup + AI + alerts, onboarding card labels updated to match UI.
+
+### v2.4 — April 12, 2026
+
+- **Edit Shop screen built** (`EditShopScreen.tsx`): edit shop name, owner name, category, WhatsApp, and AI consent from Settings; confirmation alerts on consent toggle; save flow: AsyncStorage → SQLite → `flushSyncQueue()` (immediate, not deferred); registered in `RootNavigator` as `"EditShop"` stack screen
+- **Settings screen updated**: "Edit Profile" wired to `EditShopScreen`; `useEffect` replaced with `useFocusEffect` so shop info refreshes on return; Cloud Backup status badge added to BUSINESS INFO section
+- **`updateShop()` added to `db.ts`**: updates shop row in SQLite and calls `addToSyncQueue('shop', 'UPDATE', ...)` — shop info changes now flow through the sync queue like all other entities
+- **`is_active` admin control implemented end-to-end**:
+  - Supabase: `is_active BOOLEAN NOT NULL DEFAULT TRUE` column added via migration
+  - SQLite: `is_active INTEGER DEFAULT 1` added to shop table; `ALTER TABLE` migration handles existing installs
+  - `ShopInfo` and `StoredShopInfo` types extended with `isActive?: boolean`
+  - `getShop()` now returns `id` and `isActive`; `StoredShopInfo` carries `isActive`
+  - `AuthContext` gains `isShopActive` state + `setShopActive()` method; on mount reads last-known value from AsyncStorage (instant blocking on reopen, defaults `true` for backwards compatibility)
+  - `ShopDeactivatedScreen` built: fullscreen blocking screen with support contact and logout button
+  - `RootNavigator` updated to 4-way guard: Auth → ShopSetup → ShopDeactivated → MainTabs
+  - `App.tsx` refactored into `AppContent` (inside `AuthProvider`) so `setShopActive` can be passed as a callback to `startSyncService`
+- **Bug fixed — deactivation check was consent-gated**: `checkShopStatus()` was inside `if (!hasConsent) return`, so "This Device Only" users never got the admin deactivation check. Fixed: deactivation check now runs first for all users; only data sync remains consent-gated
+- **Bug fixed — shop updates never reached backend**: `updateShop()` only queued items in SQLite; `flushSyncQueue()` was never called after save so the queue sat idle until the next app foreground/network event. Fixed: `EditShopScreen.handleSave` now calls `flushSyncQueue()` immediately after `updateShop()`
+- **`routes/shops.js` updated**: `POST /` now excludes `is_active` from upsert (admin-only field); `GET /me` endpoint added — returns full shop record including `is_active` for mobile deactivation checks
+
+### v2.3 — April 2026
+
+- **OTP-based authentication fully implemented** (tasks 25–30 in §14.4): phone → OTP → JWT → `AuthContext` → `RootNavigator` guard; dev-mode auto-fills and auto-verifies OTP from `__dev_otp` response field
+- **Full backend API layer complete** (tasks 16–24 in §14.3): `auth.js`, `middleware/auth.js`, `shops.js`, `products.js`, `categories.js`, `brands.js`, `customers.js`, `sales.js` — all mounted and working; `shop_id` always derived from JWT, never from request body
+- **Logout wired** in `SettingsScreen`: confirmation alert → clears JWT + shop info from AsyncStorage → `AuthContext` flips → instant navigation back to Auth stack; no backend call needed
+- **Cloud sync stack complete** (tasks 11–15 in §14.2): `syncQueue.ts` dispatches via `ROUTE_MAP`, max 5 retries; `syncService.ts` listens on AppState + NetInfo; consent-gated; `App.tsx` starts service on mount
+- **Supabase connected**: real credentials set in `backend/.env`; `supabase.js` uses Proxy pattern for graceful startup with placeholder credentials
+- **Physical device fix**: `EXPO_PUBLIC_API_URL` env var added; `10.0.2.2` (emulator alias) replaced with LAN IP for physical phone testing
+- **`ShopSetupScreen` wired end-to-end**: saves to AsyncStorage + SQLite + fires non-fatal POST `/api/shops` for AI consent users
+- **Progress tracker restructured**: §14.3 expanded with categories/brands routes; new §14.4 (Auth Flow); §14.5–14.8 renumbered
 
 ### v2.2 — April 2026
 - **All Phase 1 SQLite wiring complete** (tasks 1–10 in §14.1): all screens read/write live data from local SQLite, no mock data remains

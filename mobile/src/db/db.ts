@@ -8,12 +8,14 @@ const genId = () =>
 // ─── Shop ─────────────────────────────────────────────────────────────────────
 
 export interface ShopInfo {
+  id?: string;
   shopName: string;
   ownerName: string;
   category?: string;
   whatsappNumber?: string;
   phone?: string;
   aiConsent?: boolean;
+  isActive?: boolean;
 }
 
 export const insertShop = (data: ShopInfo): void => {
@@ -42,16 +44,39 @@ export const getShop = (): ShopInfo | null => {
     const row = db.getFirstSync('SELECT * FROM shop LIMIT 1') as any;
     if (!row) return null;
     return {
+      id: row.id,
       shopName: row.shop_name,
       ownerName: row.owner_name,
       phone: row.phone,
       whatsappNumber: row.whatsapp_number,
       category: row.business_category,
       aiConsent: row.ai_consent === 1,
+      isActive: row.is_active === 1,
     };
   } catch (e) {
     console.error('getShop error:', e);
     return null;
+  }
+};
+
+export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): void => {
+  try {
+    const row = db.getFirstSync('SELECT id FROM shop LIMIT 1') as any;
+    if (!row) return;
+    db.runSync(
+      `UPDATE shop SET shop_name=?, owner_name=?, whatsapp_number=?, business_category=?, ai_consent=? WHERE id=?`,
+      [
+        data.shopName ?? '',
+        data.ownerName ?? '',
+        data.whatsappNumber ?? '',
+        data.category ?? '',
+        data.aiConsent ? 1 : 0,
+        row.id,
+      ]
+    );
+    addToSyncQueue('shop', 'UPDATE', row.id, { ...data });
+  } catch (e) {
+    console.error('updateShop error:', e);
   }
 };
 
