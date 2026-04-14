@@ -1,8 +1,5 @@
-import apiClient from '../api/client';
+import { supabase } from '../lib/supabase';
 import {
-  setAuthToken,
-  getAuthToken,
-  clearAuthToken,
   clearShopInfo,
   getShopInfo,
   setShopInfo,
@@ -10,49 +7,54 @@ import {
 } from '../utils/storage';
 import { insertShop } from '../db/db';
 
-// ─── JWT Helpers ─────────────────────────────────────────────────────────────
-
-/**
- * Decode a JWT payload without a library.
- * React Native has `atob` globally available.
- */
-const decodeJwtPayload = (token: string): Record<string, any> | null => {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(base64));
-  } catch {
-    return null;
-  }
-};
-
-const isTokenExpired = (token: string): boolean => {
-  const payload = decodeJwtPayload(token);
-  if (!payload?.exp) return true;
-  return payload.exp * 1000 < Date.now();
-};
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 
 /**
- * Request OTP for the given phone number.
- * In dev mode, the response includes __dev_otp for auto-fill.
+ * Request OTP for the given 10-digit phone number.
+ * Calls the custom send-otp Edge Function which stores an OTP hash
+ * in the database and delivers the OTP via Fast2SMS.
  */
-export const sendOtp = async (
-  phone: string
-): Promise<{ success: boolean; __dev_otp?: string }> => {
-  console.log('Base URL:', apiClient.defaults.baseURL);
-  console.log('Sending OTP to:', phone);
-  const res = await apiClient.post('/api/auth/send-otp', { phone });
-  console.log('OTP sent successfully:', res.data);
-  return res.data;
+export const sendOtp = async (phone: string): Promise<void> => {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ phone }),
+  });
+
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? 'Failed to send OTP');
 };
 
 /**
- * Verify OTP and store the returned JWT in AsyncStorage.
+ * Verify OTP. On success the Edge Function returns a signed JWT
+ * which we store in Supabase's AsyncStorage session so all subsequent
+ * supabase.from() calls are authenticated automatically.
  */
 export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
-  const res = await apiClient.post('/api/auth/verify-otp', { phone, otp });
-  await setAuthToken(res.data.token);
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ phone, otp }),
+  });
+
+  const body = await res.json();
+  console.log("body. ------> ", body);
+  if (!res.ok) throw new Error(body.error ?? 'Failed to verify OTP');
+
+  const { error } = await supabase.auth.setSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+  });
+  if (error) throw error;
 };
 
 // ─── Session ──────────────────────────────────────────────────────────────────
@@ -60,9 +62,9 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
 /**
  * Check persisted auth state on app launch.
  *
- * If the JWT is valid but local shop info is missing (e.g. fresh install, Expo Go
- * reset, or data wipe), attempts to recover the shop from the backend before
- * deciding isShopSetup. This prevents an already-registered shop from being forced
+ * If the session is valid but local shop info is missing (e.g. fresh install
+ * or data wipe), attempts to recover the shop from Supabase before deciding
+ * isShopSetup. This prevents an already-registered shop from being forced
  * through setup again.
  */
 export const getStoredAuth = async (): Promise<{
@@ -70,34 +72,39 @@ export const getStoredAuth = async (): Promise<{
   isShopSetup: boolean;
   phone: string | null;
 }> => {
-  const token = await getAuthToken();
-  if (!token || isTokenExpired(token)) {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
     return { isAuthenticated: false, isShopSetup: false, phone: null };
   }
 
-  const payload = decodeJwtPayload(token);
+  // Extract 10-digit phone — auth.users.phone may be '+91XXXXXXXXXX', '91XXXXXXXXXX', or 'XXXXXXXXXX'
+  const rawPhone = (session.user.phone ?? '') as string;
+  const phone = rawPhone.slice(-10);
+
   let shopInfo = await getShopInfo();
 
-  // JWT is valid but no local shop info — try to recover from backend
+  // Session is valid but no local shop info — try to recover from Supabase
   if (!shopInfo) {
     try {
-      const res = await apiClient.get('/api/shops/me');
-      if (res.data?.shop_name) {
+      const { data } = await supabase
+        .from('shops')
+        .select('shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active')
+        .single();
+
+      if (data?.shop_name) {
         const recovered = {
-          shopName: res.data.shop_name,
-          ownerName: res.data.owner_name,
-          phone: res.data.phone,
-          category: res.data.business_category ?? '',
-          whatsappNumber: res.data.whatsapp_number ?? '',
-          aiConsent: res.data.ai_consent ?? false,
-          isActive: res.data.is_active ?? true,
+          shopName: data.shop_name,
+          ownerName: data.owner_name,
+          phone: data.phone,
+          category: data.business_category ?? '',
+          whatsappNumber: data.whatsapp_number ?? '',
+          aiConsent: data.ai_consent ?? false,
+          isActive: data.is_active ?? true,
         };
 
-        // Restore to AsyncStorage
         await setShopInfo(recovered);
         await setHasConsent(recovered.aiConsent);
-
-        // Restore to SQLite
         insertShop(recovered);
 
         shopInfo = recovered;
@@ -110,14 +117,14 @@ export const getStoredAuth = async (): Promise<{
   return {
     isAuthenticated: true,
     isShopSetup: !!shopInfo,
-    phone: payload?.phone ?? null,
+    phone,
   };
 };
 
 /**
- * Clear auth token and shop info on logout.
+ * Clear Supabase session and local shop info on logout.
  */
 export const logout = async (): Promise<void> => {
-  await clearAuthToken();
+  await supabase.auth.signOut();
   await clearShopInfo();
 };

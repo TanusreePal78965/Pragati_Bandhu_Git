@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
@@ -39,12 +40,11 @@ export default function LoginScreen() {
         setError("");
 
         try {
-            const data = await sendOtp(clean);
-            // Navigate and pass devOtp for auto-fill during development
-            navigation.navigate("Otp", { phoneNumber: clean, devOtp: data.__dev_otp });
+            await sendOtp(clean);
+            navigation.navigate("Otp", { phoneNumber: clean });
         } catch (e: any) {
             const msg =
-                e?.response?.data?.error ??
+                e?.message ??
                 "Could not send OTP. Please check your connection.";
             setError(msg);
         } finally {
@@ -62,6 +62,7 @@ export default function LoginScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar style="dark" backgroundColor="#F8FAFC" />
             <KeyboardAvoidingView
                 style={styles.keyboardView}
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -152,6 +153,7 @@ export default function LoginScreen() {
                             <Text style={styles.featureText}>Track Udhar</Text>
                         </View>
                     </View>
+                    <Text style={styles.supportText}>For assitance call 7003354703</Text>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -322,4 +324,10 @@ const styles = StyleSheet.create({
         color: "#64748B",
         fontWeight: "500",
     },
+    supportText: {
+        marginTop: 20,
+        fontSize: 12,
+        color: "#64748B",
+        textAlign: "center",
+    }
 });

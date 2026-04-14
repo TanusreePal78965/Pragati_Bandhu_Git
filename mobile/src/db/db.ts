@@ -20,12 +20,13 @@ export interface ShopInfo {
 
 export const insertShop = (data: ShopInfo): void => {
   try {
+    const id = genId();
     db.runSync(
       `INSERT OR REPLACE INTO shop
          (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        genId(),
+        id,
         data.shopName,
         data.ownerName,
         data.phone ?? '',
@@ -34,6 +35,13 @@ export const insertShop = (data: ShopInfo): void => {
         data.aiConsent ? 1 : 0,
       ]
     );
+    addToSyncQueue('shop', 'INSERT', id, {
+      shopName: data.shopName,
+      ownerName: data.ownerName,
+      category: data.category,
+      whatsappNumber: data.whatsappNumber,
+      aiConsent: data.aiConsent,
+    });
   } catch (e) {
     console.error('insertShop error:', e);
   }
@@ -61,7 +69,7 @@ export const getShop = (): ShopInfo | null => {
 
 export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): void => {
   try {
-    const row = db.getFirstSync('SELECT id FROM shop LIMIT 1') as any;
+    const row = db.getFirstSync('SELECT id, phone FROM shop LIMIT 1') as any;
     if (!row) return;
     db.runSync(
       `UPDATE shop SET shop_name=?, owner_name=?, whatsapp_number=?, business_category=?, ai_consent=? WHERE id=?`,
@@ -74,7 +82,7 @@ export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): vo
         row.id,
       ]
     );
-    addToSyncQueue('shop', 'UPDATE', row.id, { ...data });
+    addToSyncQueue('shop', 'UPDATE', row.id, { ...data, phone: row.phone });
   } catch (e) {
     console.error('updateShop error:', e);
   }

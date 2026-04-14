@@ -1,0 +1,10 @@
+{
+  // Tell VS Code to use Deno mode only for the Edge Functions folder.
+  // The rest of the project (mobile/) stays in Node.js/TypeScript mode.
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.lint": true,
+  "deno.unstable": false,
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  }
+}

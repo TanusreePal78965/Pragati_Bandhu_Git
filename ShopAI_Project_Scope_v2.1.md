@@ -134,8 +134,8 @@ Every write appends a row to a local `sync_queue` table with fields: table name,
 1. User action → write to SQLite + append to sync_queue
 2. NetInfo check: if offline, queue stays; retry automatically when online
 3. Privacy gate check: if `consent = false`, queue stays local — no cloud sync, no Claude, no WATI
-4. If online + consent = true: flush sync_queue → Express API → Supabase
-5. Daily cron job then triggers Claude API for that shop's suggestions
+4. If online + consent = true: flush sync_queue → **direct Supabase client** (no backend middleman) — RLS enforces shop isolation
+5. Daily cron job (pg_cron or Edge Function schedule) then triggers Claude API for that shop's suggestions
 
 ### 5.8 Privacy & Data Consent
 
@@ -216,22 +216,31 @@ When consent is given, only statistical patterns are sent — never product name
 
 ## 7. Folder Structure
 
-Monorepo with two top-level directories. Only `backend/` deploys to Railway. The `mobile/` directory builds via Expo EAS.
+Monorepo with three top-level directories. `backend/` is kept for reference but no longer deployed. `supabase/` contains Edge Functions and DB migrations deployed to Supabase. The `mobile/` directory builds via Expo EAS.
 
 ```
 shopai/
-├── backend/
+├── backend/                 # Legacy Express — kept for reference, not deployed
 │   ├── src/
 │   │   ├── config/          # supabase.js, claude.js
 │   │   ├── routes/          # products, sales, suggestions, alerts
-│   │   ├── controllers/
-│   │   ├── services/        # claudeService, watiService, smsService, stockService
-│   │   ├── middleware/      # auth.js (Supabase JWT), errorHandler.js
-│   │   └── jobs/            # dailySuggestions.js (cron)
+│   │   ├── middleware/      # auth.js (JWT), errorHandler.js
+│   │   └── jobs/            # dailySuggestions.js (cron, not yet built)
 │   └── railway.toml
+├── supabase/                # Supabase Edge Functions + DB migrations
+│   ├── functions/
+│   │   ├── send-sms/        # Legacy Fast2SMS hook (kept, not used)
+│   │   ├── send-otp/        # Custom OTP sender — generates OTP, stores in otp_tokens, calls Fast2SMS
+│   │   ├── verify-otp/      # Custom OTP verifier — validates, creates user, returns signed JWT
+│   │   └── ai-suggestions/  # Claude API reorder suggestions (future)
+│   └── migrations/
+│       ├── 001_rls_policies.sql
+│       └── otp_tokens + get_user_id_by_phone helper
+├── MIGRATION.md             # Migration guide: Express → Supabase-only
 └── mobile/
     ├── src/
-    │   ├── api/             # Axios client → Railway URL
+    │   ├── api/             # client.js — commented out (legacy axios client)
+    │   ├── lib/             # supabase.ts — Supabase client singleton
     │   ├── screens/
     │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen, ShopDeactivatedScreen
     │   │   ├── home/        # HomeScreen (Dashboard)
@@ -266,12 +275,13 @@ shopai/
 | Local prefs | @react-native-async-storage/async-storage | Key-value: consent flag, auth token *(MMKV replaced — incompatible with Expo Go)* |
 | Connectivity | @react-native-community/netinfo | Online/offline detection for sync |
 | Icons | @expo/vector-icons (Ionicons, MaterialCommunityIcons) | Rich icon set |
-| Backend | Node.js + Express | Simple REST API |
+| Backend | Supabase Edge Functions (Deno) | Replaces Express — no server to host or pay for |
 | Database | Supabase (PostgreSQL) | Free tier, auth built-in, realtime |
-| AI engine | Anthropic Claude API | Reorder suggestions (consent-gated) |
+| Auth | Custom OTP Edge Functions (`send-otp` + `verify-otp`) | Bypasses Supabase Phone Auth hook (network restriction); OTP stored in `otp_tokens` table; JWT signed with project secret and set via `supabase.auth.setSession()` |
+| AI engine | Anthropic Claude API | Reorder suggestions via Edge Function (consent-gated) |
 | WhatsApp alerts | WATI (shared account) | Cost split across shops |
-| SMS fallback | Fast2SMS | ₹0.15–0.25 per SMS |
-| Hosting | Railway | Backend deployment |
+| SMS OTP | Fast2SMS | ₹0.25–0.50 per OTP; called directly from `send-otp` Edge Function (Fast2SMS bypass active during dev — OTP readable from `otp_tokens` table in Supabase Dashboard) |
+| Hosting | Supabase (free tier) | No Railway — Edge Functions run on Deno Deploy (India PoPs) |
 
 ---
 
@@ -432,12 +442,14 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ### 10.1 Shared infrastructure costs
 
+> **Hosting cost is now ₹0** — migrated from Railway (₹500/month) to Supabase-only (free tier). Edge Functions and DB included in Supabase free plan up to ~500K calls/month.
+
 | Shops | WATI | Claude API | Hosting | Total cost | Per shop cost |
 |---|---|---|---|---|---|
 | 5 shops | ₹1,500 | ₹200 | ₹0 | ₹1,700 | ₹340 |
 | 10 shops | ₹1,500 | ₹400 | ₹0 | ₹1,900 | ₹190 |
-| 20 shops | ₹1,500 | ₹800 | ₹500 | ₹2,800 | ₹140 |
-| 50 shops | ₹3,000 | ₹2,000 | ₹500 | ₹5,500 | ₹110 |
+| 20 shops | ₹1,500 | ₹800 | ₹0 | ₹2,300 | ₹115 |
+| 50 shops | ₹3,000 | ₹2,000 | ₹0 | ₹5,000 | ₹100 |
 
 > Claude API cost assumes `consent_given = true` for ~80% of shops. Local-only users (consent = false) incur zero Claude API cost and improve per-shop margin on the Basic plan.
 
@@ -492,7 +504,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 12, 2026 — v2.2
+> **Last updated:** April 13, 2026 — v2.4
 
 ---
 
@@ -517,27 +529,29 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 11 | `authService.ts` | ✅ | `sendOtp`, `verifyOtp`, `getStoredAuth` (JWT expiry via `atob`), `logout`; dev-mode returns `__dev_otp` in response |
-| 12 | `client.js` — auth header | ✅ | Axios instance with `EXPO_PUBLIC_API_URL`; request interceptor auto-attaches `Authorization: Bearer <token>` from AsyncStorage |
-| 13 | `syncQueue.ts` — flush logic | ✅ | `ROUTE_MAP` dispatch (bills → `/api/sales`); DELETE vs POST routing; max 5 retry attempts; removes on success, increments on failure |
-| 14 | `syncService.ts` — listeners | ✅ | Two independent layers: (1) **Admin check** — `checkShopStatus()` calls `GET /api/shops/me` on startup + every foreground for **all users** regardless of consent; fires `onDeactivated()` if `is_active = false`. (2) **Data sync** — AppState + NetInfo flush listeners, consent-gated (basic plan users never sync). Bug fixed: previously `checkShopStatus` was inside the consent gate so no-consent users never got the deactivation check |
-| 15 | Add `axios` to package.json | ✅ | `axios ^1.15.0` confirmed in dependencies |
+| 11 | `authService.ts` | ✅ | **Migrated to custom Edge Functions.** `sendOtp` → calls `send-otp` Edge Function (generates OTP, stores plain + hash in `otp_tokens`, calls Fast2SMS). `verifyOtp` → calls `verify-otp` Edge Function (validates OTP, creates/gets Supabase user, signs JWT, returns session); session stored via `supabase.auth.setSession()`. `getStoredAuth` → `supabase.auth.getSession()`. `logout` → `supabase.auth.signOut()`. |
+| 12 | `client.js` — axios client | ✅ | **Commented out** — no longer used. Replaced by `mobile/src/lib/supabase.ts` (Supabase client singleton with AsyncStorage session persistence and auto token refresh). |
+| 13 | `syncQueue.ts` — flush logic | ✅ | **Migrated to direct Supabase calls.** `ROUTE_MAP` + axios removed; each table dispatched via `supabase.from(table).upsert()` / `.delete()`; bills upsert three tables sequentially (bills → bill_items → sales_log); max 5 retry attempts unchanged. RLS enforces shop isolation automatically. |
+| 14 | `syncService.ts` — listeners | ✅ | **Migrated.** `checkShopStatus()` now queries `supabase.from('shops').select('is_active').single()` directly instead of `GET /api/shops/me`. All other logic unchanged (AppState + NetInfo listeners, consent gate). |
+| 15 | `@supabase/supabase-js` added | ✅ | Installed via `npx expo install @supabase/supabase-js` |
 
 ---
 
-### 14.3 Backend — API Routes
+### 14.3 Backend → Supabase Migration
+
+> Express backend replaced by direct Supabase client + Edge Functions. `backend/` directory kept for reference but not deployed.
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 16 | `middleware/auth.js` | ✅ | Verifies custom JWT (`JWT_SECRET`); attaches `req.user = { phone, iat, exp }` |
-| 17 | `routes/auth.js` | ✅ | `POST /api/auth/send-otp` (dev returns `__dev_otp`); `POST /api/auth/verify-otp` (returns 30-day JWT); in-memory Map with 10-min TTL + cleanup interval |
-| 18 | `routes/shops.js` | ✅ | POST upsert (user-editable fields only; `is_active` excluded — admin-owned); `GET /me` returns full shop record incl. `is_active` for deactivation checks |
-| 19 | `routes/products.js` | ✅ | POST upsert + DELETE `/products/:id` (scoped to `shop_id`) |
-| 20 | `routes/categories.js` | ✅ | POST upsert + DELETE `/categories/:id` |
-| 21 | `routes/brands.js` | ✅ | POST upsert + DELETE `/brands/:id` |
-| 22 | `routes/customers.js` | ✅ | POST upsert + DELETE `/customers/:id` |
-| 23 | `routes/sales.js` | ✅ | POST inserts `bill` + `bill_items` + `sales_log` atomically via Supabase upsert |
-| 24 | `index.js` — mount routes | ✅ | All 6 data routes + auth route mounted; Supabase proxy handles missing credentials gracefully |
+| 16 | `middleware/auth.js` | ~~✅~~ | **Replaced by Supabase RLS.** Row-level security policies on all tables enforce shop isolation via `auth.jwt() ->> 'phone'`. No custom JWT middleware needed. |
+| 17 | `routes/auth.js` | ~~✅~~ | **Replaced by Supabase Phone Auth + `send-sms` Edge Function hook.** Supabase generates OTP; hook calls Fast2SMS. Custom in-memory OTP store removed. |
+| 18 | `routes/shops.js` | ~~✅~~ | **Replaced by direct `supabase.from('shops')` calls** from mobile. `is_active` read directly from Supabase in `syncService`. |
+| 19–23 | `routes/products|categories|brands|customers|sales.js` | ~~✅~~ | **Replaced by direct Supabase upsert/delete** in `syncQueue.ts`. |
+| 24 | `supabase/functions/send-sms/index.ts` | ✅ | Legacy hook (kept). Was intended as Supabase Phone Auth Send SMS Hook but hook configuration blocked by `api.supabase.com` network error. Replaced by custom `send-otp` Edge Function. |
+| 24a | `supabase/functions/send-otp/index.ts` | ✅ | **New.** Custom OTP sender. Generates 6-digit OTP, stores plain text + SHA-256 hash + expiry in `otp_tokens` table, calls Fast2SMS directly. No JWT required (`verify_jwt: false`). Dev mode: Fast2SMS bypassed — OTP readable from `otp_tokens.otp` in Supabase Dashboard. |
+| 24b | `supabase/functions/verify-otp/index.ts` | ✅ | **New.** Custom OTP verifier. Validates OTP against `otp_tokens.otp`, creates/gets Supabase user via Admin API (`createUser` + `get_user_id_by_phone` SQL helper), signs 30-day HS256 JWT using `JWT_SECRET` Edge Function secret. Returns `{ access_token, refresh_token }`. OTP consumed only after JWT signing succeeds. |
+| 25 | `supabase/migrations/001_rls_policies.sql` | ✅ | **Applied.** RLS on all 8 tables. Uses `right(auth.jwt() ->> 'phone', 10)` to match E.164 phone to 10-digit shop_id. |
+| 25a | `otp_tokens` table + helpers migration | ✅ | **Applied.** `otp_tokens (phone PK, otp TEXT, otp_hash TEXT, expires_at TIMESTAMPTZ)` with RLS. `get_user_id_by_phone(phone_number TEXT)` SQL helper (SECURITY DEFINER) queries `auth.users`, matches both `+91XXXXXXXXXX` and `91XXXXXXXXXX` formats. |
 
 ---
 
@@ -545,24 +559,25 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 25 | `AuthContext.tsx` | ✅ | `isReady` splash guard; `isAuthenticated` + `isShopSetup` + `isShopActive` state; `login()`, `completeSetup()`, `logout()`, `setShopActive()` methods. On mount reads last-known `isActive` from AsyncStorage (defaults `true` — backwards compatible) for instant blocking on reopen. `setShopActive()` is called by `syncService` after the live `GET /api/shops/me` result arrives, so the navigator reacts in real-time to admin changes |
-| 26 | `RootNavigator.tsx` — auth guard | ✅ | Shows `ActivityIndicator` while `!isReady`; 4-way guard: Auth → ShopSetup → ShopDeactivated → MainTabs |
-| 27 | `LoginScreen.tsx` | ✅ | 10-digit validation; calls `sendOtp`; passes `devOtp` to OTP screen; loading + error states |
-| 28 | `OtpScreen.tsx` | ✅ | Auto-fills + auto-verifies `devOtp` after 700ms; resend re-fetches new `__dev_otp` |
-| 29 | `ShopSetupScreen.tsx` | ✅ | Saves consent + shop info to AsyncStorage + SQLite; fires non-fatal POST `/api/shops`; calls `completeSetup()` |
-| 30 | Logout — `SettingsScreen.tsx` | ✅ | Confirmation alert; calls `logout()` (clears JWT + shop info); `AuthContext` flips → RootNavigator re-renders to Auth stack |
+| 26 | `mobile/src/lib/supabase.ts` | ✅ | **New.** Supabase client singleton. Configured with `AsyncStorage` for session persistence, `autoRefreshToken: false` (custom JWT — no GoTrue refresh endpoint), `detectSessionInUrl: false`. |
+| 27 | `AuthContext.tsx` | ✅ | **Updated.** `login()` now runs `getStoredAuth()` first and batches all state updates in one render to eliminate ShopSetup flash for returning users. `supabase.auth.onAuthStateChange` listener for reactive sign-out. `logout()` calls `supabase.auth.signOut()`. |
+| 28 | `RootNavigator.tsx` — auth guard | ✅ | Shows `ActivityIndicator` while `!isReady`; 4-way guard: Auth → ShopSetup → ShopDeactivated → MainTabs |
+| 29 | `LoginScreen.tsx` | ✅ | **Updated.** `sendOtp()` now returns `void` (no `__dev_otp`). Navigation no longer passes `devOtp` param. 10-digit validation + loading/error states unchanged. |
+| 30 | `OtpScreen.tsx` | ✅ | **Updated.** `devOtp` auto-fill + auto-verify `useEffect` removed. `devOtp` branch in `handleResendOtp` removed. `autoFocus` simplified. All 6-box OTP UI, resend timer, and 30s countdown unchanged. Dev testing: use Supabase Dashboard → Auth → Logs to see OTP, or configure test phone with fixed OTP `000000`. |
+| 31 | `AuthNavigator.tsx` | ✅ | **Updated.** `devOtp?: string` removed from `Otp` route params type. |
+| 32 | `ShopSetupScreen.tsx` | ✅ | Saves consent + shop info to AsyncStorage + SQLite; upserts shop via `syncQueue` → Supabase directly; calls `completeSetup()` |
+| 33 | Logout — `SettingsScreen.tsx` | ✅ | Confirmation alert; calls `logout()` (Supabase `signOut()` + clears shop info); `AuthContext` flips → RootNavigator re-renders to Auth stack |
 
 ---
 
-### 14.5 Backend — AI & Alerts
+### 14.5 Edge Functions — AI & Alerts
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 31 | `jobs/dailySuggestions.js` | 🔲 | Cron: sales_log → Claude API → suggestions_log |
-| 32 | `routes/suggestions.js` | 🔲 | GET endpoint for mobile to fetch suggestions |
-| 33 | `services/watiService.js` | 🔲 | WhatsApp alerts via shared WATI account |
-| 34 | `services/smsService.js` | 🔲 | SMS fallback via Fast2SMS |
-| 35 | `services/stockService.js` | 🔲 | Server-side low stock detection → trigger alerts |
+| 34 | `supabase/functions/ai-suggestions/index.ts` | 🔲 | Deno Edge Function: sales_log → Claude API → return suggestions; replaces planned `jobs/dailySuggestions.js` |
+| 35 | AI suggestions schedule (pg_cron) | 🔲 | Supabase pg_cron to trigger `ai-suggestions` Edge Function daily per shop |
+| 36 | WATI WhatsApp alerts | 🔲 | Edge Function or pg_cron: low stock → WATI API call |
+| 37 | Server-side low stock detection | 🔲 | Query `products` where `stock_quantity <= min_stock_threshold` → trigger WATI alert |
 
 ---
 
@@ -570,8 +585,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 36 | AI suggestions → dashboard | 🔲 | Fetch from `/api/suggestions`, cache in SQLite, display card |
-| 37 | Settings screen — real data | ✅ | Loads shop name/owner/category/WhatsApp/aiConsent from AsyncStorage; cloud backup status badge; uses `useFocusEffect` to refresh after EditShop returns |
+| 38 | AI suggestions → dashboard | 🔲 | Call `ai-suggestions` Edge Function, cache in SQLite, display card |
+| 39 | Settings screen — real data | ✅ | Loads shop name/owner/category/WhatsApp/aiConsent from AsyncStorage; cloud backup status badge; uses `useFocusEffect` to refresh after EditShop returns |
 
 ---
 

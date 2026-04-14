@@ -1,27 +1,28 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { getStoredAuth, logout as logoutService } from '../services/authService';
 import { getShopInfo } from '../utils/storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AuthState = {
-  /** false while AsyncStorage is being read on app launch — prevents flash of wrong screen */
+  /** false while session is being read on app launch — prevents flash of wrong screen */
   isReady: boolean;
-  /** true if a valid (non-expired) JWT is present in AsyncStorage */
+  /** true if a valid Supabase session exists */
   isAuthenticated: boolean;
   /** true if shop setup has been completed and shop info is saved */
   isShopSetup: boolean;
-  /** false when admin has deactivated this shop via the backend */
+  /** false when admin has deactivated this shop */
   isShopActive: boolean;
-  /** Phone number decoded from JWT — available after login */
+  /** 10-digit phone number — available after login */
   phone: string | null;
   /** Call after successful OTP verification */
   login: (phone: string) => Promise<void>;
   /** Call after ShopSetup form is completed */
   completeSetup: () => void;
-  /** Clears token + shop info and returns to login */
+  /** Clears Supabase session + shop info and returns to login */
   logout: () => Promise<void>;
-  /** Called by syncService when it detects is_active = false from backend */
+  /** Called by syncService when it detects is_active = false */
   setShopActive: (active: boolean) => void;
 };
 
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isShopActive, setIsShopActive] = useState(true);
   const [phone, setPhone] = useState<string | null>(null);
 
-  // On mount: check for a persisted JWT, shop info, and active status
+  // On mount: restore session from Supabase (persisted in AsyncStorage)
   useEffect(() => {
     getStoredAuth()
       .then(async ({ isAuthenticated: authed, isShopSetup: shopReady, phone: p }) => {
@@ -46,7 +47,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (shopReady) {
           const info = await getShopInfo();
-          // Default true — backwards-compatible with installs before isActive was added
           setIsShopActive(info?.isActive ?? true);
         }
       })
@@ -56,20 +56,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPhone(null);
       })
       .finally(() => setIsReady(true));
+
+    // Listen for Supabase auth state changes (token refresh, sign-out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          setIsAuthenticated(false);
+          setIsShopSetup(false);
+          setIsShopActive(true);
+          setPhone(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (p: string) => {
-    setIsAuthenticated(true);
-    setPhone(p);
-
-    // JWT is now in AsyncStorage — re-run the full auth check so that
-    // returning users (or reinstalled app) skip ShopSetup if shop already exists
+    // Run full auth check first, then set all state at once to avoid
+    // briefly flashing ShopSetup for returning users
     const { isShopSetup: shopReady } = await getStoredAuth();
-    if (shopReady) {
-      const info = await getShopInfo();
-      setIsShopSetup(true);
-      setIsShopActive(info?.isActive ?? true);
-    }
+    const info = shopReady ? await getShopInfo() : null;
+
+    setPhone(p);
+    setIsAuthenticated(true);
+    setIsShopSetup(shopReady);
+    setIsShopActive(info?.isActive ?? true);
   };
 
   const completeSetup = () => {

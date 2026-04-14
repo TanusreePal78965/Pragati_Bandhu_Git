@@ -2,7 +2,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { flushSyncQueue } from '../db/syncQueue';
 import { getHasConsent, getShopInfo, setShopInfo } from '../utils/storage';
-import apiClient from '../api/client';
+import { supabase } from '../lib/supabase';
 
 let unsubscribeNetInfo: (() => void) | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
@@ -17,8 +17,11 @@ const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
     const net = await NetInfo.fetch();
     if (!net.isConnected) return;
 
-    const res = await apiClient.get('/api/shops/me');
-    if (res.data?.is_active === false) {
+    const { data } = await supabase
+      .from('shops')
+      .select('is_active')
+      .single();
+    if (data?.is_active === false) {
       const info = await getShopInfo();
       if (info) await setShopInfo({ ...info, isActive: false });
       onDeactivated();

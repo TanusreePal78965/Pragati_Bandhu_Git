@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
@@ -126,6 +127,7 @@ export default function EditShopScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
+            <StatusBar style="dark" backgroundColor={colors.background} />
             <ScreenHeader
                 title="Edit Shop"
                 showBack={true}

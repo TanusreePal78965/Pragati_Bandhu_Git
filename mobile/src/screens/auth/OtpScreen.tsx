@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -29,7 +30,6 @@ export default function OtpScreen() {
     const navigation = useNavigation<OtpScreenNavigationProp>();
     const route = useRoute<OtpScreenRouteProp>();
     const phoneNumber = route.params?.phoneNumber ?? "";
-    const devOtp = route.params?.devOtp;
 
     const { login } = useAuth();
 
@@ -40,18 +40,6 @@ export default function OtpScreen() {
     const [canResend, setCanResend] = useState(false);
 
     const inputRefs = useRef<(TextInput | null)[]>([]);
-
-    // Auto-fill dev OTP on mount and trigger verification after a short delay
-    useEffect(() => {
-        if (devOtp && devOtp.length === OTP_LENGTH) {
-            const digits = devOtp.split("");
-            setOtp(digits);
-            // Small delay so the user sees the digits appear before auto-verify
-            const timer = setTimeout(() => handleVerifyOtp(devOtp), 700);
-            return () => clearTimeout(timer);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     // Countdown timer for resend button
     useEffect(() => {
@@ -114,7 +102,7 @@ export default function OtpScreen() {
             //   returning user          → MainTabs (login checks backend for existing shop)
             await login(phoneNumber);
         } catch (e: any) {
-            const msg = e?.response?.data?.error ?? "Incorrect OTP. Please try again.";
+            const msg = e?.message ?? "Incorrect OTP. Please try again.";
             setError(msg);
             setIsVerifying(false);
         }
@@ -129,13 +117,7 @@ export default function OtpScreen() {
         inputRefs.current[0]?.focus();
 
         try {
-            const data = await sendOtp(phoneNumber);
-            // In dev mode: auto-fill the new OTP
-            if (data.__dev_otp) {
-                const digits = data.__dev_otp.split("");
-                setOtp(digits);
-                setTimeout(() => handleVerifyOtp(data.__dev_otp), 700);
-            }
+            await sendOtp(phoneNumber);
         } catch {
             setError("Could not resend OTP. Please try again.");
         }
@@ -147,6 +129,7 @@ export default function OtpScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar style="dark" backgroundColor="#F8FAFC" />
             <KeyboardAvoidingView
                 style={styles.keyboardView}
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -202,7 +185,7 @@ export default function OtpScreen() {
                                     keyboardType="number-pad"
                                     maxLength={1}
                                     selectTextOnFocus
-                                    autoFocus={index === 0 && !devOtp}
+                                    autoFocus={index === 0}
                                     editable={!isVerifying}
                                 />
                             ))}
@@ -256,6 +239,7 @@ export default function OtpScreen() {
                             Your data is safe and secure with us
                         </Text>
                     </View>
+                    <Text style={styles.supportText}>For assitance call 7003354703</Text>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -375,4 +359,10 @@ const styles = StyleSheet.create({
     },
     securityIcon: { fontSize: 16 },
     securityText: { fontSize: 13, color: "#94A3B8" },
+    supportText: {
+        marginTop: 20,
+        fontSize: 12,
+        color: "#64748B",
+        textAlign: "center",
+    }
 });
