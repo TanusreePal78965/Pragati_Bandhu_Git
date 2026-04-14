@@ -650,13 +650,13 @@ export default function SettingsScreen() {
 
                 {/* Support & Info */}
                 <SectionHeader title="SUPPORT & INFO" />
-                <SettingsItem icon="help-circle" title="Help Center" />
-                <SettingsItem icon="shield-checkmark" title="Privacy Policy" />
-                <SettingsItem icon="document-text" title="Terms of Service" />
+                <SettingsItem icon="help-circle" title="Help Center" onPress={() => (navigation as any).navigate("HelpCenter")} />
+                <SettingsItem icon="shield-checkmark" title="Privacy Policy" onPress={() => (navigation as any).navigate("PrivacyPolicy")} />
+                <SettingsItem icon="document-text" title="Terms of Service" onPress={() => (navigation as any).navigate("TermsOfService")} />
                 <SettingsItem
                     icon="information-circle"
                     title="App Version"
-                    value="v1.0.4"
+                    value="v1.0.0"
                     showChevron={false}
                     onPress={handleVersionPress}
                 />

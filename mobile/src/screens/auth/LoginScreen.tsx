@@ -135,9 +135,13 @@ export default function LoginScreen() {
                         {/* Terms */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{" "}
-                            <Text style={styles.termsLink}>Terms of Service</Text>
+                            <TouchableOpacity onPress={() => navigation.navigate("TermsOfService")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Text style={styles.termsLink}>Terms of Service</Text>
+                            </TouchableOpacity>
                             {" "}and{" "}
-                            <Text style={styles.termsLink}>Privacy Policy</Text>
+                            <TouchableOpacity onPress={() => navigation.navigate("PrivacyPolicy")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Text style={styles.termsLink}>Privacy Policy</Text>
+                            </TouchableOpacity>
                         </Text>
                     </View>
 
@@ -156,7 +160,9 @@ export default function LoginScreen() {
                             <Text style={styles.featureText}>Track Udhar</Text>
                         </View>
                     </View>
-                    <Text style={styles.supportText}>For assitance call 7003354703</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate("HelpCenter")}>
+                        <Text style={styles.supportText}>Need help? Visit our Help Center</Text>
+                    </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>

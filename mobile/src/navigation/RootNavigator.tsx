@@ -18,6 +18,9 @@ import BillsScreen from "../screens/billing/BillsScreen";
 import BillDetailScreen from "../screens/billing/BillDetailScreen";
 import EditShopScreen from "../screens/settings/EditShopScreen";
 import ShopDeactivatedScreen from "../screens/auth/ShopDeactivatedScreen";
+import HelpCenterScreen from "../screens/settings/HelpCenterScreen";
+import PrivacyPolicyScreen from "../screens/settings/PrivacyPolicyScreen";
+import TermsOfServiceScreen from "../screens/settings/TermsOfServiceScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +74,9 @@ export default function RootNavigator() {
                         <Stack.Screen name="Bills" component={BillsScreen} />
                         <Stack.Screen name="BillDetail" component={BillDetailScreen} />
                         <Stack.Screen name="EditShop" component={EditShopScreen} />
+                        <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
+                        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+                        <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
                     </>
                 )}
             </Stack.Navigator>
