@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
 
 const MAX_ATTEMPTS = 5;
+let isFlushing = false;
 
 interface SyncItem {
   id: number;
@@ -48,29 +49,37 @@ export const getPendingSyncCount = (): number => {
  * and are upserted across three tables sequentially.
  */
 export const flushSyncQueue = async () => {
-  const state = await NetInfo.fetch();
-  if (!state.isConnected) return;
+  // Guard against concurrent flushes (e.g. NetInfo + AppState firing simultaneously)
+  if (isFlushing) return;
+  isFlushing = true;
 
-  const queue = db.getAllSync(
-    'SELECT * FROM sync_queue WHERE attempts < ? ORDER BY id ASC',
-    [MAX_ATTEMPTS]
-  ) as SyncItem[];
+  try {
+    const state = await NetInfo.fetch();
+    if (!state.isConnected) return;
 
-  if (queue.length === 0) return;
+    const queue = db.getAllSync(
+      'SELECT * FROM sync_queue WHERE attempts < ? ORDER BY id ASC',
+      [MAX_ATTEMPTS]
+    ) as SyncItem[];
 
-  for (const item of queue) {
-    try {
-      const payload = JSON.parse(item.payload);
-      await syncItem(item.table_name, item.operation, item.data_id, payload);
-      db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
-    } catch (e) {
-      console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, e);
-      // Failure — increment attempts; item will be retried next flush
-      db.runSync(
-        'UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?',
-        [item.id]
-      );
+    if (queue.length === 0) return;
+
+    for (const item of queue) {
+      try {
+        const payload = JSON.parse(item.payload);
+        await syncItem(item.table_name, item.operation, item.data_id, payload);
+        db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
+      } catch (e) {
+        console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, e);
+        // Failure — increment attempts; item will be retried next flush
+        db.runSync(
+          'UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?',
+          [item.id]
+        );
+      }
     }
+  } finally {
+    isFlushing = false;
   }
 };
 
@@ -88,29 +97,34 @@ async function syncItem(
   }
 }
 
+// Derives the 10-digit shop_id from the live Supabase session.
+// Mirrors the RLS policy: right(auth.jwt() ->> 'phone', 10)
+async function getShopId(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const rawPhone = session?.user?.phone ?? '';
+  const phone = rawPhone.slice(-10);
+  if (!phone) throw new Error('No authenticated session — cannot sync');
+  return phone;
+}
+
 async function syncUpsert(tableName: string, payload: any): Promise<void> {
   switch (tableName) {
     case 'products':
     case 'categories':
     case 'brands':
-    case 'customers': {
+    case 'customers':
+    case 'sales_log': {
+      // RLS requires shop_id = phone on every row — inject it from the live session.
+      const shopId = await getShopId();
       const { error } = await supabase
         .from(tableName)
-        .upsert(payload, { onConflict: 'id' });
+        .upsert({ ...payload, shop_id: shopId }, { onConflict: 'id' });
       if (error) throw error;
       break;
     }
 
     case 'shop': {
-      // Derive phone from the live session — never trust the payload's phone field,
-      // since it may be stale or empty and the RLS policy keys on id = phone.
-      const { data: { session } } = await supabase.auth.getSession();
-      const rawPhone = session?.user?.phone ?? '';
-      // Mirror the RLS policy exactly: right(auth.jwt() ->> 'phone', 10)
-      // auth.users.phone may be '+919876543210', '919876543210', or '9876543210'
-      const phone = rawPhone.slice(-10);
-      if (!phone) throw new Error('No authenticated session — cannot sync shop');
-
+      const phone = await getShopId();
       const { shopName, ownerName, category, whatsappNumber, aiConsent } = payload;
       const { error } = await supabase.from('shops').upsert(
         {
@@ -129,15 +143,17 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
     }
 
     case 'bills': {
-      // Sales payload: { bill, items, salesLog }
+      // Payload: { bill, items, salesLog } — all three need shop_id for RLS.
+      const shopId = await getShopId();
       const { bill, items, salesLog } = payload;
 
       const { error: billError } = await supabase
         .from('bills')
-        .upsert(bill, { onConflict: 'id' });
+        .upsert({ ...bill, shop_id: shopId }, { onConflict: 'id' });
       if (billError) throw billError;
 
       if (items?.length) {
+        // bill_items has no shop_id — RLS derives access via parent bill.
         const { error: itemsError } = await supabase
           .from('bill_items')
           .upsert(items, { onConflict: 'id' });
@@ -147,7 +163,7 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
       if (salesLog?.length) {
         const { error: logError } = await supabase
           .from('sales_log')
-          .upsert(salesLog, { onConflict: 'id' });
+          .upsert(salesLog.map((l: any) => ({ ...l, shop_id: shopId })), { onConflict: 'id' });
         if (logError) throw logError;
       }
       break;

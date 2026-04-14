@@ -6,6 +6,9 @@ import {
   setHasConsent,
 } from '../utils/storage';
 import { insertShop } from '../db/db';
+import db from '../db/sqlite';
+import { restoreFromCloud } from './restoreService';
+import { emitRestoreEvent } from '../utils/restoreEvents';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -108,6 +111,23 @@ export const getStoredAuth = async (): Promise<{
         insertShop(recovered);
 
         shopInfo = recovered;
+
+        // Auto-restore: if cloud consent is on and local SQLite is empty,
+        // pull all tables from Supabase in the background. The user will see
+        // their data appear on the home screen without any manual action.
+        if (recovered.aiConsent) {
+          const { count } = db.getFirstSync(
+            'SELECT COUNT(*) as count FROM products'
+          ) as { count: number };
+          if (count === 0) {
+            // C11: Emit events so AuthContext can show a "Restoring…" banner.
+            // Non-blocking — user lands on the home screen while data loads in.
+            emitRestoreEvent('start');
+            restoreFromCloud()
+              .then(() => emitRestoreEvent('complete'))
+              .catch(() => emitRestoreEvent('error'));
+          }
+        }
       }
     } catch {
       // Network unavailable or no shop found — fall through to setup screen

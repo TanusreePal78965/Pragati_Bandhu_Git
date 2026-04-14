@@ -9,6 +9,7 @@ import {
     Platform,
     ScrollView,
     ActivityIndicator,
+    Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -74,9 +75,11 @@ export default function LoginScreen() {
                 >
                     {/* Logo/Brand Section */}
                     <View style={styles.brandSection}>
-                        <View style={styles.logoContainer}>
-                            <Text style={styles.logoText}>🏪</Text>
-                        </View>
+                        <Image
+                            source={require("../../../assets/icon.png")}
+                            style={styles.logoImage}
+                            resizeMode="contain"
+                        />
                         <Text style={styles.appName}>PragatiBandhu</Text>
                         <Text style={styles.tagline}>Your Shop's Best Friend</Text>
                         <Text style={styles.taglineBengali}>আপনার দোকানের বন্ধু</Text>
@@ -177,22 +180,11 @@ const styles = StyleSheet.create({
         marginTop: 40,
         marginBottom: 40,
     },
-    logoContainer: {
-        width: 100,
-        height: 100,
+    logoImage: {
+        width: 110,
+        height: 110,
         borderRadius: 24,
-        backgroundColor: "#EEF2FF",
-        alignItems: "center",
-        justifyContent: "center",
         marginBottom: 16,
-        shadowColor: "#2563EB",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-    },
-    logoText: {
-        fontSize: 48,
     },
     appName: {
         fontSize: 28,

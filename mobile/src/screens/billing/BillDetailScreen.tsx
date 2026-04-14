@@ -10,13 +10,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { getBillItems, Bill, BillItem } from "../../db/db";
+import { getShopInfo, StoredShopInfo } from "../../utils/storage";
+
+const toUtcDate = (dateStr: string) =>
+    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
 
 const formatDateTime = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = toUtcDate(dateStr);
     return d.toLocaleString("en-IN", {
         day: "2-digit",
         month: "short",
@@ -32,12 +38,114 @@ export default function BillDetailScreen() {
     const route = useRoute<any>();
     const bill: Bill = route.params?.bill;
     const [items, setItems] = useState<BillItem[]>([]);
+    const [shopInfo, setShopInfo] = useState<StoredShopInfo | null>(null);
 
     useEffect(() => {
         if (bill?.id) {
             setItems(getBillItems(bill.id));
         }
+        getShopInfo().then(info => setShopInfo(info));
     }, [bill?.id]);
+
+    const generateBillHtml = () => {
+        const date = formatDateTime(bill.bill_date);
+        const shopName = shopInfo?.shopName || "Our Store";
+        const shopOwner = shopInfo?.ownerName || "";
+        const shopPhone = shopInfo?.phone || "";
+        const customerName = bill.customer_name || "Walk-in Customer";
+
+        const itemsHtml = items.map((item, index) => `
+            <tr>
+                <td style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                    <div style="font-weight: bold; font-size: 14px;">${item.product_name}</div>
+                    <div style="font-size: 12px; color: #666;">₹${item.unit_price.toFixed(2)} × ${item.qty}</div>
+                </td>
+                <td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">
+                    ₹${item.line_total.toFixed(2)}
+                </td>
+            </tr>
+        `).join("");
+
+        return `
+            <html>
+                <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+                </head>
+                <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #333;">
+                    <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid ${colors.primary}; padding-bottom: 20px;">
+                        <h1 style="margin: 0; color: ${colors.primary}; font-size: 28px;">${shopName}</h1>
+                        ${shopOwner ? `<p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Proprietor: ${shopOwner}</p>` : ""}
+                        ${shopPhone ? `<p style="margin: 2px 0 0 0; color: #666; font-size: 14px;">Contact: +91 ${shopPhone}</p>` : ""}
+                    </div>
+
+                    <div style="margin-bottom: 30px; display: flex; justify-content: space-between;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 12px; color: #888; text-transform: uppercase;">Customer</h3>
+                            <p style="margin: 0; font-weight: bold; font-size: 16px;">${customerName}</p>
+                        </div>
+                        <div style="flex: 1; text-align: right;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill Summary</h3>
+                            <p style="margin: 0; font-weight: bold; font-size: 14px;">ID: ${bill.id.toUpperCase()}</p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">${date}</p>
+                        </div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding-bottom: 10px; border-bottom: 2px solid #eee; color: #999; font-size: 12px; text-transform: uppercase;">Description</th>
+                                <th style="text-align: right; padding-bottom: 10px; border-bottom: 2px solid #eee; color: #999; font-size: 12px; text-transform: uppercase;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+
+                    <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="color: #666;">Subtotal</span>
+                            <span style="font-weight: bold;">₹${bill.total_amount.toFixed(2)}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                            <span style="color: #666;">Payment Mode</span>
+                            <span style="font-weight: bold; color: ${bill.payment_mode === "udhar" ? "#D97706" : colors.success};">${bill.payment_mode === "udhar" ? "Udhar (Credit)" : "Cash"}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding-top: 15px; border-top: 1px solid #ddd;">
+                            <span style="font-size: 18px; font-weight: bold;">Grand Total</span>
+                            <span style="font-size: 24px; font-weight: 800; color: ${colors.primary};">₹${bill.total_amount.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 50px; text-align: center; color: #999; font-size: 12px;">
+                        <p>Thank you for your business!</p>
+                        <p style="margin-top: 5px;">This is a computer generated receipt.</p>
+                    </div>
+                </body>
+            </html>
+        `;
+    };
+
+    const onSharePress = async () => {
+        try {
+            const html = generateBillHtml();
+            const { uri } = await Print.printToFileAsync({ html });
+            
+            const fileName = `Bill_${bill.id.substring(0, 8)}_${new Date().getTime()}.pdf`;
+            const newUri = uri.substring(0, uri.lastIndexOf('/') + 1) + fileName;
+            
+            // To rename the file on iOS/Android, we'd normally use FileSystem, 
+            // but for simple sharing, printToFileAsync's output is sufficient.
+            
+            await Sharing.shareAsync(uri, {
+                mimeType: 'application/pdf',
+                dialogTitle: `Share Bill #${bill.id.toUpperCase()}`,
+                UTI: 'com.adobe.pdf'
+            });
+        } catch (error) {
+            console.error("Error sharing PDF:", error);
+        }
+    };
 
     if (!bill) {
         return (
@@ -62,7 +170,9 @@ export default function BillDetailScreen() {
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Bill Details</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity onPress={onSharePress} style={styles.backBtn}>
+                    <Ionicons name="share-outline" size={24} color={colors.primary} />
+                </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>

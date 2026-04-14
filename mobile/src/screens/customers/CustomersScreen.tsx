@@ -118,7 +118,7 @@ export default function CustomersScreen() {
                                     </>
                                 ) : null}
                                 <Text style={styles.itemLastTrans}>
-                                    Added {new Date(item.created_at).toLocaleDateString("en-IN")}
+                                    Added {new Date(item.created_at.endsWith('Z') ? item.created_at : item.created_at.replace(' ', 'T') + 'Z').toLocaleDateString("en-IN")}
                                 </Text>
                             </View>
                         </View>

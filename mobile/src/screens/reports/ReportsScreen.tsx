@@ -29,8 +29,11 @@ const getRangeDates = (range: RangeKey): { from: string; to: string } => {
 
 const fmt = (n: number) => `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
+const toUtcDate = (dateStr: string) =>
+    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
+
 const formatDateTime = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = toUtcDate(dateStr);
     return d.toLocaleString("en-IN", {
         day: "2-digit", month: "short",
         hour: "2-digit", minute: "2-digit", hour12: true,
@@ -74,7 +77,7 @@ export default function ReportsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
-            <ScreenHeader title="Business Reports" isMainTab={false} onNotificationPress={() => {}} />
+            <ScreenHeader title="Business Reports" isMainTab={false} onNotificationPress={() => { }} />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
                 {/* Time Range Selector */}
@@ -229,13 +232,13 @@ export default function ReportsScreen() {
                     <Text style={styles.viewAllBtnText}>View All Transactions</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
+                {/* <TouchableOpacity
                     style={styles.exportButton}
                     onPress={() => Alert.alert("Coming Soon", "PDF export will be available in a future update.")}
                 >
                     <Ionicons name="download-outline" size={20} color="#fff" />
                     <Text style={styles.exportText}>Download PDF Report</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
             </ScrollView>
         </SafeAreaView>
     );

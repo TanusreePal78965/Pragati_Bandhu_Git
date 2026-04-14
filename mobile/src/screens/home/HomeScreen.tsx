@@ -36,8 +36,11 @@ export default function HomeScreen() {
     const formatCurrency = (amount: number) =>
         `₹ ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
+    const toUtcDate = (dateStr: string) =>
+        new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
+
     const formatTime = (dateStr: string) => {
-        const d = new Date(dateStr);
+        const d = toUtcDate(dateStr);
         return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
     };
 
@@ -186,7 +189,7 @@ export default function HomeScreen() {
 
                 {/* Recent Activity */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
+                    <Text style={styles.sectionTitle}>RECENT SALES</Text>
                 </View>
 
                 {recentBills.length === 0 ? (
@@ -196,7 +199,11 @@ export default function HomeScreen() {
                 ) : (
                     <View style={styles.activityList}>
                         {recentBills.map((bill) => (
-                            <View key={bill.id} style={styles.activityItem}>
+                            <TouchableOpacity
+                                key={bill.id}
+                                style={styles.activityItem}
+                                onPress={() => navigation.navigate("BillDetail", { bill })}
+                            >
                                 <View
                                     style={[
                                         styles.activityIcon,
@@ -226,7 +233,7 @@ export default function HomeScreen() {
                                 <Text style={styles.activityAmount}>
                                     ₹{bill.total_amount.toFixed(2)}
                                 </Text>
-                            </View>
+                            </TouchableOpacity>
                         ))}
                     </View>
                 )}

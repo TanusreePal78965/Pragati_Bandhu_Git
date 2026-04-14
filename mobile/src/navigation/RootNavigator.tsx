@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, Text } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
@@ -22,7 +22,7 @@ import ShopDeactivatedScreen from "../screens/auth/ShopDeactivatedScreen";
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-    const { isReady, isAuthenticated, isShopSetup, isShopActive } = useAuth();
+    const { isReady, isAuthenticated, isShopSetup, isShopActive, isAutoRestoring } = useAuth();
 
     // Splash guard: don't render navigator until AsyncStorage check is done.
     // Prevents the login screen from flashing on a returning authenticated user.
@@ -36,6 +36,15 @@ export default function RootNavigator() {
 
     return (
         <NavigationContainer>
+            {/* C11: Non-intrusive banner visible while background auto-restore is running */}
+            {isAutoRestoring && (
+                <View style={{ backgroundColor: '#dbeafe', paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color="#1e40af" />
+                    <Text style={{ color: '#1e40af', fontSize: 13, fontWeight: '600' }}>
+                        Restoring your data from cloud…
+                    </Text>
+                </View>
+            )}
             <Stack.Navigator screenOptions={{ headerShown: false }}>
                 {!isAuthenticated ? (
                     // ── Unauthenticated: only auth screens accessible ──────────

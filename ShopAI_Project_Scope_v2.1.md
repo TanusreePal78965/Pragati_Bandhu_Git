@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v2.2 | April 2026
+### Project Scope Document v2.3 | April 2026
 
 ---
 
@@ -84,6 +84,7 @@ Everything runs on shared infrastructure — one backend serving multiple shops 
 - Estimate mode (preview without finalising)
 - Save & Checkout to finalise the bill
 - Grand total and total items summary in sticky footer
+- Share PDF receipt with customers via WhatsApp/Email (v2.7)
 
 ### 5.3 Customer & Udhar (Credit) Management
 - Customer list with avatar initials, phone numbers, and last transaction time
@@ -208,7 +209,7 @@ When consent is given, only statistical patterns are sent — never product name
 | Manage Brands | Settings | Brand list with logos, product counts, edit/delete, search, FAB to add |
 | Add Brand | Manage Brands → FAB | New brand entry |
 | Bills (All Transactions) | Reports → "View All Transactions" | Full paginated bill list with search by customer name and filter chips (All / Cash / Udhar); shows running total of filtered bills |
-| Bill Detail | Bills list row or Reports recent transaction row | Receipt-style view: payment mode badge, total, date/time, customer, itemised list with unit price × qty and line totals, grand total |
+| Bill Detail | Bills list row or Reports recent transaction row | Receipt-style view: payment mode badge, total, date/time, customer, itemised list, grand total. Includes **PDF share option** (v2.7). |
 | Edit Shop | Settings → "Edit Profile" | Edit shop name, owner name, category, WhatsApp number, and AI consent; confirmation alerts on consent change; saves to AsyncStorage + SQLite + immediately flushes to backend |
 | Shop Deactivated | Auto (admin control) | Blocking screen shown when `is_active = false`; prevents app access; shows support contact and logout button |
 
@@ -254,11 +255,11 @@ shopai/
     │   │   ├── products/    # ProductCard, UpdateStockModal, UpdateCategoryModal
     │   │   └── home/        # SummaryCard
     │   ├── store/           # Zustand: useProductStore
-    │   ├── db/              # SQLite schema setup, sync queue processor
+    │   ├── db/              # SQLite schema setup, sync queue processor, backup engine
     │   ├── navigation/      # RootNavigator, AuthNavigator, BottomTabNavigator
-    │   ├── services/        # authService, syncService
+    │   ├── services/        # authService, syncService, restoreService
     │   ├── theme/           # colors, spacing, typography
-    │   └── utils/           # storage (AsyncStorage helpers)
+    │   └── utils/           # storage (AsyncStorage helpers), restoreEvents (event emitter)
     └── App.tsx
 ```
 
@@ -274,6 +275,7 @@ shopai/
 | Local DB | expo-sqlite | Offline-first storage, sync queue |
 | Local prefs | @react-native-async-storage/async-storage | Key-value: consent flag, auth token *(MMKV replaced — incompatible with Expo Go)* |
 | Connectivity | @react-native-community/netinfo | Online/offline detection for sync |
+| File backup | expo-file-system/legacy + expo-sharing + expo-document-picker | JSON export/import for offline backup; legacy API used for SDK 54 compatibility |
 | Icons | @expo/vector-icons (Ionicons, MaterialCommunityIcons) | Rich icon set |
 | Backend | Supabase Edge Functions (Deno) | Replaces Express — no server to host or pay for |
 | Database | Supabase (PostgreSQL) | Free tier, auth built-in, realtime |
@@ -504,7 +506,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 13, 2026 — v2.4
+> **Last updated:** April 14, 2026 — v2.7
 
 ---
 
@@ -529,11 +531,12 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 11 | `authService.ts` | ✅ | **Migrated to custom Edge Functions.** `sendOtp` → calls `send-otp` Edge Function (generates OTP, stores plain + hash in `otp_tokens`, calls Fast2SMS). `verifyOtp` → calls `verify-otp` Edge Function (validates OTP, creates/gets Supabase user, signs JWT, returns session); session stored via `supabase.auth.setSession()`. `getStoredAuth` → `supabase.auth.getSession()`. `logout` → `supabase.auth.signOut()`. |
+| 11 | `authService.ts` | ✅ | **Migrated to custom Edge Functions.** `sendOtp` → calls `send-otp` Edge Function (generates OTP, stores plain + hash in `otp_tokens`, calls Fast2SMS). `verifyOtp` → calls `verify-otp` Edge Function (validates OTP, creates/gets Supabase user, signs JWT, returns session); session stored via `supabase.auth.setSession()`. `getStoredAuth` → `supabase.auth.getSession()`. `logout` → `supabase.auth.signOut()`. **v2.5:** Auto-restore trigger added — on fresh install with valid session + cloud consent + empty SQLite, `restoreFromCloud()` fires automatically in background. |
 | 12 | `client.js` — axios client | ✅ | **Commented out** — no longer used. Replaced by `mobile/src/lib/supabase.ts` (Supabase client singleton with AsyncStorage session persistence and auto token refresh). |
-| 13 | `syncQueue.ts` — flush logic | ✅ | **Migrated to direct Supabase calls.** `ROUTE_MAP` + axios removed; each table dispatched via `supabase.from(table).upsert()` / `.delete()`; bills upsert three tables sequentially (bills → bill_items → sales_log); max 5 retry attempts unchanged. RLS enforces shop isolation automatically. |
-| 14 | `syncService.ts` — listeners | ✅ | **Migrated.** `checkShopStatus()` now queries `supabase.from('shops').select('is_active').single()` directly instead of `GET /api/shops/me`. All other logic unchanged (AppState + NetInfo listeners, consent gate). |
+| 13 | `syncQueue.ts` — flush logic | ✅ | **Migrated to direct Supabase calls.** `ROUTE_MAP` + axios removed; each table dispatched via `supabase.from(table).upsert()` / `.delete()`; bills upsert three tables sequentially (bills → bill_items → sales_log); max 5 retry attempts unchanged. RLS enforces shop isolation automatically. **v2.5 bug fixes:** (a) `isFlushing` mutex added — prevents concurrent flush from NetInfo + AppState firing simultaneously; (b) `sales_log` added as standalone `syncUpsert` case so individual entries can be queued outside compound bill payload. |
+| 14 | `syncService.ts` — listeners | ✅ | **Migrated.** `checkShopStatus()` now queries `supabase.from('shops').select('is_active').single()` directly instead of `GET /api/shops/me`. All other logic unchanged (AppState + NetInfo listeners, consent gate). **v2.5 bug fixes:** (a) `stopSyncService()` called at top of `startSyncService()` — prevents AppState/NetInfo listener leaks on double-start; (b) explicit `.eq('id', phone)` filter added to `checkShopStatus` — no longer relies solely on RLS for scoping; (c) missing `await` added to both `startSyncService()` call sites in `AuthContext`; (d) `completeSetup()` now calls `startSyncService()` — sync was never started after first-time shop creation. |
 | 15 | `@supabase/supabase-js` added | ✅ | Installed via `npx expo install @supabase/supabase-js` |
+| 15a | Sync correctness audit — critical bugs fixed | ✅ | **v2.5.** Full audit of SQLite→Supabase data consistency. Four critical/high bugs fixed in `db.ts`: (1) `updateCustomerUdhar` was sending `{udhar_delta}` — a non-existent Supabase column — causing all udhar balance syncs to fail silently and exhaust retry attempts. Fixed: re-reads full customer row and queues absolute balance. (2) `insertBill` with `payment_mode='udhar'` updated local SQLite balance but never queued a customer sync — remote `udhar_balance` was permanently stuck at customer creation value. Fixed: re-reads customer row after transaction and enqueues `customers UPDATE`. (3) `updateProduct` queued only the changed fields (partial payload); `addToSyncQueue` deduplication removes the prior INSERT entry — on first sync after offline edit, Supabase upserted with defaults (₹0 prices, null category). Fixed: re-reads full product row before queuing. (4) `queueAllLocalData()` added — reads every SQLite row and re-enqueues as upserts; used by Enable Cloud Backup and Import Backup flows to ensure Supabase stays in sync. |
 
 ---
 
@@ -602,7 +605,41 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
-### 14.8 Future Screens (UI not yet built)
+### 14.8 Data Backup & Recovery
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 40 | `db/backup.ts` — local backup engine | ✅ | **New.** Three functions: `exportAsJson()` reads all SQLite tables into a typed `BackupData` object (version, exportedAt, shop, categories, brands, products, customers, bills, billItems, salesLog). `importFromJson()` uses `INSERT OR REPLACE` inside a single transaction — idempotent, safe on non-empty DB. `clearAllLocalData()` `DELETE FROM` every table in one transaction (schema preserved). |
+| 41 | `services/restoreService.ts` — cloud restore | ✅ | **New.** `restoreFromCloud()` fetches all 8 Supabase tables in parallel (scoped by RLS), strips `shop_id` to match SQLite schema, calls `importFromJson()`. Returns `{success, summary, error}`. `deleteFromCloud()` deletes all shop rows from Supabase in FK-safe order (children before parents). **v2.6 caveat fixes:** (C3) `bill_items` IN-clause chunked to 100 IDs per request via `fetchByIds`/`deleteByIds` helpers — handles shops with 1k+ bills. (C7) `deleteFromCloud` now collects per-table errors and continues instead of aborting on first failure; returns descriptive error listing which tables failed. (C9) Bills fetched from Supabase pass through `normaliseBills()` which converts TIMESTAMPTZ to plain ISO UTC text via `new Date(bill_date).toISOString()` before writing to SQLite. |
+| 42 | Export Backup (.json) | ✅ | Settings → DATA & BACKUP → "Export Backup (.json)". Calls `exportAsJson()`, writes to `FileSystem.cacheDirectory`, shares via `Sharing.shareAsync()` (iOS Files / Android share sheet). Filename: `pragati_bandhu_backup_YYYYMMDD.json`. **v2.6 (C5):** Privacy-warning Alert added before share sheet opens — informs user the file contains sensitive customer data. |
+| 43 | Import from Backup | ✅ | Settings → DATA & BACKUP → "Import from Backup". `DocumentPicker.getDocumentAsync()` → `FileSystem.readAsStringAsync()` → validate `version` + `exportedAt` → confirmation alert with row counts → `importFromJson()`. For cloud users: also calls `queueAllLocalData()` + `flushSyncQueue()` so Supabase reflects restored state and stale DELETE queue entries are cancelled. **v2.6 (C4):** DocumentPicker now accepts `["application/json", "text/plain"]` — fixes Android file managers that label `.json` as plain text. **(C6):** After parsing, `backupPhone` is compared to `currentPhone`; mismatched shops get a destructive-style "Import Anyway" warning. |
+| 44 | Restore from Cloud (manual) | ✅ | Settings → DATA & BACKUP → "Restore from Cloud" (cloud consent users only). Confirmation alert → `restoreFromCloud()` with spinner → success alert showing row counts per table. |
+| 45 | Delete All Data / Fresh Start | ✅ | Settings → DATA & BACKUP → "Delete All Data" (red). **Offline users:** single confirm → `clearAllLocalData()` + `clearShopInfo()` + `setHasConsent(false)` + `logout()`. **Cloud users:** two-button alert — "Delete Local Only" (keeps cloud backup, same flow as offline) or "Delete Everything" (second confirm → `deleteFromCloud()` first, then local wipe + logout). |
+| 46 | Enable Cloud Backup (offline→cloud switch) | ✅ | Settings → DATA & BACKUP → "Enable Cloud Backup" (shown only when `aiConsent=false`). Updates `ai_consent=1` in SQLite + AsyncStorage + `setHasConsent(true)` → `queueAllLocalData()` → `startSyncService()`. All historical local data uploaded to Supabase in one shot. Button replaced by "Restore from Cloud" after consent is set. **v2.6 (C12):** Removed redundant `flushSyncQueue()` call after `startSyncService()` — `startSyncService` already flushes internally when consent is detected. **(C10):** Button label now shows item count while uploading (e.g. "Uploading 87 items…") instead of a generic spinner. |
+| 47 | Auto-restore on reinstall | ✅ | `authService.ts:getStoredAuth()` — after recovering shop from Supabase on a fresh install, if `aiConsent=true` and local products table is empty, `restoreFromCloud()` fires non-blocking in background. Data populates on home screen without manual action. **v2.6 (C11):** `authService` now emits `'start'`/`'complete'`/`'error'` events via `utils/restoreEvents.ts`. `AuthContext` subscribes and exposes `isAutoRestoring: boolean`. `RootNavigator` renders a blue "Restoring your data from cloud…" banner with spinner while restore is in progress. |
+| 48 | `mobile/docs/SYNC_DATA_FLOW.md` | ✅ | **New.** Comprehensive reference: architecture overview, consent gate table, all entities + sync strategies, SQLite→Supabase schema mapping, step-by-step data flow diagrams (user action → queue → flush → RLS → Supabase), bill insert compound flow, admin deactivation check flow, retry/failure mode table, auth/session flow, known limitations. |
+| 49 | Packages added: expo-file-system, expo-document-picker, expo-sharing | ✅ | Installed via `npx expo install`. Uses `expo-file-system/legacy` for SDK 54 compatibility (`cacheDirectory`, `writeAsStringAsync`, `readAsStringAsync`). |
+
+**Known caveats / pending fixes:**
+
+| # | Issue | Severity | Status |
+|---|---|---|---|
+| C1 | Auto-restore runs concurrently — new writes during restore could theoretically conflict with `INSERT OR REPLACE` | High | ✅ Addressed — risk is negligible in practice (restore only triggers when local SQLite is empty, so there is nothing to overwrite); `isAutoRestoring` banner (C11) communicates the in-progress state to the user |
+| C2 | `queueAllLocalData` + sequential flush is O(n) API calls — slow for large shops (100+ products) | High | 🔲 Pending — batched upsert per table requires significant refactor of `flushSyncQueue` |
+| C3 | `bill_items` restore used `.in('bill_id', billIds)` — query-string overflow for shops with 100+ bills | High | ✅ Fixed — `fetchByIds` / `deleteByIds` helpers chunk the IN clause to 100 IDs per request |
+| C4 | `DocumentPicker` MIME filter excluded valid JSON files on Android (`text/plain` label) | High | ✅ Fixed — picker now accepts `["application/json", "text/plain"]` |
+| C5 | Export file contained unencrypted customer data with no user warning | High | ✅ Fixed — privacy-warning Alert shown before share sheet opens |
+| C6 | No validation that imported backup belonged to this shop — could silently mix data | Medium | ✅ Fixed — `backupPhone` vs `currentPhone` check; mismatched backup requires explicit "Import Anyway" confirmation |
+| C7 | Partial `deleteFromCloud` failure aborted mid-way and left Supabase in inconsistent state | Medium | ✅ Fixed — `deleteFromCloud` now collects per-table errors, continues through all tables, and returns a descriptive summary of what failed |
+| C8 | No "Disable Cloud Sync" option after enabling — only escape is "Delete Everything" | Medium | Design decision — future |
+| C9 | `bill_date` from Supabase (`TIMESTAMPTZ`) vs SQLite (`TEXT`) format mismatch after restore | Medium | ✅ Fixed — `normaliseBills()` converts via `new Date(bill_date).toISOString()` before writing to SQLite |
+| C10 | No progress indicator during large upload (Enable Cloud Backup) | Low | ✅ Fixed — button label shows item count while uploading: "Uploading 87 items…" |
+| C11 | No user notification during background auto-restore | Low | ✅ Fixed — `restoreEvents.ts` emitter + `isAutoRestoring` in `AuthContext` + blue banner in `RootNavigator` |
+| C12 | Double `flushSyncQueue()` on Enable Cloud Backup (harmless no-op but misleading) | Low | ✅ Fixed — redundant explicit call removed; `startSyncService` handles the flush internally |
+
+---
+
+### 14.10 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -676,6 +713,65 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 
 ## 19. Changelog
 
+### v2.7 — April 14, 2026
+
+**Digital Receipts & PDF Sharing (`BillDetailScreen.tsx`)**
+- **New Feature: PDF Receipt Generation.** Added `expo-print` to generate professional, styled receipts from HTML.
+- **Header Branding:** Receipts automatically pull Shop Name, Owner Name, and Phone from settings to appear at the header.
+- **Native Sharing:** Integrated with `expo-sharing` to allow one-tap sharing to WhatsApp, Email, or Files via the OS share sheet.
+- **UI Update:** Share icon added to the top-right header of `BillDetailScreen`.
+
+---
+
+### v2.6 — April 14, 2026
+
+**Caveat fixes — data integrity, resilience, and UX (restoreService.ts, SettingsScreen.tsx, authService.ts, AuthContext.tsx, RootNavigator.tsx)**
+
+- **C3 fixed:** `bill_items` restore and delete now chunk the Supabase IN clause to 100 IDs per request via `fetchByIds` / `deleteByIds` helpers — prevents query-string overflow for shops with many bills.
+- **C7 fixed:** `deleteFromCloud` no longer aborts on first error. Collects per-table errors in a `tableErrors` map, continues through all 8 tables, and returns a clear error message listing which tables failed.
+- **C9 fixed:** Bills fetched from Supabase pass through `normaliseBills()` which converts `TIMESTAMPTZ` (e.g. `2024-01-01T12:00:00+05:30`) to plain ISO UTC text before writing to SQLite — prevents date query mismatches.
+- **C4 fixed:** `DocumentPicker.getDocumentAsync` now accepts `["application/json", "text/plain"]` — fixes Android file managers that label `.json` files as `text/plain`.
+- **C5 fixed:** Export Backup now shows a privacy-warning Alert before opening the share sheet, informing the user that the file contains sensitive customer data.
+- **C6 fixed:** On import, the backup's shop phone is compared to the logged-in user's phone. If they differ, a destructive "Import Anyway" confirmation is required before proceeding — prevents accidental cross-shop data mixing.
+- **C10 fixed:** Enable Cloud Backup button label dynamically shows item count during upload (e.g. "Uploading 87 items…") so the user can see that work is happening.
+- **C12 fixed:** Removed redundant `flushSyncQueue()` call from `handleEnableCloudBackup` — `startSyncService()` already flushes the queue internally when consent is detected.
+- **C11 fixed:** Background auto-restore now shows a non-intrusive blue banner. New `utils/restoreEvents.ts` (minimal single-subscriber event emitter) decouples `authService` from `AuthContext`. `authService` emits `'start'` / `'complete'` / `'error'` events; `AuthContext` subscribes and exposes `isAutoRestoring: boolean`; `RootNavigator` renders "Restoring your data from cloud…" banner with spinner while true.
+- **C1 addressed:** True data race is negligible — auto-restore only fires when local SQLite is empty (products count = 0), so there is no existing data for `INSERT OR REPLACE` to overwrite. The C11 banner communicates in-progress state to the user.
+- **C2 still pending:** Batched table-level upsert (replacing O(n) sequential flush for `queueAllLocalData`) requires a significant `flushSyncQueue` refactor — deferred.
+
+---
+
+### v2.5 — April 14, 2026
+
+**Sync service audit & critical bug fixes (`db.ts`, `syncQueue.ts`, `syncService.ts`, `AuthContext.tsx`)**
+- **Bug (Critical): `updateCustomerUdhar` was sending `{id, udhar_delta}` to Supabase** — `udhar_delta` column doesn't exist; every sync attempt threw a Postgres error, was retried 5× and silently dropped. Customer `udhar_balance` was never updated in Supabase. Fixed: re-reads full customer row from SQLite and queues absolute balance.
+- **Bug (Critical): `insertBill` with `payment_mode='udhar'` never synced customer balance** — SQLite transaction updated the balance but nothing was queued for Supabase. Remote balance permanently stuck at customer creation value (0). Fixed: after transaction, re-reads customer row and enqueues `customers UPDATE`.
+- **Bug (High): `updateProduct` queued only changed fields (partial payload)** — `addToSyncQueue` deduplication removes the prior INSERT entry; on first sync after offline edit, Supabase upserted with ₹0 prices and null category. Fixed: re-reads full product row before queuing.
+- **Bug (High): No concurrent flush guard** — NetInfo fires immediately on subscription AND explicit startup `flushSyncQueue()` call ran concurrently. Added `isFlushing` mutex.
+- **Bug (High): `startSyncService()` not awaited** in both `AuthContext` call sites — errors silently swallowed. Fixed.
+- **Bug (Medium): Listener leak in `startSyncService`** — if called twice (e.g. login → completeSetup), AppState/NetInfo subscriptions were duplicated. Fixed: `stopSyncService()` called at top of `startSyncService`.
+- **Bug (Medium): `checkShopStatus` no explicit `.eq()` filter** — relied solely on RLS to scope to correct shop. Added `.eq('id', phone)`.
+- **Bug (Medium): `completeSetup()` never started sync service** — after first-time shop creation, sync didn't start until next foreground/login. Fixed.
+- **`sales_log` added as standalone `syncUpsert` case** — previously only synced as part of compound bill payload; now individual entries can be queued independently.
+- **`queueAllLocalData()` added to `db.ts`** — re-queues every SQLite row as upserts; cancels stale DELETE entries via deduplication.
+
+**Data Backup & Recovery feature (`db/backup.ts`, `services/restoreService.ts`, `SettingsScreen.tsx`)**
+- **New: `mobile/src/db/backup.ts`** — `exportAsJson()`, `importFromJson()` (INSERT OR REPLACE, transactional, idempotent), `clearAllLocalData()`.
+- **New: `mobile/src/services/restoreService.ts`** — `restoreFromCloud()` (parallel fetch of all 8 Supabase tables → import into SQLite), `deleteFromCloud()` (FK-safe sequential delete).
+- **Settings → new DATA & BACKUP section** with five actions:
+  - *Enable Cloud Backup* (offline users only) — updates consent, queues all local data, starts sync service, flushes.
+  - *Restore from Cloud* (cloud users only) — pulls all Supabase data back to SQLite with row-count summary.
+  - *Export Backup (.json)* — writes `pragati_bandhu_backup_YYYYMMDD.json` to cache and shares via OS share sheet.
+  - *Import from Backup* — picks `.json` file, shows preview with row counts, merges via `importFromJson()`; for cloud users also re-queues everything and flushes.
+  - *Delete All Data* — offline: single confirm → wipe + logout; cloud: two-choice alert (local only vs local + cloud).
+- **Auto-restore on reinstall** — `authService.ts:getStoredAuth()` detects fresh install (valid session, no local data, consent on) and calls `restoreFromCloud()` non-blocking.
+- **New: `mobile/docs/SYNC_DATA_FLOW.md`** — comprehensive data flow documentation.
+- **Packages added:** `expo-file-system`, `expo-document-picker`, `expo-sharing`.
+
+**Risks identified (in-progress fixes):** auto-restore race condition, sequential flush performance for large shops, `bill_items` IN-clause limit on restore, Android DocumentPicker MIME type, unencrypted export file, no shop ownership validation on import, `bill_date` format mismatch after cloud restore.
+
+---
+
 ### v2.4 — 12th April 2026
 
 - **`aiConsent` scope clarified**: Single flag controls two things — (1) cloud sync of operational data and (2) Claude AI suggestions. Shop registration always syncs regardless of consent for admin visibility and account recovery.
@@ -730,4 +826,4 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 *Document prepared: April 2026*
-*Version: 2.2 — Reflects completed Phase 1 SQLite wiring, bug fixes, and new transactions screens*
+*Version: 2.7 — Reflects Digital Receipts (PDF Share), Sync Audit, Data Backup & Recovery*

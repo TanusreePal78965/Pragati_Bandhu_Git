@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getStoredAuth, logout as logoutService } from '../services/authService';
 import { getShopInfo } from '../utils/storage';
+import { startSyncService, stopSyncService } from '../services/syncService';
+import { onRestoreEvent } from '../utils/restoreEvents';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,6 +16,8 @@ type AuthState = {
   isShopSetup: boolean;
   /** false when admin has deactivated this shop */
   isShopActive: boolean;
+  /** true while a background auto-restore from Supabase is in progress (C11) */
+  isAutoRestoring: boolean;
   /** 10-digit phone number — available after login */
   phone: string | null;
   /** Call after successful OTP verification */
@@ -35,7 +39,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isShopSetup, setIsShopSetup] = useState(false);
   const [isShopActive, setIsShopActive] = useState(true);
+  const [isAutoRestoring, setIsAutoRestoring] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
+
+  // C11: Subscribe to auto-restore lifecycle events emitted by authService.
+  // Must be registered BEFORE the auth check effect runs so the 'start' event
+  // is not missed. Effects run in declaration order.
+  useEffect(() => {
+    onRestoreEvent((event) => {
+      setIsAutoRestoring(event === 'start');
+    });
+    return () => onRestoreEvent(null);
+  }, []);
 
   // On mount: restore session from Supabase (persisted in AsyncStorage)
   useEffect(() => {
@@ -48,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (shopReady) {
           const info = await getShopInfo();
           setIsShopActive(info?.isActive ?? true);
+          await startSyncService(() => setShopActive(false));
         }
       })
       .catch(() => {
@@ -82,14 +98,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthenticated(true);
     setIsShopSetup(shopReady);
     setIsShopActive(info?.isActive ?? true);
+    if (shopReady) await startSyncService(() => setShopActive(false));
   };
 
   const completeSetup = () => {
     setIsShopSetup(true);
     setIsShopActive(true);
+    // First-time setup: sync service hasn't been started yet (login ran before shop existed)
+    startSyncService(() => setShopActive(false));
   };
 
   const logout = async () => {
+    stopSyncService();
     await logoutService();
     setIsAuthenticated(false);
     setIsShopSetup(false);
@@ -103,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isReady, isAuthenticated, isShopSetup, isShopActive, phone, login, completeSetup, logout, setShopActive }}
+      value={{ isReady, isAuthenticated, isShopSetup, isShopActive, isAutoRestoring, phone, login, completeSetup, logout, setShopActive }}
     >
       {children}
     </AuthContext.Provider>

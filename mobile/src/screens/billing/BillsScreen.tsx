@@ -17,13 +17,16 @@ import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllBills, Bill } from "../../db/db";
 
+const toUtcDate = (dateStr: string) =>
+    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
+
 const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = toUtcDate(dateStr);
     return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = toUtcDate(dateStr);
     return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 };
 

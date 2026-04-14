@@ -347,7 +347,13 @@ export const updateProduct = (
       .join(', ');
     const values = [...Object.values(fields), id];
     db.runSync(`UPDATE products SET ${sets}, updated_at = datetime('now') WHERE id = ?`, values);
-    addToSyncQueue('products', 'UPDATE', id, { id, ...fields });
+    // Re-read the full row — partial payloads would corrupt Supabase if the INSERT
+    // hasn't synced yet (deduplication deletes the INSERT queue entry on every UPDATE).
+    const full = db.getFirstSync('SELECT * FROM products WHERE id = ?', [id]) as Product | null;
+    if (full) {
+      const { category_name: _c, brand_name: _b, ...syncPayload } = full;
+      addToSyncQueue('products', 'UPDATE', id, syncPayload);
+    }
   } catch (e) {
     console.error('updateProduct error:', e);
     throw e;
@@ -419,7 +425,9 @@ export const insertCustomer = (customer: {
 export const updateCustomerUdhar = (id: string, deltaAmount: number): void => {
   try {
     db.runSync('UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?', [deltaAmount, id]);
-    addToSyncQueue('customers', 'UPDATE', id, { id, udhar_delta: deltaAmount });
+    // Re-read the full row so the upsert payload is safe and complete (no non-existent delta column)
+    const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
+    if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
   } catch (e) {
     console.error('updateCustomerUdhar error:', e);
     throw e;
@@ -438,6 +446,9 @@ export const insertBill = (
   items: Omit<BillItem, 'id' | 'bill_id'>[]
 ): string => {
   const billId = genId();
+  const billItemsForSync: any[] = [];
+  const salesLogForSync: any[] = [];
+
   try {
     db.withTransactionSync(() => {
       // 1. Insert bill
@@ -456,6 +467,7 @@ export const insertBill = (
 
       for (const item of items) {
         const itemId = genId();
+        const logId = genId();
 
         // 2. Insert bill item
         db.runSync(
@@ -474,8 +486,25 @@ export const insertBill = (
         db.runSync(
           `INSERT INTO sales_log (id, product_id, product_name, qty_sold, sale_amount)
            VALUES (?, ?, ?, ?, ?)`,
-          [genId(), item.product_id, item.product_name, item.qty, item.line_total]
+          [logId, item.product_id, item.product_name, item.qty, item.line_total]
         );
+
+        billItemsForSync.push({
+          id: itemId,
+          bill_id: billId,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          qty: item.qty,
+          unit_price: item.unit_price,
+          line_total: item.line_total,
+        });
+        salesLogForSync.push({
+          id: logId,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          qty_sold: item.qty,
+          sale_amount: item.line_total,
+        });
       }
 
       // 5. If udhar → increment customer balance
@@ -487,7 +516,24 @@ export const insertBill = (
       }
     });
 
-    addToSyncQueue('bills', 'INSERT', billId, { id: billId, ...bill, items });
+    addToSyncQueue('bills', 'INSERT', billId, {
+      bill: { id: billId, ...bill },
+      items: billItemsForSync,
+      salesLog: salesLogForSync,
+    });
+
+    // Sync the updated udhar balance — the transaction only wrote to SQLite;
+    // queue a full customer UPDATE so Supabase reflects the new balance.
+    if (bill.payment_mode === 'udhar' && bill.customer_id) {
+      const updatedCustomer = db.getFirstSync(
+        'SELECT * FROM customers WHERE id = ?',
+        [bill.customer_id]
+      ) as Customer | null;
+      if (updatedCustomer) {
+        addToSyncQueue('customers', 'UPDATE', bill.customer_id, updatedCustomer);
+      }
+    }
+
     return billId;
   } catch (e) {
     console.error('insertBill error:', e);
@@ -573,6 +619,129 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
     console.error('getSalesByRange error:', e);
     return { total_sales: 0, net_profit: 0, cash_sales: 0, udhar_sales: 0, bill_count: 0 };
   }
+};
+
+// ─── Full Re-queue ────────────────────────────────────────────────────────────
+
+/**
+ * Reads every row from SQLite and adds it to the sync queue as an upsert.
+ *
+ * Use cases:
+ * 1. Offline → cloud switch: pushes all historical local data up to Supabase.
+ * 2. JSON import for cloud users: re-syncs restored rows and cancels any stale
+ *    DELETE queue entries for the same IDs (addToSyncQueue deduplication removes
+ *    them before inserting the new upsert entries).
+ */
+export const queueAllLocalData = (): void => {
+  // Shop — payload must match the camelCase shape syncUpsert expects
+  const shop = db.getFirstSync('SELECT * FROM shop') as any | null;
+  if (shop) {
+    addToSyncQueue('shop', 'INSERT', shop.id, {
+      shopName: shop.shop_name,
+      ownerName: shop.owner_name,
+      category: shop.business_category,
+      whatsappNumber: shop.whatsapp_number,
+      aiConsent: shop.ai_consent === 1,
+    });
+  }
+
+  // Simple tables — payload columns map 1-to-1 with Supabase columns
+  const categories = db.getAllSync('SELECT * FROM categories') as any[];
+  for (const row of categories) addToSyncQueue('categories', 'INSERT', row.id, row);
+
+  const brands = db.getAllSync('SELECT * FROM brands') as any[];
+  for (const row of brands) addToSyncQueue('brands', 'INSERT', row.id, row);
+
+  const products = db.getAllSync(
+    'SELECT id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, updated_at FROM products'
+  ) as any[];
+  for (const row of products) addToSyncQueue('products', 'INSERT', row.id, row);
+
+  const customers = db.getAllSync(
+    'SELECT id, name, phone, address, udhar_balance, created_at FROM customers'
+  ) as any[];
+  for (const row of customers) addToSyncQueue('customers', 'INSERT', row.id, row);
+
+  // Bills — compound payload: { bill, items, salesLog }
+  // salesLog is queued separately below so it isn't double-upserted here.
+  const bills = db.getAllSync('SELECT * FROM bills') as any[];
+  for (const bill of bills) {
+    const items = db.getAllSync(
+      'SELECT * FROM bill_items WHERE bill_id = ?',
+      [bill.id]
+    ) as any[];
+    addToSyncQueue('bills', 'INSERT', bill.id, { bill, items, salesLog: [] });
+  }
+
+  // Sales log — queued individually via the standalone 'sales_log' syncUpsert case
+  const salesLog = db.getAllSync('SELECT * FROM sales_log') as any[];
+  for (const row of salesLog) addToSyncQueue('sales_log', 'INSERT', row.id, row);
+};
+
+// ─── SQLite Export ────────────────────────────────────────────────────────────
+
+/**
+ * Dumps all local SQLite tables as SQL INSERT statements ready to paste
+ * into the Supabase SQL editor. Requires shopId (10-digit phone) to fill
+ * the shop_id column that Supabase RLS enforces.
+ */
+export const exportAsSql = (shopId: string): string => {
+  const escape = (v: any): string => {
+    if (v === null || v === undefined) return 'NULL';
+    if (typeof v === 'number') return String(v);
+    return `'${String(v).replace(/'/g, "''")}'`;
+  };
+
+  const lines: string[] = [
+    `-- Pragati Bandhu export — shop ${shopId} — ${new Date().toISOString()}`,
+    `-- Paste into Supabase SQL Editor and run.`,
+    '',
+  ];
+
+  const dump = (_table: string, supaTable: string, rows: any[], cols: string[], extraCols?: Record<string, string>) => {
+    if (!rows.length) return;
+    const allCols = extraCols ? [...cols, ...Object.keys(extraCols)] : cols;
+    lines.push(`-- ${supaTable} (${rows.length} rows)`);
+    for (const row of rows) {
+      const vals = cols.map((c) => escape(row[c]));
+      if (extraCols) Object.values(extraCols).forEach((v) => vals.push(`'${v}'`));
+      lines.push(`INSERT INTO ${supaTable} (${allCols.join(', ')}) VALUES (${vals.join(', ')}) ON CONFLICT (id) DO NOTHING;`);
+    }
+    lines.push('');
+  };
+
+  const sid = shopId;
+
+  const categories = db.getAllSync('SELECT * FROM categories') as any[];
+  dump('categories', 'categories', categories, ['id', 'name', 'icon', 'icon_color'], { shop_id: sid });
+
+  const brands = db.getAllSync('SELECT * FROM brands') as any[];
+  dump('brands', 'brands', brands, ['id', 'name', 'color'], { shop_id: sid });
+
+  const products = db.getAllSync('SELECT * FROM products') as any[];
+  dump('products', 'products', products,
+    ['id', 'name', 'category_id', 'brand_id', 'purchase_price', 'selling_price', 'stock_quantity', 'min_stock_threshold', 'uom'],
+    { shop_id: sid });
+
+  const customers = db.getAllSync('SELECT * FROM customers') as any[];
+  dump('customers', 'customers', customers, ['id', 'name', 'phone', 'address', 'udhar_balance'], { shop_id: sid });
+
+  const bills = db.getAllSync('SELECT * FROM bills') as any[];
+  dump('bills', 'bills', bills,
+    ['id', 'customer_id', 'customer_name', 'payment_mode', 'total_amount', 'total_items', 'bill_date'],
+    { shop_id: sid });
+
+  const billItems = db.getAllSync('SELECT * FROM bill_items') as any[];
+  dump('bill_items', 'bill_items', billItems,
+    ['id', 'bill_id', 'product_id', 'product_name', 'qty', 'unit_price', 'line_total']);
+
+  const salesLog = db.getAllSync('SELECT * FROM sales_log') as any[];
+  dump('sales_log', 'sales_log', salesLog,
+    ['id', 'product_id', 'product_name', 'qty_sold', 'sale_amount', 'sold_date'],
+    { shop_id: sid });
+
+  lines.push('-- End of export');
+  return lines.join('\n');
 };
 
 export const getTopProducts = (from: string, to: string, limit = 5): TopProduct[] => {

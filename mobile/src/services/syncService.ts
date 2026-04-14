@@ -17,9 +17,14 @@ const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
     const net = await NetInfo.fetch();
     if (!net.isConnected) return;
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const phone = session?.user?.phone?.slice(-10);
+    if (!phone) return;
+
     const { data } = await supabase
       .from('shops')
       .select('is_active')
+      .eq('id', phone)
       .single();
     if (data?.is_active === false) {
       const info = await getShopInfo();
@@ -40,6 +45,10 @@ const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
  * @param onDeactivated - Called when the backend reports is_active = false.
  */
 export const startSyncService = async (onDeactivated: () => void): Promise<void> => {
+  // Clean up any existing listeners before re-subscribing to prevent leaks
+  // if startSyncService is called more than once (e.g. login → completeSetup).
+  stopSyncService();
+
   // ── Admin deactivation check (all users) ────────────────────────────────────
   await checkShopStatus(onDeactivated);
 
