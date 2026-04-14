@@ -12,7 +12,11 @@ function AppContent() {
   const { setShopActive } = useAuth();
 
   useEffect(() => {
-    initDatabase();
+    try {
+      initDatabase();
+    } catch (e) {
+      console.error('DB init failed:', e);
+    }
     startSyncService(() => setShopActive(false)); // no-op for basic plan users (aiConsent = false)
 
     return () => {
