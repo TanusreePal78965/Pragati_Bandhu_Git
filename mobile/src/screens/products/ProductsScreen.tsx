@@ -259,7 +259,7 @@ export default function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
     },

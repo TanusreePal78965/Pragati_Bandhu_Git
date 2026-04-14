@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
 import TextInputField from "../../components/common/TextInputField";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import ScreenHeader from "../../components/common/ScreenHeader";
@@ -250,7 +249,7 @@ export default function EditShopScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
     },
     loadingContainer: {
         flex: 1,
@@ -289,7 +288,7 @@ const styles = StyleSheet.create({
     consentCard: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         padding: spacing.md,
         borderRadius: 12,
         borderWidth: 1.5,

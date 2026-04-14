@@ -166,7 +166,7 @@ export default function BillDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     header: {
         flexDirection: "row",
         alignItems: "center",

@@ -153,7 +153,7 @@ export default function CustomersScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     searchBar: {
         flexDirection: "row",
         alignItems: "center",

@@ -157,7 +157,7 @@ export default function BillsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",

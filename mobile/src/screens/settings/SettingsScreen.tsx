@@ -255,7 +255,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
     },
     titleSection: {
         paddingHorizontal: spacing.md,

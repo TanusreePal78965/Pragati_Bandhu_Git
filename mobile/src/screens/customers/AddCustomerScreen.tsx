@@ -58,7 +58,7 @@ export default function AddCustomerScreen() {
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={{ flex: 1 }}
             >
                 <ScrollView
@@ -151,7 +151,7 @@ export default function AddCustomerScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#FFFFFF" },
+    container: { flex: 1, backgroundColor: colors.surface },
     header: {
         flexDirection: "row",
         alignItems: "center",
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         borderRadius: 12,
         paddingHorizontal: 12,
         height: 56,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     currencyPrefix: { fontSize: 18, fontWeight: "600", color: colors.text, marginRight: 8 },
     input: { flex: 1, fontSize: 16, color: colors.text },
     inputHelp: { fontSize: 12, color: colors.textSecondary, marginLeft: 4 },
-    footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: "#fff" },
+    footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
     saveButton: {
         backgroundColor: colors.primary,
         height: 56,

@@ -396,14 +396,14 @@ export default function NewBillScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#F8FAFC" },
+    container: { flex: 1, backgroundColor: colors.surface },
     header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: spacing.md,
         height: 56,
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
     },
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderRadius: 12,
         paddingHorizontal: 12,
         height: 48,
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     },
     searchInput: { flex: 1, marginLeft: 8, fontSize: 15, color: "#1e293b" },
     searchResults: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: "#E2E8F0",
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         height: 48,
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: "#E2E8F0",
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
         maxWidth: "70%",
     },
     itemCard: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     // Customer Modal
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalContent: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: spacing.lg,

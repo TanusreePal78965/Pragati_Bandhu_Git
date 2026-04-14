@@ -90,18 +90,7 @@ export default function ManageCategoriesScreen() {
         <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
 
-            <ScreenHeader
-                title="Manage Categories"
-                showBack={true}
-                rightElement={
-                    <TouchableOpacity
-                        style={styles.headerPlusButton}
-                        onPress={() => navigation.navigate("AddCategory" as never)}
-                    >
-                        <Ionicons name="add" size={24} color="#fff" />
-                    </TouchableOpacity>
-                }
-            />
+            <ScreenHeader title="Manage Categories" showBack={true} />
 
             <View style={styles.content}>
                 <View style={styles.searchContainer}>
@@ -150,16 +139,8 @@ export default function ManageCategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     content: { flex: 1, paddingHorizontal: spacing.md },
-    headerPlusButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: colors.primary,
-        alignItems: "center",
-        justifyContent: "center",
-    },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",

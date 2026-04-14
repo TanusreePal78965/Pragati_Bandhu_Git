@@ -242,7 +242,7 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
     rangeSelector: { flexDirection: "row", gap: 8, marginVertical: spacing.lg },
     chip: {

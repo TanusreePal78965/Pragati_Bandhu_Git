@@ -236,11 +236,11 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.surface },
     scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
     mainStatsContainer: { gap: spacing.md, marginTop: spacing.md },
     salesCard: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderRadius: spacing.roundness,
         padding: spacing.lg,
         shadowColor: "#000",
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     },
     primaryActionText: { color: "#fff", fontSize: 18, fontWeight: "700" },
     secondaryActionsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
-    secondaryActionCard: { flex: 1, backgroundColor: "#fff", borderRadius: spacing.roundness, padding: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.border },
+    secondaryActionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: spacing.roundness, padding: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.border },
     secondaryActionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
     secondaryActionText: { fontSize: 14, fontWeight: "600", color: colors.text },
     aiSection: { marginTop: spacing.xl },
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     aiBadge: { backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
     aiBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
     aiTime: { fontSize: 12, color: colors.textSecondary },
-    activityList: { backgroundColor: "#fff", borderRadius: spacing.roundness, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+    activityList: { backgroundColor: colors.surface, borderRadius: spacing.roundness, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
     activityItem: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
     activityIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
     activityContent: { flex: 1 },

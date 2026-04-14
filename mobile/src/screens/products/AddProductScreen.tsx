@@ -9,12 +9,12 @@ import {
     KeyboardAvoidingView,
     Platform,
     Alert,
+    StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllCategories, getAllBrands, insertProduct, Category, Brand } from "../../db/db";
@@ -117,9 +117,10 @@ export default function AddProductScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+            <StatusBar barStyle="dark-content" />
             <ScreenHeader title="Add New Product" showBack={true} />
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={{ flex: 1 }}
             >
                 <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -235,24 +236,24 @@ export default function AddProductScreen() {
                         </View>
                     </View>
                 </ScrollView>
-            </KeyboardAvoidingView>
 
-            <View style={styles.footer}>
-                <TouchableOpacity
-                    style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
-                    onPress={handleSave}
-                    disabled={!name.trim() || saving}
-                >
-                    <Ionicons name="save" size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Product"}</Text>
-                </TouchableOpacity>
-            </View>
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
+                        onPress={handleSave}
+                        disabled={!name.trim() || saving}
+                    >
+                        <Ionicons name="save" size={20} color="#fff" />
+                        <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Product"}</Text>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#f9fafb" },
+    container: { flex: 1, backgroundColor: colors.surface },
     scroll: { padding: spacing.md },
     sectionTitle: {
         fontSize: 12,
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
     label: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
     noItemsText: { fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
     input: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: "#e5e7eb",
         borderRadius: 8,
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     inputWithIcon: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: "#e5e7eb",
         borderRadius: 8,
@@ -307,7 +308,7 @@ const styles = StyleSheet.create({
     alertText: { fontSize: 12, color: "#4b5563", lineHeight: 18 },
     footer: {
         padding: spacing.md,
-        backgroundColor: "#fff",
+        backgroundColor: colors.surface,
         borderTopWidth: 1,
         borderTopColor: "#f3f4f6",
     },

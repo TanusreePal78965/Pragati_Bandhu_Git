@@ -8,8 +8,8 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
-    StatusBar,
     Alert,
+    StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { insertBrand } from "../../db/db";
+import ScreenHeader from "../../components/common/ScreenHeader";
 
 const BRAND_COLORS = [
     "#fef3c7",
@@ -52,16 +53,10 @@ export default function AddBrandScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
             <StatusBar barStyle="dark-content" />
-
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Add New Brand</Text>
-            </View>
+            <ScreenHeader title="Add New Brand" showBack={true} />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={styles.keyboardView}
             >
                 <ScrollView
@@ -128,35 +123,24 @@ export default function AddBrandScreen() {
                         </Text>
                     </View>
                 </ScrollView>
-            </KeyboardAvoidingView>
 
-            <View style={styles.footer}>
-                <TouchableOpacity
-                    style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
-                    onPress={handleSave}
-                    disabled={!name.trim() || saving}
-                >
-                    <Ionicons name="checkmark-done" size={24} color="#fff" />
-                    <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Create Brand"}</Text>
-                </TouchableOpacity>
-            </View>
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
+                        onPress={handleSave}
+                        disabled={!name.trim() || saving}
+                    >
+                        <Ionicons name="checkmark-done" size={24} color="#fff" />
+                        <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Create Brand"}</Text>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    backButton: { padding: 4, marginRight: spacing.sm },
-    headerTitle: { fontSize: typography.sizes.xl, fontWeight: "700", color: colors.text },
+    container: { flex: 1, backgroundColor: colors.surface },
     keyboardView: { flex: 1 },
     scroll: { flex: 1 },
     scrollContent: { padding: spacing.lg },
