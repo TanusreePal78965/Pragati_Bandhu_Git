@@ -16,9 +16,7 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllBills, Bill } from "../../db/db";
-
-const toUtcDate = (dateStr: string) =>
-    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
+import { toUtcDate } from "../../utils/dateUtils";
 
 const formatDate = (dateStr: string) => {
     const d = toUtcDate(dateStr);
@@ -35,12 +33,12 @@ const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => (
         <View style={styles.cardLeft}>
             <View style={[
                 styles.modeIcon,
-                { backgroundColor: bill.payment_mode === "udhar" ? "#FEF3C7" : "#DCFCE7" },
+                { backgroundColor: bill.payment_mode === "udhar" ? "#FEF3C7" : bill.payment_mode === "upi" ? "#F5F3FF" : "#DCFCE7" },
             ]}>
                 <Ionicons
-                    name={bill.payment_mode === "udhar" ? "wallet-outline" : "cash-outline"}
+                    name={bill.payment_mode === "udhar" ? "wallet-outline" : bill.payment_mode === "upi" ? "phone-portrait-outline" : "cash-outline"}
                     size={20}
-                    color={bill.payment_mode === "udhar" ? "#D97706" : colors.success}
+                    color={bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success}
                 />
             </View>
             <View style={styles.cardInfo}>
@@ -53,13 +51,13 @@ const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => (
                 <View style={styles.tagRow}>
                     <View style={[
                         styles.tag,
-                        { backgroundColor: bill.payment_mode === "udhar" ? "#FEF9C3" : "#DCFCE7" },
+                        { backgroundColor: bill.payment_mode === "udhar" ? "#FEF9C3" : bill.payment_mode === "upi" ? "#EDE9FE" : "#DCFCE7" },
                     ]}>
                         <Text style={[
                             styles.tagText,
-                            { color: bill.payment_mode === "udhar" ? "#92400E" : "#166534" },
+                            { color: bill.payment_mode === "udhar" ? "#92400E" : bill.payment_mode === "upi" ? "#5B21B6" : "#166534" },
                         ]}>
-                            {bill.payment_mode === "udhar" ? "Udhar" : "Cash"}
+                            {bill.payment_mode === "udhar" ? "Udhar" : bill.payment_mode === "upi" ? "UPI" : "Cash"}
                         </Text>
                     </View>
                     <Text style={styles.itemCount}>{bill.total_items} item{bill.total_items !== 1 ? "s" : ""}</Text>
@@ -77,7 +75,7 @@ export default function BillsScreen() {
     const navigation = useNavigation<any>();
     const [bills, setBills] = useState<Bill[]>([]);
     const [search, setSearch] = useState("");
-    const [filter, setFilter] = useState<"all" | "cash" | "udhar">("all");
+    const [filter, setFilter] = useState<"all" | "cash" | "upi" | "udhar">("all");
 
     useFocusEffect(
         useCallback(() => {
@@ -119,14 +117,20 @@ export default function BillsScreen() {
 
             {/* Filter chips */}
             <View style={styles.filterRow}>
-                {(["all", "cash", "udhar"] as const).map((f) => (
+                {(["all", "cash", "upi", "udhar"] as const).map((f) => (
                     <TouchableOpacity
                         key={f}
-                        style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                        style={[
+                            styles.filterChip,
+                            filter === f && (f === "upi" ? styles.filterChipUpiActive : styles.filterChipActive),
+                        ]}
                         onPress={() => setFilter(f)}
                     >
-                        <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-                            {f === "all" ? "All" : f === "cash" ? "Cash" : "Udhar"}
+                        <Text style={[
+                            styles.filterChipText,
+                            filter === f && (f === "upi" ? styles.filterChipUpiText : styles.filterChipTextActive),
+                        ]}>
+                            {f === "all" ? "All" : f === "cash" ? "Cash" : f === "upi" ? "UPI" : "Udhar"}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -192,8 +196,10 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
     filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    filterChipUpiActive: { backgroundColor: "#7C3AED", borderColor: "#7C3AED" },
     filterChipText: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
     filterChipTextActive: { color: "#fff" },
+    filterChipUpiText: { color: "#fff" },
     filterSpacer: { flex: 1 },
     totalLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
     list: { paddingHorizontal: spacing.md, paddingBottom: 32 },

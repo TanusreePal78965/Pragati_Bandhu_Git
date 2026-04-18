@@ -110,6 +110,24 @@ export default function ProductsScreen() {
         );
     };
 
+    const handleDirectDelete = (product: Product) => {
+        Alert.alert(
+            "Delete Product",
+            `Delete "${product.name}"? This cannot be undone.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                        deleteProduct(product.id);
+                        setProducts(getAllProducts());
+                    },
+                },
+            ]
+        );
+    };
+
     const selectedItemsNames = products
         .filter((p) => selectedItems.includes(p.id))
         .map((p) => p.name);
@@ -182,6 +200,8 @@ export default function ProductsScreen() {
                         price={item.selling_price}
                         selected={selectedItems.includes(item.id)}
                         onPress={() => toggleSelection(item.id)}
+                        onEdit={() => navigation.navigate("EditProduct", { product: item })}
+                        onDelete={() => handleDirectDelete(item)}
                     />
                 )}
                 ListEmptyComponent={

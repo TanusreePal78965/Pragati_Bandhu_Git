@@ -5,7 +5,6 @@ import {
   setShopInfo,
   setHasConsent,
 } from '../utils/storage';
-import { insertShop } from '../db/db';
 import db from '../db/sqlite';
 import { restoreFromCloud } from './restoreService';
 import { emitRestoreEvent } from '../utils/restoreEvents';
@@ -50,7 +49,6 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
   });
 
   const body = await res.json();
-  console.log("body. ------> ", body);
   if (!res.ok) throw new Error(body.error ?? 'Failed to verify OTP');
 
   const { error } = await supabase.auth.setSession({
@@ -108,7 +106,24 @@ export const getStoredAuth = async (): Promise<{
 
         await setShopInfo(recovered);
         await setHasConsent(recovered.aiConsent);
-        insertShop(recovered);
+
+        // Insert directly preserving the real Supabase ID (phone).
+        // Don't use insertShop() — it generates a random id and re-queues sync.
+        db.runSync(
+          `INSERT OR REPLACE INTO shop
+             (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            phone,
+            data.shop_name,
+            data.owner_name,
+            data.phone ?? null,
+            data.whatsapp_number ?? null,
+            data.business_category ?? null,
+            data.ai_consent ? 1 : 0,
+            data.is_active ? 1 : 0,
+          ]
+        );
 
         shopInfo = recovered;
 

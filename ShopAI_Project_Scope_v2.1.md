@@ -506,7 +506,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 14, 2026 — v2.7
+> **Last updated:** April 17, 2026 — v2.9
 
 ---
 
@@ -521,7 +521,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 5 | Customers → SQLite | ✅ | CustomersScreen + AddCustomerScreen wired; udhar balance tracked |
 | 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance |
 | 7 | Sales log → SQLite | ✅ | `sales_log` row written per product on every bill checkout |
-| 8 | Reports → SQLite | ✅ | ReportsScreen queries real `getTodaySales`, `getSalesByRange`, `getTopProducts`; also shows last 10 transactions |
+| 8 | Reports → SQLite | ✅ | ReportsScreen queries real `getTodaySales`, `getSalesByRange`, `getTopProducts`; also shows last 10 transactions. **v2.8:** PDF export implemented via `expo-print` + `expo-sharing`; generates a full HTML report (summary stats, top products, recent transactions) and shares via OS share sheet. Net Profit renamed from "Est. Profit"; now computed from real `purchase_price` vs `selling_price` per bill item (not hardcoded 20%). |
 | 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` |
 | 10 | Low stock detection (local) | ✅ | `getLowStockProducts()` computes `stock < min_threshold` on device; shown as attention card on HomeScreen |
 
@@ -602,6 +602,11 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Recent Transactions section in Reports | ✅ | Last 10 bills shown in ReportsScreen; each row tappable → BillDetail; "View All" button → BillsScreen |
 | Edit Shop screen | ✅ | `EditShopScreen`: edit shop name, owner name, category, WhatsApp, and AI consent; confirmation alerts on consent toggle; saves to AsyncStorage + SQLite + immediately flushes sync queue to backend |
 | Shop Deactivated screen | ✅ | `ShopDeactivatedScreen`: blocking fullscreen shown when admin sets `is_active = false`; shows support contact + logout; detected via `checkShopStatus()` on every app foreground |
+| Edit Product screen | ✅ | **v2.8.** `EditProductScreen`: pre-filled form reached via pencil icon on each product row. Edits name, purchase price, selling price, current stock, min threshold, category, brand, and UOM. Calls `updateProduct()` which re-reads the full row before queuing sync — no partial-payload corruption. Category and brand include a "None" chip to clear them. Direct delete button on each card added to `ProductsScreen` (previously dead). |
+| Estimate preview in billing | ✅ | **v2.8.** ESTIMATE button in `NewBillScreen` opens a full-screen receipt-style modal showing current bill items, customer, payment mode, and grand total without saving. Clearly labelled "NOT SAVED — For preview only". Empty-bill guard shows an alert if pressed with no items. |
+| AI consent gate on Dashboard | ✅ | **v2.8.** `HomeScreen` reads `aiConsent` from SQLite via `getShop()` on every focus. Cloud users (`aiConsent=true`) see "AI Reorder Insights" with sparkle icon. Local-only users (`aiConsent=false`) see "Low Stock Alerts" with a warning icon — same threshold data, correct branding, no false "AI" label. Local-only users with low stock also see an upgrade nudge pointing to Settings → Enable Cloud Backup. |
+| Edit Customer screen + Udhar payment recording | ✅ | **v2.9.** `EditCustomerScreen`: reached by tapping any customer row in `CustomersScreen`. Displays udhar balance card (red when owed, green when cleared). "Record Payment" modal with ₹ input, quick chips (₹100/200/500/1000 + "Full ₹X"), validates amount > 0 and ≤ outstanding balance, calls `recordUdharPayment()` which clamps at ₹0 via `MAX(0, udhar_balance − ?)` in SQL. Contact form lets owner edit name, phone, address via `updateCustomer()`. Both DB functions re-read the full row before queuing sync to prevent partial-payload corruption. Registered as `"EditCustomer"` in `RootNavigator`. |
+| Customer transaction history | ✅ | **v2.9.** `EditCustomerScreen` Bill History section shows the last 10 bills for that customer via `getBillsByCustomer(customerId, 10)`. Each row shows date, total, payment mode, chevron; taps through to `BillDetailScreen` for the full receipt. Empty state shown when customer has no bills. |
 
 ---
 
@@ -643,12 +648,12 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | Item | Status | Notes |
 |---|---|---|
-| Dedicated AI Suggestions screen | 🔲 | Currently only a teaser card on dashboard |
+| Dedicated AI Suggestions screen | 🔲 | Currently only a teaser card on dashboard (consent-gated correctly as of v2.8) |
 | Alert Settings screen | 🔲 | WhatsApp number, alert prefs, consent toggle |
 | Sync status detail on dashboard | 🔲 | ScreenHeader has sync badge, but no queue detail |
-| Edit Product screen | 🔲 | Tap product → pre-filled form to update price, stock threshold, category |
-| Edit Customer screen | 🔲 | Tap customer → pre-filled form; record udhar payments |
-| Udhar payment recording | 🔲 | Mark partial or full udhar payment against a customer |
+| Edit Product screen | ✅ | **v2.8** — see 14.7 above |
+| Edit Customer screen | ✅ | **v2.9** — see 14.7 above |
+| Udhar payment recording | ✅ | **v2.9** — see 14.7 above |
 | Admin panel / API | 🔲 | Endpoint to toggle `is_active` on a shop; currently done directly in Supabase dashboard |
 
 ---
@@ -712,6 +717,36 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v2.9 — April 17, 2026
+
+**Udhar payment recording + Edit Customer screen (`EditCustomerScreen.tsx` new, `CustomersScreen.tsx`, `db.ts`, `RootNavigator.tsx`)**
+
+- **Edit Customer screen built (`EditCustomerScreen.tsx`).** Reached by tapping any customer row in `CustomersScreen` (previously a dead `TouchableOpacity`). Shows an Udhar Balance Card (red when owed, green when fully cleared). Contact form pre-fills Name, Phone, and Address; calls `updateCustomer()` on Save. Registered as `"EditCustomer"` in `RootNavigator`.
+
+- **Udhar payment recording.** "Record Payment" button on the balance card opens a bottom-sheet modal. Features: ₹ amount input, quick-fill chips for ₹100 / ₹200 / ₹500 / ₹1,000 (shown only when less than balance) and a "Full ₹X" chip to clear in one tap. Validates amount > 0 and ≤ outstanding balance. Calls `recordUdharPayment(customerId, amount)` which executes `UPDATE customers SET udhar_balance = MAX(0, udhar_balance - ?)` — balance cannot go negative at the SQL level. Full row re-read before sync queue entry to prevent partial-payload corruption. Success alert shows remaining balance. "Record Payment" button hidden once balance reaches ₹0.
+
+- **Customer transaction history.** `EditCustomerScreen` includes a Bill History section showing the last 10 bills per customer via new `getBillsByCustomer(customerId, limit)` function in `db.ts`. Each row shows date, grand total, payment mode badge, and a chevron; taps through to `BillDetailScreen`. "No bills yet" empty state displayed when customer has no history.
+
+- **`CustomersScreen` navigation wired.** Customer rows now navigate to `"EditCustomer"` with `{ customerId: item.id }`. Screen refreshes on return via `useFocusEffect`.
+
+---
+
+### v2.8 — April 17, 2026
+
+**Bug fixes & UX integrity (`ReportsScreen.tsx`, `HomeScreen.tsx`, `NewBillScreen.tsx`, `EditProductScreen.tsx` new, `ProductsScreen.tsx`, `db.ts`, `RootNavigator.tsx`)**
+
+- **PDF Report Export implemented.** `ReportsScreen` now generates and shares a full PDF report via `expo-print` + `expo-sharing`. Report includes: shop header (name, owner, phone), period + date range, summary stats (Total Sales, Net Profit, Cash Sales, Udhar, Bill Count), Top 5 Products table, and last 10 transactions table. Button shows "Generating PDF…" with spinner while in progress; alerts if period has no data. "Est. Profit" label renamed to "Net Profit" now that calculation is real.
+
+- **Profit calculation fixed.** `getSalesByRange()` in `db.ts` replaced hardcoded `totalSales * 0.2` with a SQL join: `SUM(bi.qty × (bi.unit_price − COALESCE(p.purchase_price, 0)))` across `bill_items → products`. Uses selling price at time of sale vs current purchase price. Products with no purchase price set contribute ₹0 margin rather than inflating profit.
+
+- **ESTIMATE button wired.** `NewBillScreen` ESTIMATE button now opens a full-screen receipt-style modal showing the current bill (items, customer, payment mode, grand total) without saving. Clearly labelled "NOT SAVED — For preview only". Shows an alert if pressed when bill is empty.
+
+- **Edit Product screen built (`EditProductScreen.tsx`).** Pre-filled form for all product fields: name, purchase price, selling price, current stock, min threshold, category (with "None" chip), brand (with "None" chip), UOM. Calls `updateProduct()`. Wired via pencil icon on each product card in `ProductsScreen`. Trash icon on each product card now also triggers a direct single-item delete confirmation. Registered as `"EditProduct"` in `RootNavigator`.
+
+- **AI consent gate on Dashboard.** `HomeScreen` reads `aiConsent` from SQLite (`getShop()`) on every screen focus. Cloud users see "AI Reorder Insights" with sparkle icon (unchanged). Local-only users (`aiConsent=false`) see "Low Stock Alerts" with amber warning icon — identical threshold data but no false "AI" branding, in line with the consent promise made at shop setup. Local-only users with active low-stock items see an upgrade nudge directing them to Settings → Enable Cloud Backup.
+
+---
 
 ### v2.7 — April 14, 2026
 

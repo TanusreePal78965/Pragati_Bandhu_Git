@@ -17,9 +17,7 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { getBillItems, Bill, BillItem } from "../../db/db";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
-
-const toUtcDate = (dateStr: string) =>
-    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
+import { toUtcDate } from "../../utils/dateUtils";
 
 const formatDateTime = (dateStr: string) => {
     const d = toUtcDate(dateStr);
@@ -54,7 +52,9 @@ export default function BillDetailScreen() {
         const shopPhone = shopInfo?.phone || "";
         const customerName = bill.customer_name || "Walk-in Customer";
 
-        const itemsHtml = items.map((item, index) => `
+        const itemsHtml = items.length === 0
+            ? `<tr><td colspan="2" style="padding:12px;color:#888;text-align:center;">No items found</td></tr>`
+            : items.map((item) => `
             <tr>
                 <td style="padding: 10px 0; border-bottom: 1px solid #eee;">
                     <div style="font-weight: bold; font-size: 14px;">${item.product_name}</div>
@@ -109,7 +109,7 @@ export default function BillDetailScreen() {
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
                             <span style="color: #666;">Payment Mode</span>
-                            <span style="font-weight: bold; color: ${bill.payment_mode === "udhar" ? "#D97706" : colors.success};">${bill.payment_mode === "udhar" ? "Udhar (Credit)" : "Cash"}</span>
+                            <span style="font-weight: bold; color: ${bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success};">${bill.payment_mode === "udhar" ? "Udhar (Credit)" : bill.payment_mode === "upi" ? "UPI Payment" : "Cash"}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding-top: 15px; border-top: 1px solid #ddd;">
                             <span style="font-size: 18px; font-weight: bold;">Grand Total</span>
@@ -159,6 +159,13 @@ export default function BillDetailScreen() {
     }
 
     const isUdhar = bill.payment_mode === "udhar";
+    const isUpi = bill.payment_mode === "upi";
+    const modeColor = isUdhar ? "#D97706" : isUpi ? "#7C3AED" : colors.success;
+    const modeBgColor = isUdhar ? "#FEF9C3" : isUpi ? "#EDE9FE" : "#DCFCE7";
+    const modeTextColor = isUdhar ? "#92400E" : isUpi ? "#5B21B6" : "#166534";
+    const modeIcon = isUdhar ? "wallet-outline" : isUpi ? "phone-portrait-outline" : "cash-outline";
+    const modeLabel = isUdhar ? "Udhar" : isUpi ? "UPI" : "Cash";
+    const modeLabelLong = isUdhar ? "Udhar (Credit)" : isUpi ? "UPI Payment" : "Cash";
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
@@ -184,20 +191,10 @@ export default function BillDetailScreen() {
                         <View style={styles.storeIconWrap}>
                             <Ionicons name="storefront-outline" size={28} color={colors.primary} />
                         </View>
-                        <View style={[
-                            styles.modeBadge,
-                            { backgroundColor: isUdhar ? "#FEF9C3" : "#DCFCE7" },
-                        ]}>
-                            <Ionicons
-                                name={isUdhar ? "wallet-outline" : "cash-outline"}
-                                size={14}
-                                color={isUdhar ? "#92400E" : "#166534"}
-                            />
-                            <Text style={[
-                                styles.modeBadgeText,
-                                { color: isUdhar ? "#92400E" : "#166534" },
-                            ]}>
-                                {isUdhar ? "Udhar" : "Cash"}
+                        <View style={[styles.modeBadge, { backgroundColor: modeBgColor }]}>
+                            <Ionicons name={modeIcon as any} size={14} color={modeTextColor} />
+                            <Text style={[styles.modeBadgeText, { color: modeTextColor }]}>
+                                {modeLabel}
                             </Text>
                         </View>
                     </View>
@@ -222,11 +219,8 @@ export default function BillDetailScreen() {
                     <View style={styles.infoRow}>
                         <Ionicons name="card-outline" size={16} color={colors.textSecondary} />
                         <Text style={styles.infoLabel}>Payment</Text>
-                        <Text style={[
-                            styles.infoValue,
-                            { color: isUdhar ? "#D97706" : colors.success },
-                        ]}>
-                            {isUdhar ? "Udhar (Credit)" : "Cash"}
+                        <Text style={[styles.infoValue, { color: modeColor }]}>
+                            {modeLabelLong}
                         </Text>
                     </View>
 

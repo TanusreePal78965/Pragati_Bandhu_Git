@@ -5,6 +5,8 @@ export interface RestoreResult {
   success: boolean;
   summary?: ImportSummary;
   error?: string;
+  /** Per-table errors when a partial failure occurred */
+  tableErrors?: Record<string, string>;
 }
 
 export interface DeleteFromCloudResult {
@@ -68,30 +70,41 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
     const phone = session.user.phone?.slice(-10) ?? '';
     if (!phone) return { success: false, error: 'Could not determine shop phone' };
 
-    // ── Fetch all tables in parallel ─────────────────────────────────────────
-    const [
-      shopRes,
-      categoriesRes,
-      brandsRes,
-      productsRes,
-      customersRes,
-      billsRes,
-      salesLogRes,
-    ] = await Promise.all([
-      supabase.from('shops').select('*').eq('id', phone).single(),
-      supabase.from('categories').select('*').eq('shop_id', phone),
-      supabase.from('brands').select('*').eq('shop_id', phone),
-      supabase.from('products').select('*').eq('shop_id', phone),
-      supabase.from('customers').select('*').eq('shop_id', phone),
-      supabase.from('bills').select('*').eq('shop_id', phone),
-      supabase.from('sales_log').select('*').eq('shop_id', phone),
-    ]);
+    // ── Fetch all tables individually — continue on per-table errors ──────────
+    const tableErrors: Record<string, string> = {};
+
+    const safeQuery = async <T>(
+      query: Promise<{ data: T | null; error: any }>,
+      table: string,
+    ): Promise<T | null> => {
+      try {
+        const { data, error } = await query;
+        if (error) { tableErrors[table] = error.message; return null; }
+        return data;
+      } catch (e: any) {
+        tableErrors[table] = e?.message ?? 'Unknown error';
+        return null;
+      }
+    };
+
+    const shopData      = await safeQuery(supabase.from('shops').select('*').eq('id', phone).single() as any, 'shops');
+    const categoriesData = await safeQuery(supabase.from('categories').select('*').eq('shop_id', phone), 'categories');
+    const brandsData     = await safeQuery(supabase.from('brands').select('*').eq('shop_id', phone), 'brands');
+    const productsData   = await safeQuery(supabase.from('products').select('*').eq('shop_id', phone), 'products');
+    const customersData  = await safeQuery(supabase.from('customers').select('*').eq('shop_id', phone), 'customers');
+    const billsData      = await safeQuery(supabase.from('bills').select('*').eq('shop_id', phone), 'bills');
+    const salesLogData   = await safeQuery(supabase.from('sales_log').select('*').eq('shop_id', phone), 'sales_log');
 
     // Fetch bill_items separately, chunked to handle shops with many bills (C3)
-    const billIds = (billsRes.data ?? []).map((b: any) => b.id);
-    const billItems = billIds.length > 0
-      ? await fetchByIds('bill_items', 'bill_id', billIds)
-      : [];
+    const billIds = ((billsData as any[] | null) ?? []).map((b: any) => b.id);
+    let billItems: any[] = [];
+    if (billIds.length > 0) {
+      try {
+        billItems = await fetchByIds('bill_items', 'bill_id', billIds);
+      } catch (e: any) {
+        tableErrors['bill_items'] = e?.message ?? 'Unknown error';
+      }
+    }
 
     // ── Map Supabase rows → SQLite shape ─────────────────────────────────────
     const stripShopId = (rows: any[] | null) =>
@@ -107,17 +120,18 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
           : new Date().toISOString(),
       }));
 
-    const shopRow = shopRes.data
+    const shopDataTyped = shopData as any;
+    const shopRow = shopDataTyped
       ? {
-          id: shopRes.data.id,
-          shop_name: shopRes.data.shop_name,
-          owner_name: shopRes.data.owner_name,
-          phone: shopRes.data.phone,
-          whatsapp_number: shopRes.data.whatsapp_number ?? null,
-          business_category: shopRes.data.business_category ?? null,
-          ai_consent: shopRes.data.ai_consent ? 1 : 0,
-          is_active: shopRes.data.is_active ? 1 : 0,
-          created_at: shopRes.data.created_at,
+          id: shopDataTyped.id,
+          shop_name: shopDataTyped.shop_name,
+          owner_name: shopDataTyped.owner_name,
+          phone: shopDataTyped.phone,
+          whatsapp_number: shopDataTyped.whatsapp_number ?? null,
+          business_category: shopDataTyped.business_category ?? null,
+          ai_consent: shopDataTyped.ai_consent ? 1 : 0,
+          is_active: shopDataTyped.is_active ? 1 : 0,
+          created_at: shopDataTyped.created_at,
         }
       : null;
 
@@ -125,17 +139,22 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       version: 1,
       exportedAt: new Date().toISOString(),
       shop: shopRow,
-      categories: stripShopId(categoriesRes.data),
-      brands: stripShopId(brandsRes.data),
-      products: stripShopId(productsRes.data),
-      customers: stripShopId(customersRes.data),
-      bills: normaliseBills(billsRes.data),   // C9
-      billItems,                              // bill_items has no shop_id column
-      salesLog: stripShopId(salesLogRes.data),
+      categories: stripShopId(categoriesData as any[] | null),
+      brands: stripShopId(brandsData as any[] | null),
+      products: stripShopId(productsData as any[] | null),
+      customers: stripShopId(customersData as any[] | null),
+      bills: normaliseBills(billsData as any[] | null),   // C9
+      billItems,                                          // bill_items has no shop_id column
+      salesLog: stripShopId(salesLogData as any[] | null),
     };
 
     const summary = importFromJson(backup);
-    return { success: true, summary };
+    const hasErrors = Object.keys(tableErrors).length > 0;
+    return {
+      success: true,
+      summary,
+      ...(hasErrors && { tableErrors }),
+    };
   } catch (e: any) {
     console.error('[restoreService] restoreFromCloud error:', e);
     return { success: false, error: e?.message ?? 'Restore failed' };

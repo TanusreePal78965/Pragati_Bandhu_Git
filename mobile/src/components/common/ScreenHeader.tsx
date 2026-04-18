@@ -80,10 +80,10 @@ export default function ScreenHeader({
                 {rightElement ? (
                     rightElement
                 ) : (
-                    onNotificationPress && (
+                    onNotificationPress !== undefined && (
                         <TouchableOpacity
                             style={styles.notificationButton}
-                            onPress={onNotificationPress}
+                            onPress={() => navigation.navigate("Notifications" as never)}
                         >
                             <Ionicons name="notifications-outline" size={24} color={colors.textSecondary} />
                             <View style={styles.notificationDot} />

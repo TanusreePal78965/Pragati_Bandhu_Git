@@ -104,7 +104,7 @@ export default function CustomersScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.listItem}>
+                    <TouchableOpacity style={styles.listItem} onPress={() => navigation.navigate("EditCustomer", { customerId: item.id })}>
                         <View style={[styles.avatar, { backgroundColor: getAvatarColor(item.id) }]}>
                             <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
                         </View>

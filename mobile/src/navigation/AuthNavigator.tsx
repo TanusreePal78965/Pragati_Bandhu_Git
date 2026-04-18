@@ -6,6 +6,7 @@ import ShopSetupScreen from "../screens/auth/ShopSetupScreen";
 import HelpCenterScreen from "../screens/settings/HelpCenterScreen";
 import PrivacyPolicyScreen from "../screens/settings/PrivacyPolicyScreen";
 import TermsOfServiceScreen from "../screens/settings/TermsOfServiceScreen";
+import AppFeaturesScreen from "../screens/settings/AppFeaturesScreen";
 
 export type AuthStackParamList = {
     Login: undefined;
@@ -14,6 +15,7 @@ export type AuthStackParamList = {
     HelpCenter: undefined;
     PrivacyPolicy: undefined;
     TermsOfService: undefined;
+    AppFeatures: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -32,6 +34,7 @@ export default function AuthNavigator() {
             <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
+            <Stack.Screen name="AppFeatures" component={AppFeaturesScreen} />
         </Stack.Navigator>
     );
 }

@@ -15,29 +15,49 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
-import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, Bill, Product } from "../../db/db";
+import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, getShop, getSalesByRange, Bill, Product } from "../../db/db";
+import { toUtcDate } from "../../utils/dateUtils";
 
 export default function HomeScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [todaySales, setTodaySales] = useState({ total: 0, count: 0 });
+    const [salesTrend, setSalesTrend] = useState<number | null>(null);
     const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
     const [totalProducts, setTotalProducts] = useState(0);
     const [recentBills, setRecentBills] = useState<Bill[]>([]);
+    const [hasAiConsent, setHasAiConsent] = useState(false);
+
+    const getIsoDate = (d: Date) => d.toISOString().split("T")[0];
 
     const loadData = useCallback(() => {
-        setTodaySales(getTodaySales());
+        const todayData = getTodaySales();
+        setTodaySales(todayData);
+
+        // Trend: compare today vs yesterday
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yDate = getIsoDate(yesterday);
+        const yesterdayData = getSalesByRange(yDate, yDate);
+        if (yesterdayData.total_sales > 0) {
+            const pct = ((todayData.total - yesterdayData.total_sales) / yesterdayData.total_sales) * 100;
+            setSalesTrend(Math.round(pct));
+        } else if (todayData.total > 0) {
+            setSalesTrend(null); // new sales with no yesterday baseline — don't show %
+        } else {
+            setSalesTrend(null);
+        }
+
         setLowStockItems(getLowStockProducts());
         setTotalProducts(getAllProducts().length);
         setRecentBills(getRecentBills(5));
+        const shop = getShop();
+        setHasAiConsent(shop?.aiConsent === true);
     }, []);
 
     useFocusEffect(loadData);
 
     const formatCurrency = (amount: number) =>
         `₹ ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
-
-    const toUtcDate = (dateStr: string) =>
-        new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
 
     const formatTime = (dateStr: string) => {
         const d = toUtcDate(dateStr);
@@ -63,6 +83,24 @@ export default function HomeScreen() {
                         <View style={styles.trendRow}>
                             <Ionicons name="receipt-outline" size={16} color={colors.success} />
                             <Text style={styles.trendText}>{todaySales.count} bill{todaySales.count !== 1 ? "s" : ""} today</Text>
+                            {salesTrend !== null && (
+                                <View style={[
+                                    styles.trendBadge,
+                                    { backgroundColor: salesTrend >= 0 ? "#DCFCE7" : "#FEE2E2" },
+                                ]}>
+                                    <Ionicons
+                                        name={salesTrend >= 0 ? "trending-up" : "trending-down"}
+                                        size={12}
+                                        color={salesTrend >= 0 ? colors.success : colors.error}
+                                    />
+                                    <Text style={[
+                                        styles.trendBadgeText,
+                                        { color: salesTrend >= 0 ? colors.success : colors.error },
+                                    ]}>
+                                        {salesTrend >= 0 ? "+" : ""}{salesTrend}% vs yesterday
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -148,23 +186,42 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* AI Reorder Suggestions */}
+                {/* Low Stock / AI Reorder Section — shown to all users, branded correctly per consent */}
                 <View style={styles.aiSection}>
                     <View style={styles.aiHeader}>
                         <View style={styles.aiTitleRow}>
-                            <Ionicons name="sparkles" size={18} color={colors.primary} />
-                            <Text style={styles.aiTitle}>AI Reorder Insights</Text>
+                            {hasAiConsent ? (
+                                <>
+                                    <Ionicons name="sparkles" size={18} color={colors.primary} />
+                                    <Text style={styles.aiTitle}>AI Reorder Insights</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="alert-circle-outline" size={18} color="#D97706" />
+                                    <Text style={[styles.aiTitle, { color: "#92400E" }]}>Low Stock Alerts</Text>
+                                </>
+                            )}
                         </View>
                     </View>
 
                     {lowStockItems.length > 0 ? (
                         lowStockItems.slice(0, 2).map((item) => (
-                            <View key={item.id} style={styles.aiCard}>
+                            <View
+                                key={item.id}
+                                style={[
+                                    styles.aiCard,
+                                    !hasAiConsent && { backgroundColor: "#FFFBEB", borderLeftColor: "#D97706" },
+                                ]}
+                            >
                                 <Text style={styles.aiMessage}>
                                     "{item.name}" is low on stock ({item.stock_quantity} left, threshold: {item.min_stock_threshold}). Consider restocking soon.
                                 </Text>
                                 <View style={styles.aiFooter}>
-                                    <View style={[styles.aiBadge, item.stock_quantity === 0 && { backgroundColor: colors.error }]}>
+                                    <View style={[
+                                        styles.aiBadge,
+                                        item.stock_quantity === 0 && { backgroundColor: colors.error },
+                                        !hasAiConsent && item.stock_quantity > 0 && { backgroundColor: "#D97706" },
+                                    ]}>
                                         <Text style={styles.aiBadgeText}>
                                             {item.stock_quantity === 0 ? "OUT OF STOCK" : "LOW STOCK"}
                                         </Text>
@@ -176,13 +233,25 @@ export default function HomeScreen() {
                     ) : (
                         <View style={styles.aiCard}>
                             <Text style={styles.aiMessage}>
-                                All products have sufficient stock. AI suggestions will appear here when stock runs low.
+                                {hasAiConsent
+                                    ? "All products have sufficient stock. AI suggestions will appear here when stock runs low."
+                                    : "All products have sufficient stock. You will be alerted here when any item runs low."}
                             </Text>
                             <View style={styles.aiFooter}>
                                 <View style={[styles.aiBadge, { backgroundColor: colors.success }]}>
                                     <Text style={styles.aiBadgeText}>ALL GOOD</Text>
                                 </View>
                             </View>
+                        </View>
+                    )}
+
+                    {/* Upgrade nudge for local-only users */}
+                    {!hasAiConsent && lowStockItems.length > 0 && (
+                        <View style={styles.upgradeNudge}>
+                            <Ionicons name="information-circle-outline" size={15} color="#1d4ed8" />
+                            <Text style={styles.upgradeNudgeText}>
+                                Enable Cloud Backup in Settings to get AI-powered reorder quantity suggestions.
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -209,14 +278,16 @@ export default function HomeScreen() {
                                         styles.activityIcon,
                                         {
                                             backgroundColor:
-                                                bill.payment_mode === "udhar" ? "#FEF3C7" : "#DCFCE7",
+                                                bill.payment_mode === "udhar" ? "#FEF3C7"
+                                                : bill.payment_mode === "upi" ? "#F5F3FF"
+                                                : "#DCFCE7",
                                         },
                                     ]}
                                 >
                                     <Ionicons
-                                        name={bill.payment_mode === "udhar" ? "wallet-outline" : "receipt-outline"}
+                                        name={bill.payment_mode === "udhar" ? "wallet-outline" : bill.payment_mode === "upi" ? "phone-portrait-outline" : "receipt-outline"}
                                         size={20}
-                                        color={bill.payment_mode === "udhar" ? "#D97706" : colors.success}
+                                        color={bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success}
                                     />
                                 </View>
                                 <View style={styles.activityContent}>
@@ -227,7 +298,7 @@ export default function HomeScreen() {
                                     </Text>
                                     <Text style={styles.activitySubtitle}>
                                         {formatTime(bill.bill_date)} · {bill.total_items} items ·{" "}
-                                        {bill.payment_mode === "udhar" ? "Udhar" : "Cash"}
+                                        {bill.payment_mode === "udhar" ? "Udhar" : bill.payment_mode === "upi" ? "UPI" : "Cash"}
                                     </Text>
                                 </View>
                                 <Text style={styles.activityAmount}>
@@ -262,8 +333,10 @@ const styles = StyleSheet.create({
     salesLabel: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, letterSpacing: 1 },
     salesIconBg: { position: "absolute", right: 0, top: 0 },
     salesValue: { fontSize: 32, fontWeight: "800", color: colors.primary, marginVertical: spacing.sm },
-    trendRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    trendRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
     trendText: { fontSize: 12, color: colors.success, fontWeight: "600" },
+    trendBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+    trendBadgeText: { fontSize: 11, fontWeight: "700" },
     alertCard: { borderRadius: spacing.roundness, padding: spacing.lg, borderWidth: 1, borderStyle: "dashed" },
     alertLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: spacing.sm },
     alertMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -311,4 +384,14 @@ const styles = StyleSheet.create({
     activityAmount: { fontSize: 15, fontWeight: "700", color: colors.text },
     emptyActivity: { alignItems: "center", paddingVertical: spacing.xl },
     emptyActivityText: { fontSize: 14, color: colors.textSecondary },
+    upgradeNudge: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 6,
+        backgroundColor: "#EFF6FF",
+        padding: 10,
+        borderRadius: 8,
+        marginTop: 8,
+    },
+    upgradeNudgeText: { flex: 1, fontSize: 12, color: "#1d4ed8", lineHeight: 18 },
 });

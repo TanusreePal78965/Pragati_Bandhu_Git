@@ -142,7 +142,7 @@ export interface Bill {
   id: string;
   customer_id: string | null;
   customer_name: string | null;
-  payment_mode: 'cash' | 'udhar';
+  payment_mode: 'cash' | 'udhar' | 'upi';
   total_amount: number;
   total_items: number;
   bill_date: string;
@@ -153,6 +153,7 @@ export interface ReportData {
   net_profit: number;
   cash_sales: number;
   udhar_sales: number;
+  upi_sales: number;
   bill_count: number;
 }
 
@@ -366,7 +367,11 @@ export const updateProductStock = (id: string, newQty: number): void => {
       `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
       [newQty, id]
     );
-    addToSyncQueue('products', 'UPDATE', id, { id, stock_quantity: newQty });
+    const full = db.getFirstSync('SELECT * FROM products WHERE id = ?', [id]) as Product | null;
+    if (full) {
+      const { category_name: _c, brand_name: _b, ...syncPayload } = full;
+      addToSyncQueue('products', 'UPDATE', id, syncPayload);
+    }
   } catch (e) {
     console.error('updateProductStock error:', e);
     throw e;
@@ -418,6 +423,41 @@ export const insertCustomer = (customer: {
     addToSyncQueue('customers', 'INSERT', id, { id, ...customer });
   } catch (e) {
     console.error('insertCustomer error:', e);
+    throw e;
+  }
+};
+
+export const updateCustomer = (
+  id: string,
+  fields: { name: string; phone?: string; address?: string }
+): void => {
+  try {
+    db.runSync(
+      `UPDATE customers SET name = ?, phone = ?, address = ? WHERE id = ?`,
+      [fields.name, fields.phone ?? null, fields.address ?? null, id]
+    );
+    const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
+    if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
+  } catch (e) {
+    console.error('updateCustomer error:', e);
+    throw e;
+  }
+};
+
+/**
+ * Records a cash payment against a customer's udhar balance.
+ * Balance is clamped to 0 — it can never go negative.
+ */
+export const recordUdharPayment = (id: string, paymentAmount: number): void => {
+  try {
+    db.runSync(
+      `UPDATE customers SET udhar_balance = MAX(0, udhar_balance - ?) WHERE id = ?`,
+      [paymentAmount, id]
+    );
+    const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
+    if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
+  } catch (e) {
+    console.error('recordUdharPayment error:', e);
     throw e;
   }
 };
@@ -514,25 +554,25 @@ export const insertBill = (
           [bill.total_amount, bill.customer_id]
         );
       }
-    });
 
-    addToSyncQueue('bills', 'INSERT', billId, {
-      bill: { id: billId, ...bill },
-      items: billItemsForSync,
-      salesLog: salesLogForSync,
-    });
+      // 6. Queue sync — inside the transaction so a queue-write failure rolls back
+      //    the bill insert too, keeping SQLite and sync_queue consistent.
+      addToSyncQueue('bills', 'INSERT', billId, {
+        bill: { id: billId, ...bill },
+        items: billItemsForSync,
+        salesLog: salesLogForSync,
+      });
 
-    // Sync the updated udhar balance — the transaction only wrote to SQLite;
-    // queue a full customer UPDATE so Supabase reflects the new balance.
-    if (bill.payment_mode === 'udhar' && bill.customer_id) {
-      const updatedCustomer = db.getFirstSync(
-        'SELECT * FROM customers WHERE id = ?',
-        [bill.customer_id]
-      ) as Customer | null;
-      if (updatedCustomer) {
-        addToSyncQueue('customers', 'UPDATE', bill.customer_id, updatedCustomer);
+      if (bill.payment_mode === 'udhar' && bill.customer_id) {
+        const updatedCustomer = db.getFirstSync(
+          'SELECT * FROM customers WHERE id = ?',
+          [bill.customer_id]
+        ) as Customer | null;
+        if (updatedCustomer) {
+          addToSyncQueue('customers', 'UPDATE', bill.customer_id, updatedCustomer);
+        }
       }
-    }
+    });
 
     return billId;
   } catch (e) {
@@ -576,6 +616,18 @@ export const getBillItems = (billId: string): BillItem[] => {
   }
 };
 
+export const getBillsByCustomer = (customerId: string, limit = 10): Bill[] => {
+  try {
+    return db.getAllSync(
+      'SELECT * FROM bills WHERE customer_id = ? ORDER BY bill_date DESC LIMIT ?',
+      [customerId, limit]
+    ) as Bill[];
+  } catch (e) {
+    console.error('getBillsByCustomer error:', e);
+    return [];
+  }
+};
+
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
 export const getTodaySales = (): { total: number; count: number } => {
@@ -598,6 +650,7 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
          COALESCE(SUM(total_amount), 0) AS total_sales,
          COALESCE(SUM(CASE WHEN payment_mode = 'cash' THEN total_amount ELSE 0 END), 0) AS cash_sales,
          COALESCE(SUM(CASE WHEN payment_mode = 'udhar' THEN total_amount ELSE 0 END), 0) AS udhar_sales,
+         COALESCE(SUM(CASE WHEN payment_mode = 'upi' THEN total_amount ELSE 0 END), 0) AS upi_sales,
          COUNT(*) AS bill_count
        FROM bills
        WHERE date(bill_date) BETWEEN date(?) AND date(?)`,
@@ -605,19 +658,30 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
     ) as any;
 
     const totalSales = row?.total_sales ?? 0;
-    // Rough net profit: assume ~20% margin over selling price
-    const net_profit = Math.round(totalSales * 0.2);
+
+    // Real net profit: (unit_price - purchase_price) × qty for every bill item in range.
+    // Falls back to 0 for products with no purchase price set (rather than inflating profit).
+    const profitRow = db.getFirstSync(
+      `SELECT COALESCE(SUM(bi.qty * (bi.unit_price - COALESCE(p.purchase_price, 0))), 0) AS net_profit
+       FROM bills b
+       JOIN bill_items bi ON bi.bill_id = b.id
+       LEFT JOIN products p ON p.id = bi.product_id
+       WHERE date(b.bill_date) BETWEEN date(?) AND date(?)`,
+      [from, to]
+    ) as { net_profit: number } | null;
+    const net_profit = Math.round(profitRow?.net_profit ?? 0);
 
     return {
       total_sales: totalSales,
       net_profit,
       cash_sales: row?.cash_sales ?? 0,
       udhar_sales: row?.udhar_sales ?? 0,
+      upi_sales: row?.upi_sales ?? 0,
       bill_count: row?.bill_count ?? 0,
     };
   } catch (e) {
     console.error('getSalesByRange error:', e);
-    return { total_sales: 0, net_profit: 0, cash_sales: 0, udhar_sales: 0, bill_count: 0 };
+    return { total_sales: 0, net_profit: 0, cash_sales: 0, udhar_sales: 0, upi_sales: 0, bill_count: 0 };
   }
 };
 

@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
     Image,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
@@ -135,13 +136,9 @@ export default function LoginScreen() {
                         {/* Terms */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{" "}
-                            <TouchableOpacity onPress={() => navigation.navigate("TermsOfService")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Text style={styles.termsLink}>Terms of Service</Text>
-                            </TouchableOpacity>
+                            <Text style={styles.termsLink} onPress={() => navigation.navigate("TermsOfService")}>Terms of Service</Text>
                             {" "}and{" "}
-                            <TouchableOpacity onPress={() => navigation.navigate("PrivacyPolicy")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Text style={styles.termsLink}>Privacy Policy</Text>
-                            </TouchableOpacity>
+                            <Text style={styles.termsLink} onPress={() => navigation.navigate("PrivacyPolicy")}>Privacy Policy</Text>
                         </Text>
                     </View>
 
@@ -160,6 +157,17 @@ export default function LoginScreen() {
                             <Text style={styles.featureText}>Track Udhar</Text>
                         </View>
                     </View>
+                    {/* Explore Features */}
+                    <TouchableOpacity
+                        style={styles.featuresLink}
+                        onPress={() => navigation.navigate("AppFeatures")}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="sparkles-outline" size={16} color="#2563EB" />
+                        <Text style={styles.featuresLinkText}>Explore All Features</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#2563EB" />
+                    </TouchableOpacity>
+
                     <TouchableOpacity onPress={() => navigation.navigate("HelpCenter")}>
                         <Text style={styles.supportText}>Need help? Visit our Help Center</Text>
                     </TouchableOpacity>
@@ -322,8 +330,27 @@ const styles = StyleSheet.create({
         color: "#64748B",
         fontWeight: "500",
     },
-    supportText: {
+    featuresLink: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
         marginTop: 20,
+        marginBottom: 4,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        backgroundColor: "#EFF6FF",
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#BFDBFE",
+    },
+    featuresLinkText: {
+        fontSize: 14,
+        color: "#2563EB",
+        fontWeight: "600",
+    },
+    supportText: {
+        marginTop: 12,
         fontSize: 12,
         color: "#64748B",
         textAlign: "center",

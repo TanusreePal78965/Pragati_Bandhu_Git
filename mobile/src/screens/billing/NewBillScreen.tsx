@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -11,10 +11,11 @@ import {
     Modal,
     Alert,
     Pressable,
+    SafeAreaView as RNSafeAreaView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
@@ -30,7 +31,7 @@ interface BillItem {
 
 export default function NewBillScreen() {
     const navigation = useNavigation();
-    const [paymentMode, setPaymentMode] = useState<"cash" | "udhar">("cash");
+    const [paymentMode, setPaymentMode] = useState<"cash" | "udhar" | "upi">("cash");
     const [billItems, setBillItems] = useState<BillItem[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -39,11 +40,14 @@ export default function NewBillScreen() {
     const [showCustomerModal, setShowCustomerModal] = useState(false);
     const [customerSearch, setCustomerSearch] = useState("");
     const [saving, setSaving] = useState(false);
+    const [showEstimate, setShowEstimate] = useState(false);
 
-    useEffect(() => {
-        setProducts(getAllProducts());
-        setCustomers(getAllCustomers());
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            setProducts(getAllProducts());
+            setCustomers(getAllCustomers());
+        }, [])
+    );
 
     // Product search results (only show when search has text)
     const searchResults = search.trim().length > 1
@@ -54,8 +58,16 @@ export default function NewBillScreen() {
         : [];
 
     const addProduct = (product: Product) => {
+        if (product.stock_quantity === 0) {
+            Alert.alert("Out of Stock", `"${product.name}" is out of stock and cannot be added to the bill.`);
+            return;
+        }
         const existing = billItems.find((i) => i.product_id === product.id);
         if (existing) {
+            if (existing.qty >= product.stock_quantity) {
+                Alert.alert("Stock Limit", `Only ${product.stock_quantity} unit(s) of "${product.name}" available.`);
+                return;
+            }
             setBillItems((prev) =>
                 prev.map((i) =>
                     i.product_id === product.id ? { ...i, qty: i.qty + 1 } : i
@@ -77,6 +89,14 @@ export default function NewBillScreen() {
     };
 
     const updateQty = (productId: string, delta: number) => {
+        if (delta > 0) {
+            const product = products.find((p) => p.id === productId);
+            const current = billItems.find((i) => i.product_id === productId);
+            if (product && current && current.qty >= product.stock_quantity) {
+                Alert.alert("Stock Limit", `Only ${product.stock_quantity} unit(s) of "${product.name}" available.`);
+                return;
+            }
+        }
         setBillItems((prev) =>
             prev
                 .map((i) => (i.product_id === productId ? { ...i, qty: i.qty + delta } : i))
@@ -244,12 +264,21 @@ export default function NewBillScreen() {
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
+                        style={[styles.paymentBtn, paymentMode === "upi" && styles.paymentBtnUpiActive]}
+                        onPress={() => setPaymentMode("upi")}
+                    >
+                        <Ionicons name="phone-portrait-outline" size={20} color={paymentMode === "upi" ? "#7C3AED" : "#94a3b8"} />
+                        <Text style={[styles.paymentBtnText, paymentMode === "upi" && styles.paymentBtnUpiText]}>
+                            UPI
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
                         style={[styles.paymentBtn, paymentMode === "udhar" && styles.paymentBtnActive]}
                         onPress={() => setPaymentMode("udhar")}
                     >
                         <Ionicons name="wallet-outline" size={20} color={paymentMode === "udhar" ? colors.primary : "#94a3b8"} />
                         <Text style={[styles.paymentBtnText, paymentMode === "udhar" && styles.paymentBtnTextActive]}>
-                            Udhar (Credit)
+                            Udhar
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -316,8 +345,17 @@ export default function NewBillScreen() {
                 </View>
             </View>
             <View style={styles.actionsContainer}>
-                <TouchableOpacity style={styles.estimateBtn}>
-                    <Ionicons name="print-outline" size={24} color="#475569" />
+                <TouchableOpacity
+                    style={styles.estimateBtn}
+                    onPress={() => {
+                        if (billItems.length === 0) {
+                            Alert.alert("Empty Bill", "Add at least one product to preview an estimate.");
+                            return;
+                        }
+                        setShowEstimate(true);
+                    }}
+                >
+                    <Ionicons name="document-text-outline" size={24} color="#475569" />
                     <Text style={styles.estimateBtnText}>ESTIMATE</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -331,6 +369,119 @@ export default function NewBillScreen() {
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Estimate Preview Modal */}
+            <Modal visible={showEstimate} transparent={false} animationType="slide">
+                <RNSafeAreaView style={styles.estimateContainer}>
+                    {/* Estimate Header */}
+                    <View style={styles.estimateHeader}>
+                        <TouchableOpacity onPress={() => setShowEstimate(false)} style={styles.estimateCloseBtn}>
+                            <Ionicons name="close" size={24} color="#475569" />
+                        </TouchableOpacity>
+                        <Text style={styles.estimateHeaderTitle}>Estimate Preview</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+
+                    <ScrollView contentContainerStyle={styles.estimateScroll}>
+                        {/* Estimate Badge */}
+                        <View style={styles.estimateBadgeRow}>
+                            <View style={styles.estimateBadge}>
+                                <Ionicons name="document-text-outline" size={14} color="#92400e" />
+                                <Text style={styles.estimateBadgeText}>ESTIMATE — NOT SAVED</Text>
+                            </View>
+                            <Text style={styles.estimateDate}>
+                                {new Date().toLocaleDateString("en-IN", {
+                                    day: "2-digit", month: "short", year: "numeric",
+                                })}
+                            </Text>
+                        </View>
+
+                        {/* Customer */}
+                        <View style={styles.estimateSection}>
+                            <Text style={styles.estimateSectionLabel}>CUSTOMER</Text>
+                            <Text style={styles.estimateCustomerName}>
+                                {selectedCustomer?.name ?? "Walk-in Customer"}
+                            </Text>
+                            {selectedCustomer?.phone && (
+                                <Text style={styles.estimateCustomerPhone}>{selectedCustomer.phone}</Text>
+                            )}
+                        </View>
+
+                        {/* Payment Mode */}
+                        <View style={styles.estimatePaymentRow}>
+                            <View style={[
+                                styles.estimatePaymentBadge,
+                                { backgroundColor: paymentMode === "udhar" ? "#FEF3C7" : "#DCFCE7" }
+                            ]}>
+                                <Ionicons
+                                    name={paymentMode === "udhar" ? "wallet-outline" : "cash-outline"}
+                                    size={14}
+                                    color={paymentMode === "udhar" ? "#D97706" : "#16a34a"}
+                                />
+                                <Text style={[
+                                    styles.estimatePaymentText,
+                                    { color: paymentMode === "udhar" ? "#D97706" : "#16a34a" }
+                                ]}>
+                                    {paymentMode === "udhar" ? "Udhar (Credit)" : "Cash Payment"}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Divider */}
+                        <View style={styles.estimateDivider} />
+
+                        {/* Items */}
+                        <Text style={styles.estimateSectionLabel}>ITEMS</Text>
+                        {billItems.map((item, idx) => (
+                            <View key={item.product_id} style={styles.estimateItem}>
+                                <View style={styles.estimateItemLeft}>
+                                    <Text style={styles.estimateItemIdx}>{idx + 1}.</Text>
+                                    <View>
+                                        <Text style={styles.estimateItemName}>{item.product_name}</Text>
+                                        <Text style={styles.estimateItemMeta}>
+                                            ₹{item.unit_price.toFixed(2)} × {item.qty} {item.uom}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.estimateItemTotal}>
+                                    ₹{(item.qty * item.unit_price).toFixed(2)}
+                                </Text>
+                            </View>
+                        ))}
+
+                        {/* Divider */}
+                        <View style={styles.estimateDivider} />
+
+                        {/* Totals */}
+                        <View style={styles.estimateTotalRow}>
+                            <Text style={styles.estimateTotalLabel}>Total Items</Text>
+                            <Text style={styles.estimateTotalValue}>{totalItems}</Text>
+                        </View>
+                        <View style={[styles.estimateTotalRow, styles.estimateGrandRow]}>
+                            <Text style={styles.estimateGrandLabel}>GRAND TOTAL</Text>
+                            <Text style={styles.estimateGrandValue}>₹{grandTotal.toFixed(2)}</Text>
+                        </View>
+
+                        {/* Disclaimer */}
+                        <View style={styles.estimateDisclaimer}>
+                            <Ionicons name="information-circle-outline" size={16} color="#92400e" />
+                            <Text style={styles.estimateDisclaimerText}>
+                                This is a preview only. Tap "Save & Checkout" on the billing screen to finalise and record this bill.
+                            </Text>
+                        </View>
+                    </ScrollView>
+
+                    {/* Close Footer */}
+                    <View style={styles.estimateFooter}>
+                        <TouchableOpacity
+                            style={styles.estimateCloseFooterBtn}
+                            onPress={() => setShowEstimate(false)}
+                        >
+                            <Text style={styles.estimateCloseFooterText}>Close Preview</Text>
+                        </TouchableOpacity>
+                    </View>
+                </RNSafeAreaView>
+            </Modal>
 
             {/* Customer Picker Modal */}
             <Modal visible={showCustomerModal} transparent animationType="slide">
@@ -492,8 +643,10 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     paymentBtnActive: { borderColor: colors.primary, backgroundColor: "#EFF6FF" },
-    paymentBtnText: { fontSize: 15, fontWeight: "600", color: "#64748B" },
+    paymentBtnUpiActive: { borderColor: "#7C3AED", backgroundColor: "#F5F3FF" },
+    paymentBtnText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
     paymentBtnTextActive: { color: colors.primary },
+    paymentBtnUpiText: { color: "#7C3AED" },
     emptyBill: {
         alignItems: "center",
         paddingVertical: 32,
@@ -640,4 +793,103 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     walkInBtnText: { fontSize: 15, fontWeight: "600", color: colors.textSecondary },
+    // Estimate Modal
+    estimateContainer: { flex: 1, backgroundColor: "#fff" },
+    estimateHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 16,
+        height: 56,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F1F5F9",
+    },
+    estimateCloseBtn: { width: 40, alignItems: "flex-start" },
+    estimateHeaderTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+    estimateScroll: { padding: 20, paddingBottom: 40 },
+    estimateBadgeRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 20,
+    },
+    estimateBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#FEF3C7",
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 6,
+    },
+    estimateBadgeText: { fontSize: 11, fontWeight: "800", color: "#92400e", letterSpacing: 0.5 },
+    estimateDate: { fontSize: 13, color: "#64748B", fontWeight: "600" },
+    estimateSection: { marginBottom: 16 },
+    estimateSectionLabel: { fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.8, marginBottom: 6 },
+    estimateCustomerName: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+    estimateCustomerPhone: { fontSize: 13, color: "#64748B", marginTop: 2 },
+    estimatePaymentRow: { marginBottom: 16 },
+    estimatePaymentBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        alignSelf: "flex-start",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    estimatePaymentText: { fontSize: 13, fontWeight: "700" },
+    estimateDivider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 16 },
+    estimateItem: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F8FAFC",
+    },
+    estimateItemLeft: { flexDirection: "row", alignItems: "flex-start", gap: 10, flex: 1 },
+    estimateItemIdx: { fontSize: 13, color: "#94A3B8", fontWeight: "600", width: 18, marginTop: 2 },
+    estimateItemName: { fontSize: 15, fontWeight: "600", color: "#1e293b" },
+    estimateItemMeta: { fontSize: 12, color: "#64748B", marginTop: 2 },
+    estimateItemTotal: { fontSize: 15, fontWeight: "700", color: "#1e293b" },
+    estimateTotalRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 6,
+    },
+    estimateTotalLabel: { fontSize: 14, color: "#64748B", fontWeight: "500" },
+    estimateTotalValue: { fontSize: 14, color: "#1e293b", fontWeight: "600" },
+    estimateGrandRow: {
+        marginTop: 6,
+        paddingTop: 12,
+        borderTopWidth: 2,
+        borderTopColor: "#F1F5F9",
+    },
+    estimateGrandLabel: { fontSize: 16, fontWeight: "800", color: "#1e293b", letterSpacing: 0.5 },
+    estimateGrandValue: { fontSize: 24, fontWeight: "800", color: colors.primary },
+    estimateDisclaimer: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 8,
+        backgroundColor: "#FFFBEB",
+        padding: 14,
+        borderRadius: 10,
+        marginTop: 20,
+    },
+    estimateDisclaimerText: { flex: 1, fontSize: 13, color: "#92400e", lineHeight: 19 },
+    estimateFooter: {
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: "#F1F5F9",
+    },
+    estimateCloseFooterBtn: {
+        backgroundColor: "#F1F5F9",
+        height: 52,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    estimateCloseFooterText: { fontSize: 16, fontWeight: "700", color: "#475569" },
 });

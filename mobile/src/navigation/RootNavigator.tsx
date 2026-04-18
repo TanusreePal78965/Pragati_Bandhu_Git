@@ -17,6 +17,10 @@ import AddCustomerScreen from "../screens/customers/AddCustomerScreen";
 import BillsScreen from "../screens/billing/BillsScreen";
 import BillDetailScreen from "../screens/billing/BillDetailScreen";
 import EditShopScreen from "../screens/settings/EditShopScreen";
+import EditProductScreen from "../screens/products/EditProductScreen";
+import EditCustomerScreen from "../screens/customers/EditCustomerScreen";
+import AppFeaturesScreen from "../screens/settings/AppFeaturesScreen";
+import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 import ShopDeactivatedScreen from "../screens/auth/ShopDeactivatedScreen";
 import HelpCenterScreen from "../screens/settings/HelpCenterScreen";
 import PrivacyPolicyScreen from "../screens/settings/PrivacyPolicyScreen";
@@ -66,14 +70,18 @@ export default function RootNavigator() {
                         {/* Stack screens / modals outside the tab bar */}
                         <Stack.Screen name="NewBill" component={NewBillScreen} />
                         <Stack.Screen name="AddProduct" component={AddProductScreen} />
+                        <Stack.Screen name="EditProduct" component={EditProductScreen} />
                         <Stack.Screen name="ManageCategories" component={ManageCategoriesScreen} />
                         <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
                         <Stack.Screen name="ManageBrands" component={ManageBrandsScreen} />
                         <Stack.Screen name="AddBrand" component={AddBrandScreen} />
                         <Stack.Screen name="AddCustomer" component={AddCustomerScreen} />
+                        <Stack.Screen name="EditCustomer" component={EditCustomerScreen} />
                         <Stack.Screen name="Bills" component={BillsScreen} />
                         <Stack.Screen name="BillDetail" component={BillDetailScreen} />
                         <Stack.Screen name="EditShop" component={EditShopScreen} />
+                        <Stack.Screen name="AppFeatures" component={AppFeaturesScreen} />
+                        <Stack.Screen name="Notifications" component={NotificationsScreen} />
                         <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
                         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
                         <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />

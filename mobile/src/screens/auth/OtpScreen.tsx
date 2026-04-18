@@ -41,6 +41,12 @@ export default function OtpScreen() {
 
     const inputRefs = useRef<(TextInput | null)[]>([]);
 
+    useEffect(() => {
+        if (!phoneNumber) {
+            navigation.navigate("Login");
+        }
+    }, [phoneNumber, navigation]);
+
     // Countdown timer for resend button
     useEffect(() => {
         if (resendTimer > 0) {

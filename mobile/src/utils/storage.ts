@@ -5,7 +5,6 @@ export const StorageKeys = {
   LAST_SYNC: 'last_sync',
   USER_ID: 'user_id',
   SHOP_ID: 'shop_id',
-  AUTH_TOKEN: 'auth_token',
   SHOP_INFO: 'shop_info',
 };
 
@@ -29,20 +28,6 @@ export const setLastSync = async (value: string): Promise<void> => {
 export const getLastSync = async (): Promise<string | undefined> => {
   const val = await AsyncStorage.getItem(StorageKeys.LAST_SYNC);
   return val ?? undefined;
-};
-
-// ─── Auth Token ──────────────────────────────────────────────────────────────
-
-export const setAuthToken = async (token: string): Promise<void> => {
-  await AsyncStorage.setItem(StorageKeys.AUTH_TOKEN, token);
-};
-
-export const getAuthToken = async (): Promise<string | null> => {
-  return AsyncStorage.getItem(StorageKeys.AUTH_TOKEN);
-};
-
-export const clearAuthToken = async (): Promise<void> => {
-  await AsyncStorage.removeItem(StorageKeys.AUTH_TOKEN);
 };
 
 // ─── Shop Info ───────────────────────────────────────────────────────────────

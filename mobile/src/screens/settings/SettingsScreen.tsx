@@ -103,14 +103,17 @@ export default function SettingsScreen() {
     const [versionClicks, setVersionClicks] = useState(0);
     const [showExport, setShowExport] = useState(false);
     const navigation = useNavigation();
-    const { logout, phone } = useAuth();
+    const { logout, phone, setShopActive } = useAuth();
 
     useFocusEffect(
         useCallback(() => {
+            let cancelled = false;
             getShopInfo().then(info => {
+                if (cancelled) return;
                 setShopInfoState(info);
                 setSyncPendingCount(getPendingSyncCount());
             });
+            return () => { cancelled = true; };
         }, [])
     );
 
@@ -191,7 +194,7 @@ export default function SettingsScreen() {
 
                             // 5. Start the sync service — it flushes the queue internally
                             //    when consent is detected (no separate flush needed). (C12)
-                            await startSyncService(() => { });
+                            await startSyncService(() => setShopActive(false));
 
                             // 5. Refresh UI
                             const refreshed = await getShopInfo();
@@ -650,6 +653,12 @@ export default function SettingsScreen() {
 
                 {/* Support & Info */}
                 <SectionHeader title="SUPPORT & INFO" />
+                <SettingsItem
+                    icon="sparkles"
+                    title="App Features"
+                    value="What can this app do?"
+                    onPress={() => (navigation as any).navigate("AppFeatures")}
+                />
                 <SettingsItem icon="help-circle" title="Help Center" onPress={() => (navigation as any).navigate("HelpCenter")} />
                 <SettingsItem icon="shield-checkmark" title="Privacy Policy" onPress={() => (navigation as any).navigate("PrivacyPolicy")} />
                 <SettingsItem icon="document-text" title="Terms of Service" onPress={() => (navigation as any).navigate("TermsOfService")} />
