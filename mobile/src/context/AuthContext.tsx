@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getStoredAuth, logout as logoutService } from '../services/authService';
-import { getShopInfo } from '../utils/storage';
+import { getShopInfo, getOrCreateDeviceId } from '../utils/storage';
 import { startSyncService, stopSyncService } from '../services/syncService';
 import { onRestoreEvent } from '../utils/restoreEvents';
 
@@ -16,6 +16,8 @@ type AuthState = {
   isShopSetup: boolean;
   /** false when admin has deactivated this shop */
   isShopActive: boolean;
+  /** true when another device has claimed this shop's active session */
+  isDeviceConflict: boolean;
   /** true while a background auto-restore from Supabase is in progress (C11) */
   isAutoRestoring: boolean;
   /** 10-digit phone number — available after login */
@@ -28,6 +30,8 @@ type AuthState = {
   logout: () => Promise<void>;
   /** Called by syncService when it detects is_active = false */
   setShopActive: (active: boolean) => void;
+  /** Claims the session for this device — updates active_device_id in Supabase */
+  claimSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -39,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isShopSetup, setIsShopSetup] = useState(false);
   const [isShopActive, setIsShopActive] = useState(true);
+  const [isDeviceConflict, setIsDeviceConflict] = useState(false);
   const [isAutoRestoring, setIsAutoRestoring] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
 
@@ -63,7 +68,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (shopReady) {
           const info = await getShopInfo();
           setIsShopActive(info?.isActive ?? true);
-          await startSyncService(() => setShopActive(false));
+          await startSyncService(
+            () => setShopActive(false),
+            () => setIsDeviceConflict(true),
+          );
         }
       })
       .catch(() => {
@@ -80,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAuthenticated(false);
           setIsShopSetup(false);
           setIsShopActive(true);
+          setIsDeviceConflict(false);
           setPhone(null);
         }
       }
@@ -89,8 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (p: string) => {
-    // Run full auth check first, then set all state at once to avoid
-    // briefly flashing ShopSetup for returning users
     const { isShopSetup: shopReady } = await getStoredAuth();
     const info = shopReady ? await getShopInfo() : null;
 
@@ -98,14 +105,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthenticated(true);
     setIsShopSetup(shopReady);
     setIsShopActive(info?.isActive ?? true);
-    if (shopReady) await startSyncService(() => setShopActive(false));
+    setIsDeviceConflict(false);
+    if (shopReady) {
+      await startSyncService(
+        () => setShopActive(false),
+        () => setIsDeviceConflict(true),
+      );
+    }
   };
 
   const completeSetup = () => {
     setIsShopSetup(true);
     setIsShopActive(true);
-    // First-time setup: sync service hasn't been started yet (login ran before shop existed)
-    startSyncService(() => setShopActive(false));
+    setIsDeviceConflict(false);
+    startSyncService(
+      () => setShopActive(false),
+      () => setIsDeviceConflict(true),
+    );
   };
 
   const logout = async () => {
@@ -114,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthenticated(false);
     setIsShopSetup(false);
     setIsShopActive(true);
+    setIsDeviceConflict(false);
     setPhone(null);
   };
 
@@ -121,9 +138,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsShopActive(active);
   };
 
+  /**
+   * Claims this device as the active session by writing its device_id to
+   * Supabase. The conflicting device will detect the mismatch on its next
+   * foreground and be shown the DeviceConflictScreen.
+   */
+  const claimSession = async (): Promise<void> => {
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      const { data: { session } } = await supabase.auth.getSession();
+      const shopPhone = session?.user?.phone?.slice(-10);
+      if (shopPhone) {
+        await supabase.from('shops')
+          .update({ active_device_id: deviceId })
+          .eq('id', shopPhone);
+      }
+    } catch {
+      // Non-critical — conflict screen will retry on next foreground
+    }
+    setIsDeviceConflict(false);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ isReady, isAuthenticated, isShopSetup, isShopActive, isAutoRestoring, phone, login, completeSetup, logout, setShopActive }}
+      value={{
+        isReady,
+        isAuthenticated,
+        isShopSetup,
+        isShopActive,
+        isDeviceConflict,
+        isAutoRestoring,
+        phone,
+        login,
+        completeSetup,
+        logout,
+        setShopActive,
+        claimSession,
+      }}
     >
       {children}
     </AuthContext.Provider>

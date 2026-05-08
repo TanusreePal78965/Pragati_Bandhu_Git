@@ -1,18 +1,22 @@
 import { AppState, AppStateStatus } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { flushSyncQueue } from '../db/syncQueue';
-import { getHasConsent, getShopInfo, setShopInfo } from '../utils/storage';
+import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId } from '../utils/storage';
 import { supabase } from '../lib/supabase';
 
 let unsubscribeNetInfo: (() => void) | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
 
 /**
- * Checks with the backend whether the shop is still active.
- * Runs for ALL users regardless of consent — this is an admin control, not a sync operation.
- * If is_active = false: persists locally and fires onDeactivated so the UI blocks access.
+ * Checks shop status from Supabase on every foreground for ALL users:
+ *   - is_active = false  → onDeactivated() (admin control)
+ *   - active_device_id mismatch AND aiConsent = true → onDeviceConflict()
+ *     (another device has claimed the session)
  */
-const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
+const checkShopStatus = async (
+  onDeactivated: () => void,
+  onDeviceConflict: () => void,
+): Promise<void> => {
   try {
     const net = await NetInfo.fetch();
     if (!net.isConnected) return;
@@ -23,13 +27,35 @@ const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
 
     const { data } = await supabase
       .from('shops')
-      .select('is_active')
+      .select('is_active, active_device_id, ai_consent')
       .eq('id', phone)
       .single();
-    if (data?.is_active === false) {
+
+    if (!data) return;
+
+    // Admin deactivation — applies to all users
+    if (data.is_active === false) {
       const info = await getShopInfo();
       if (info) await setShopInfo({ ...info, isActive: false });
       onDeactivated();
+      return;
+    }
+
+    // Device conflict — only for online (aiConsent) users.
+    if (data.ai_consent) {
+      const thisDeviceId = await getOrCreateDeviceId();
+      if (!data.active_device_id) {
+        // No device claimed yet (new shop or just cleared) — stamp this device.
+        // Fire-and-forget: non-critical, next check will confirm.
+        supabase.from('shops')
+          .update({ active_device_id: thisDeviceId })
+          .eq('id', phone)
+          .then(() => {}).catch(() => {});
+      } else if (data.active_device_id !== thisDeviceId) {
+        // Another device holds the session — block access.
+        onDeviceConflict();
+        return;
+      }
     }
   } catch {
     // Non-critical — silently ignore network / auth errors
@@ -40,33 +66,35 @@ const checkShopStatus = async (onDeactivated: () => void): Promise<void> => {
  * Start background sync listeners.
  *
  * Admin deactivation check: runs for ALL users (consent-independent).
+ * Device conflict check: runs for aiConsent users only.
  * Data sync: runs only for users who gave AI/cloud consent.
  *
- * @param onDeactivated - Called when the backend reports is_active = false.
+ * @param onDeactivated   - Called when backend reports is_active = false.
+ * @param onDeviceConflict - Called when another device has claimed the session.
  */
-export const startSyncService = async (onDeactivated: () => void): Promise<void> => {
-  // Clean up any existing listeners before re-subscribing to prevent leaks
-  // if startSyncService is called more than once (e.g. login → completeSetup).
+export const startSyncService = async (
+  onDeactivated: () => void,
+  onDeviceConflict: () => void,
+): Promise<void> => {
+  // Clean up existing listeners before re-subscribing to prevent leaks
   stopSyncService();
 
-  // ── Admin deactivation check (all users) ────────────────────────────────────
-  await checkShopStatus(onDeactivated);
+  // ── Initial check (all users) ────────────────────────────────────────────────
+  await checkShopStatus(onDeactivated, onDeviceConflict);
 
-  // AppState listener runs for ALL users:
-  //   - re-checks deactivation on every foreground
-  //   - also flushes sync queue if consent is given
+  // AppState listener: re-check on every foreground + flush queue for consent users
   appStateSubscription = AppState.addEventListener(
     'change',
     async (state: AppStateStatus) => {
       if (state === 'active') {
-        await checkShopStatus(onDeactivated);
+        await checkShopStatus(onDeactivated, onDeviceConflict);
         const hasConsent = await getHasConsent();
         if (hasConsent) await flushSyncQueue();
       }
     }
   );
 
-  // ── Data sync (consent users only) ─────────────────────────────────────────
+  // ── Data sync (consent users only) ──────────────────────────────────────────
   const hasConsent = await getHasConsent();
   if (!hasConsent) return;
 
@@ -77,7 +105,7 @@ export const startSyncService = async (onDeactivated: () => void): Promise<void>
     }
   });
 
-  // Flush immediately on startup for queued items from last session
+  // Flush immediately for items queued in last session
   await flushSyncQueue();
 };
 

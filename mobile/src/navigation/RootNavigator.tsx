@@ -22,6 +22,7 @@ import EditCustomerScreen from "../screens/customers/EditCustomerScreen";
 import AppFeaturesScreen from "../screens/settings/AppFeaturesScreen";
 import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 import ShopDeactivatedScreen from "../screens/auth/ShopDeactivatedScreen";
+import DeviceConflictScreen from "../screens/auth/DeviceConflictScreen";
 import HelpCenterScreen from "../screens/settings/HelpCenterScreen";
 import PrivacyPolicyScreen from "../screens/settings/PrivacyPolicyScreen";
 import TermsOfServiceScreen from "../screens/settings/TermsOfServiceScreen";
@@ -29,7 +30,7 @@ import TermsOfServiceScreen from "../screens/settings/TermsOfServiceScreen";
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-    const { isReady, isAuthenticated, isShopSetup, isShopActive, isAutoRestoring } = useAuth();
+    const { isReady, isAuthenticated, isShopSetup, isShopActive, isDeviceConflict, isAutoRestoring } = useAuth();
 
     // Splash guard: don't render navigator until AsyncStorage check is done.
     // Prevents the login screen from flashing on a returning authenticated user.
@@ -62,6 +63,9 @@ export default function RootNavigator() {
                 ) : !isShopActive ? (
                     // ── Shop deactivated by admin ──────────────────────────────
                     <Stack.Screen name="ShopDeactivated" component={ShopDeactivatedScreen} />
+                ) : isDeviceConflict ? (
+                    // ── Session claimed by another device ──────────────────────
+                    <Stack.Screen name="DeviceConflict" component={DeviceConflictScreen} />
                 ) : (
                     // ── Authenticated + shop ready: full app accessible ────────
                     <>

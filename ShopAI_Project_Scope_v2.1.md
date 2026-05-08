@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v2.3 | April 2026
+### Project Scope Document v3.3 | May 2026
 
 ---
 
@@ -212,6 +212,7 @@ When consent is given, only statistical patterns are sent — never product name
 | Bill Detail | Bills list row or Reports recent transaction row | Receipt-style view: payment mode badge, total, date/time, customer, itemised list, grand total. Includes **PDF share option** (v2.7). |
 | Edit Shop | Settings → "Edit Profile" | Edit shop name, owner name, category, WhatsApp number, and AI consent; confirmation alerts on consent change; saves to AsyncStorage + SQLite + immediately flushes to backend |
 | Shop Deactivated | Auto (admin control) | Blocking screen shown when `is_active = false`; prevents app access; shows support contact and logout button |
+| Device Conflict | Auto (session claim) | Blocking screen shown when another device claims the active session (`active_device_id` mismatch); "Use on This Device" re-claims session; cloud users only |
 
 ---
 
@@ -243,7 +244,7 @@ shopai/
     │   ├── api/             # client.js — commented out (legacy axios client)
     │   ├── lib/             # supabase.ts — Supabase client singleton
     │   ├── screens/
-    │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen, ShopDeactivatedScreen
+    │   │   ├── auth/        # LoginScreen, OtpScreen, ShopSetupScreen, ShopDeactivatedScreen, DeviceConflictScreen
     │   │   ├── home/        # HomeScreen (Dashboard)
     │   │   ├── products/    # ProductsScreen, AddProductScreen
     │   │   ├── billing/     # NewBillScreen, BillsScreen, BillDetailScreen
@@ -303,7 +304,8 @@ CREATE TABLE IF NOT EXISTS shops (
   whatsapp_number TEXT,
   business_category TEXT,
   ai_consent BOOLEAN DEFAULT FALSE,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- admin-controlled; false = blocks app access
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,      -- admin-controlled; false = blocks app access
+  active_device_id TEXT,                        -- single active session; mismatch → DeviceConflictScreen
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -338,6 +340,8 @@ CREATE TABLE IF NOT EXISTS products (
   stock_quantity INTEGER DEFAULT 0,
   min_stock_threshold INTEGER DEFAULT 5,
   uom TEXT DEFAULT 'Pcs',
+  purchase_uom TEXT DEFAULT NULL,    -- bulk purchase unit name (e.g. "Box", "Bag")
+  units_per_pack INTEGER DEFAULT NULL, -- how many base units in one purchase pack
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -371,9 +375,10 @@ CREATE TABLE IF NOT EXISTS bill_items (
   bill_id TEXT NOT NULL REFERENCES bills(id),
   product_id TEXT NOT NULL,
   product_name TEXT NOT NULL,
-  qty INTEGER NOT NULL,
-  unit_price NUMERIC NOT NULL,
-  line_total NUMERIC NOT NULL
+  qty INTEGER NOT NULL,              -- always in base units (e.g. 60 Pcs)
+  unit_price NUMERIC NOT NULL,       -- always per base unit
+  line_total NUMERIC NOT NULL,
+  display_qty TEXT DEFAULT NULL      -- human label for receipt (e.g. "5 Box", "3 Bag")
 );
 
 -- Daily sales log — input for Claude AI suggestions (synced only if aiConsent = true)
@@ -386,6 +391,15 @@ CREATE TABLE IF NOT EXISTS sales_log (
   sale_amount NUMERIC NOT NULL,
   sold_date DATE DEFAULT CURRENT_DATE
 );
+
+-- Login activity log (v3.0)
+CREATE TABLE IF NOT EXISTS login_events (
+  id           BIGSERIAL PRIMARY KEY,
+  shop_id      TEXT NOT NULL,
+  device_id    TEXT,
+  logged_in_at TIMESTAMPTZ DEFAULT NOW()
+);
+-- RLS: owner SELECT + INSERT (shop_id = right(auth.jwt() ->> 'phone', 10))
 
 -- AI suggestion log (future — populated by dailySuggestions cron job)
 -- CREATE TABLE IF NOT EXISTS suggestions_log (
@@ -506,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** April 17, 2026 — v2.9
+> **Last updated:** May 8, 2026 — v3.3
 
 ---
 
@@ -564,7 +578,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 |---|---|---|---|
 | 26 | `mobile/src/lib/supabase.ts` | ✅ | **New.** Supabase client singleton. Configured with `AsyncStorage` for session persistence, `autoRefreshToken: false` (custom JWT — no GoTrue refresh endpoint), `detectSessionInUrl: false`. |
 | 27 | `AuthContext.tsx` | ✅ | **Updated.** `login()` now runs `getStoredAuth()` first and batches all state updates in one render to eliminate ShopSetup flash for returning users. `supabase.auth.onAuthStateChange` listener for reactive sign-out. `logout()` calls `supabase.auth.signOut()`. |
-| 28 | `RootNavigator.tsx` — auth guard | ✅ | Shows `ActivityIndicator` while `!isReady`; 4-way guard: Auth → ShopSetup → ShopDeactivated → MainTabs |
+| 28 | `RootNavigator.tsx` — auth guard | ✅ | Shows `ActivityIndicator` while `!isReady`; **5-way guard (v3.0):** Auth → ShopSetup → ShopDeactivated → DeviceConflict → MainTabs |
 | 29 | `LoginScreen.tsx` | ✅ | **Updated.** `sendOtp()` now returns `void` (no `__dev_otp`). Navigation no longer passes `devOtp` param. 10-digit validation + loading/error states unchanged. |
 | 30 | `OtpScreen.tsx` | ✅ | **Updated.** `devOtp` auto-fill + auto-verify `useEffect` removed. `devOtp` branch in `handleResendOtp` removed. `autoFocus` simplified. All 6-box OTP UI, resend timer, and 30s countdown unchanged. Dev testing: use Supabase Dashboard → Auth → Logs to see OTP, or configure test phone with fixed OTP `000000`. |
 | 31 | `AuthNavigator.tsx` | ✅ | **Updated.** `devOtp?: string` removed from `Otp` route params type. |
@@ -605,6 +619,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Edit Product screen | ✅ | **v2.8.** `EditProductScreen`: pre-filled form reached via pencil icon on each product row. Edits name, purchase price, selling price, current stock, min threshold, category, brand, and UOM. Calls `updateProduct()` which re-reads the full row before queuing sync — no partial-payload corruption. Category and brand include a "None" chip to clear them. Direct delete button on each card added to `ProductsScreen` (previously dead). |
 | Estimate preview in billing | ✅ | **v2.8.** ESTIMATE button in `NewBillScreen` opens a full-screen receipt-style modal showing current bill items, customer, payment mode, and grand total without saving. Clearly labelled "NOT SAVED — For preview only". Empty-bill guard shows an alert if pressed with no items. |
 | AI consent gate on Dashboard | ✅ | **v2.8.** `HomeScreen` reads `aiConsent` from SQLite via `getShop()` on every focus. Cloud users (`aiConsent=true`) see "AI Reorder Insights" with sparkle icon. Local-only users (`aiConsent=false`) see "Low Stock Alerts" with a warning icon — same threshold data, correct branding, no false "AI" label. Local-only users with low stock also see an upgrade nudge pointing to Settings → Enable Cloud Backup. |
+| Bulk/pack unit support | ✅ | **v3.1.** `purchase_uom` + `units_per_pack` on products; pack-mode toggle in stock update modal; per-item retail/bulk toggle in billing; `display_qty` on bill_items for receipt display. Stock always stored in base units internally. |
 | Edit Customer screen + Udhar payment recording | ✅ | **v2.9.** `EditCustomerScreen`: reached by tapping any customer row in `CustomersScreen`. Displays udhar balance card (red when owed, green when cleared). "Record Payment" modal with ₹ input, quick chips (₹100/200/500/1000 + "Full ₹X"), validates amount > 0 and ≤ outstanding balance, calls `recordUdharPayment()` which clamps at ₹0 via `MAX(0, udhar_balance − ?)` in SQL. Contact form lets owner edit name, phone, address via `updateCustomer()`. Both DB functions re-read the full row before queuing sync to prevent partial-payload corruption. Registered as `"EditCustomer"` in `RootNavigator`. |
 | Customer transaction history | ✅ | **v2.9.** `EditCustomerScreen` Bill History section shows the last 10 bills for that customer via `getBillsByCustomer(customerId, 10)`. Each row shows date, total, payment mode, chevron; taps through to `BillDetailScreen` for the full receipt. Empty state shown when customer has no bills. |
 
@@ -644,7 +659,42 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
-### 14.10 Future Screens (UI not yet built)
+### 14.9 Multi-Device — Single Active Session (v3.0)
+
+> Only applies to `aiConsent = true` users. Offline-only users are unaffected — no `active_device_id` check runs for them.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 50 | Supabase migration: `active_device_id` column | ✅ | `ALTER TABLE shops ADD COLUMN IF NOT EXISTS active_device_id TEXT` — migration `add_active_device_id_to_shops` applied |
+| 51 | `storage.ts` — `getOrCreateDeviceId()` | ✅ | Generates UUID-like string on first call, persists in AsyncStorage under `device_id` key. Survives restarts; cleared on uninstall (new install = new claim, correct behaviour). |
+| 52 | `authService.ts` — device claim removed from login | ✅ | **v3.3 fix.** Device claim previously fired in `verifyOtp` (fire-and-forget `UPDATE shops SET active_device_id`). Removed — it raced with `checkShopStatus`: Device B would set its own ID before the check read Supabase, always seeing itself as the active device. Claim now happens only in `checkShopStatus` (stamp-if-null) and `claimSession()` (explicit re-claim). |
+| 53 | `syncQueue.ts` — device ID in shop upsert | ✅ | `case 'shop':` upsert now includes `active_device_id` from `getOrCreateDeviceId()` — ensures first-time shop creation and all shop edits stamp the correct device. |
+| 54 | `syncService.ts` — device conflict detection | ✅ | `checkShopStatus()` fetches `is_active, active_device_id, ai_consent`. For consent users: **v3.3 logic:** if `active_device_id = null` → stamps this device (first login / no prior claim); if `active_device_id ≠ thisDevice` → `onDeviceConflict()`. Previously gated on `data.ai_consent && data.active_device_id` — if either was falsy (null or corrupted to false), check was silently skipped. |
+| 55 | `AuthContext.tsx` — `isDeviceConflict` + `claimSession()` | ✅ | New `isDeviceConflict: boolean` state. `claimSession()` updates `active_device_id` in Supabase to this device's ID and resets `isDeviceConflict = false`. All `startSyncService()` call sites pass both callbacks. `logout()` resets `isDeviceConflict`. |
+| 56 | `DeviceConflictScreen.tsx` | ✅ | New blocking screen shown when `isDeviceConflict = true`. Amber icon. "Use on This Device" → confirmation alert → `claimSession()`. "Logout" → `logout()`. Shows registered phone number for context. |
+| 57 | `RootNavigator.tsx` — 5-way guard | ✅ | Guard order: Auth → ShopSetup → ShopDeactivated → **DeviceConflict** → MainTabs. |
+| 58 | Login activity tracking | ✅ | `login_events (id BIGSERIAL, shop_id TEXT, device_id TEXT, logged_in_at TIMESTAMPTZ)` table created with RLS (owner read + insert). Fire-and-forget insert in `authService.verifyOtp` after session is set — records every successful login with shop phone and device ID. Queryable in Supabase Dashboard for admin visibility. |
+
+---
+
+### 14.10 Data Isolation & Auth Correctness (v3.2)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 59 | Per-user SQLite database files | ✅ | `sqlite.ts` rewritten — each authenticated user gets their own `shopai_<phone>.db` file. A JS Proxy forwards all `db.*` calls to the current open instance so zero call-site changes were needed across `db.ts`, `syncQueue.ts`, `backup.ts`, `authService.ts`. Eliminates cross-user data bleed at the architectural level. |
+| 60 | `openUserDatabase(phone)` | ✅ | Opens `shopai_<phone>.db` and runs schema + migrations. Safe to call multiple times with the same phone (no-op). Called in `authService.getStoredAuth()` immediately after session phone is extracted — before any SQLite read. |
+| 61 | `closeUserDatabase()` | ✅ | Closes the current DB file handle and resets internal state. Called in `logout()` — releases file lock so the next user's `openUserDatabase` starts clean. |
+| 62 | `logout()` — no SQLite wipe | ✅ | Logout now only calls `supabase.auth.signOut()` + `closeUserDatabase()` + `clearAllUserData()`. SQLite is **never wiped on logout** — offline users keep their data intact in their own DB file; online users keep their local cache (restore from cloud is always available). |
+| 63 | `clearAllUserData()` added to `storage.ts` | ✅ | Removes all user-specific AsyncStorage keys (`HAS_CONSENT`, `LAST_SYNC`, `USER_ID`, `SHOP_ID`, `SHOP_INFO`) in one call. `DEVICE_ID` intentionally preserved — identifies the physical device across user switches. |
+| 64 | `SettingsScreen` — Delete All Data uses `clearAllUserData` | ✅ | Replaced `clearShopInfo()` with `clearAllUserData()` in both `confirmDeleteLocal` and `confirmDeleteEverything` flows — ensures all AsyncStorage keys are cleared, not just `SHOP_INFO`. |
+| 65 | `syncQueue.ts` — `ai_consent` corruption fix | ✅ | `case 'shop'` UPDATE path now excludes `ai_consent` from the Supabase payload — stale local values can no longer overwrite cloud consent and break device-conflict detection. INSERT path (first-time setup) still includes `ai_consent`. |
+| 66 | `db.ts` `updateShop` — `aiConsent` excluded from sync payload | ✅ | `aiConsent` stripped from sync queue payload via destructuring. Local SQLite still updates correctly. Consent changes reach Supabase via a direct targeted update in `EditShopScreen`. |
+| 67 | `EditShopScreen` — direct consent push | ✅ | On save, a fire-and-forget `supabase.from('shops').update({ ai_consent })` is sent using the authenticated phone — the only path that mutates `ai_consent` in Supabase, preventing any stale-value overwrite. |
+| 68 | `App.tsx` — `initDatabase()` removed | ✅ | Schema creation now happens inside `openUserDatabase()`. `initDatabase` import and `useEffect` call removed from `App.tsx`. |
+
+---
+
+### 14.11 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
 |---|---|---|
@@ -666,7 +716,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Expiry date tracking | v2 | Critical for medical stores |
 | Multi-shop support | v2 | One owner, multiple locations |
 | Supplier contact integration | v2 | One-tap WhatsApp to supplier from suggestion |
-| Unit variants | v2 | Loose vs packet, sizes, colours |
+| Unit variants (loose vs packet) | ✅ v3.1 | Bulk/pack unit support implemented — `purchase_uom` + `units_per_pack` per product; size/colour variants still v2 |
 | UPI payment tracking | v2 | Payment mode split in reports (UI exists, needs backend) |
 | Offline mode (full) | v2 | Already partially built in v1 via sync queue |
 | Salon — usage per service | v3 | Track product consumed per customer |
@@ -717,6 +767,87 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v3.3 — May 8, 2026
+
+**Device conflict detection — race condition fix + ai_consent restoration (`authService.ts`, `syncService.ts`, Supabase)**
+
+- **Root cause 1: race condition in device claim.** `verifyOtp` previously fired a fire-and-forget `UPDATE shops SET active_device_id = thisDevice` immediately before `checkShopStatus` ran. Because both were async, Device B would write its own ID to Supabase before its own conflict check read it — always seeing itself as the active device, letting two sessions run simultaneously. Fix: device claim removed from `verifyOtp` entirely.
+
+- **Root cause 2: `ai_consent = false` in Supabase.** The conflict check gated on `data.ai_consent && data.active_device_id`. Both test shops (`9126667356`, `7003354703`) had `ai_consent` corrupted to `false` by the earlier stale-sync bug (fixed in v3.2). Even with the race fix, a `false` consent value would skip the block entirely. Fix: both shops restored to `ai_consent = true` via direct SQL.
+
+- **`checkShopStatus` now owns the stamp-if-null logic.** For `aiConsent = true` users: if `active_device_id` is null (no prior claim) → stamps this device. If `active_device_id ≠ thisDevice` → `onDeviceConflict()`. This is the only correct place to claim — the check and the claim happen in the same read cycle, with no race window.
+
+- **When DeviceConflictScreen appears:** whenever `checkShopStatus` detects an `active_device_id` mismatch — on login, on every app foreground via AppState, and immediately when the sync service starts. **Never auto-logs out** — user must choose "Use on This Device" (re-claim) or "Logout" (exit). Re-claiming stamps this device; the other device is blocked on its next foreground check.
+
+---
+
+### v3.2 — May 8, 2026
+
+**Per-user SQLite isolation + auth correctness (`sqlite.ts`, `authService.ts`, `db.ts`, `syncQueue.ts`, `EditShopScreen.tsx`, `SettingsScreen.tsx`, `storage.ts`, `App.tsx`)**
+
+- **Root cause fixed: cross-user data bleed on same device.** Previous architecture used a single `shopai.db` shared by all users. Logging out and logging in with a different account left the first user's rows in every table; `SELECT ... LIMIT 1` queries returned stale data from the wrong account.
+
+- **Per-user database files (`sqlite.ts` rewritten).** Each authenticated user now gets their own SQLite file: `shopai_<phone>.db`. A JS `Proxy` object is exported as `db` and forwards every property access to the current `_db` instance at call time — all 4 callers (`db.ts`, `syncQueue.ts`, `backup.ts`, `authService.ts`) continue importing `db` unchanged. `openUserDatabase(phone)` opens the correct file and runs schema + migrations; `closeUserDatabase()` releases the handle on logout.
+
+- **Structural isolation eliminates the need for logout wipes.** Offline users: data is preserved in `shopai_<phone>.db` across logout/login cycles — no data loss. Online users: local cache preserved; restore from cloud always available. Different user logging in on the same device simply opens a different file — no bleed, no wipe needed.
+
+- **`logout()` simplified.** Only three steps: `supabase.auth.signOut()` → `closeUserDatabase()` → `clearAllUserData()`. The previous consent-gated SQLite wipe and cross-user detection logic are gone.
+
+- **`clearAllUserData()` added to `storage.ts`.** Clears all user-specific AsyncStorage keys (`HAS_CONSENT`, `LAST_SYNC`, `USER_ID`, `SHOP_ID`, `SHOP_INFO`) in one `multiRemove` call. `DEVICE_ID` preserved — physical device identity must survive user switches. Replaces `clearShopInfo()` in all logout and delete-data flows.
+
+- **`ai_consent` corruption fixed (`syncQueue.ts`, `db.ts`, `EditShopScreen.tsx`).** Shop UPDATE sync no longer includes `ai_consent` in its payload — stale local values (e.g. `false`) can no longer silently overwrite Supabase's `true` and break device-conflict detection. Consent changes are pushed directly from `EditShopScreen` via a targeted fire-and-forget `supabase.from('shops').update({ ai_consent })`.
+
+- **`initDatabase()` removed from `App.tsx`.** Schema creation now happens inside `openUserDatabase()`. The call in `App.tsx` is gone — tables are only created once the authenticated phone is known.
+
+---
+
+### v3.1 — May 8, 2026
+
+**Bulk/pack unit support — flexible buying and selling (`sqlite.ts`, `db.ts`, `AddProductScreen.tsx`, `EditProductScreen.tsx`, `UpdateStockModal.tsx`, `ProductsScreen.tsx`, `NewBillScreen.tsx`)**
+
+- **Two new product fields: `purchase_uom` and `units_per_pack`.** Added as nullable columns on `products` (SQLite migration + Supabase schema). Existing products unaffected — both columns default NULL, which disables pack logic entirely. Owner sets these once when creating or editing a product.
+
+- **"Bulk / Pack Size" section added to Add Product and Edit Product screens.** An optional toggle at the bottom of each form: "Sells in packs / boxes / bags?" When enabled, owner enters:
+  - *Pack unit name*: what they call the big unit (e.g. "Box", "Bag", "Dozen", "Crate") — shown on receipts.
+  - *Units per pack*: how many base units (e.g. Pcs, kg) fit in one pack. Live preview updates as owner types: "1 Box = 12 Pcs".
+
+- **Stock update modal (UpdateStockModal) supports pack entry.** When any selected product has pack size configured, a "Enter quantity in packs/boxes" toggle appears. In pack mode: owner enters how many packs received; each product's `units_per_pack` is applied to compute the base unit quantity. The product chip area shows the conversion per item (e.g. "5 Box = 60 Pcs"). Products without pack config receive the plain entered quantity.
+
+- **Billing screen (NewBillScreen) supports per-item retail/bulk toggle.** When a product has `purchase_uom` + `units_per_pack` configured, a small toggle button appears on the bill line item: tapping it switches between selling in base units ("Pcs") and bulk units ("Box"). In bulk mode:
+  - Qty display shows packs (e.g. "2") not base units (e.g. "24").
+  - Price display shows per-pack price (e.g. "₹120 / Box") not per-unit price.
+  - `+/-` step size jumps by `units_per_pack` in base units internally.
+  - Stock check enforces pack-boundary limits.
+  - `display_qty` stored on `bill_items` for receipt accuracy (e.g. "2 Box").
+
+- **Stock is always tracked in base units internally.** `stock_quantity` on `products` never changes format. `qty` on `bill_items` always stores base units. `display_qty` is a presentation-only label. Reports and AI suggestions remain unaffected.
+
+- **`display_qty` column added to `bill_items`.** Stores the human-readable quantity label at sale time (e.g. "5 Box", "3 Bag", "10 Pcs"). Used for receipt display in `BillDetailScreen` and PDF export. Synced to Supabase as part of compound bill payload.
+
+---
+
+### v3.0 — May 8, 2026
+
+**Single active session — multi-device support for cloud users (`DeviceConflictScreen.tsx` new, `storage.ts`, `authService.ts`, `syncQueue.ts`, `syncService.ts`, `AuthContext.tsx`, `RootNavigator.tsx`, Supabase migration)**
+
+- **Supabase migration applied.** `active_device_id TEXT` column added to `shops` table via `add_active_device_id_to_shops` migration.
+
+- **`getOrCreateDeviceId()` added to `storage.ts`.** Generates a stable UUID-like identifier on first call and persists it in AsyncStorage under the `device_id` key. Survives app restarts; cleared on uninstall so a fresh install generates a new ID and cleanly claims the session.
+
+- **Session claim on login (`authService.ts`).** After `verifyOtp` sets the Supabase session, a fire-and-forget `UPDATE shops SET active_device_id = thisDeviceId` stamps the cloud record. If the shop row doesn't exist yet (new user, pre-setup), the update is a no-op.
+
+- **Device ID stamped on shop sync (`syncQueue.ts`).** The `case 'shop':` upsert block now includes `active_device_id` from `getOrCreateDeviceId()` — ensures first-time shop creation and all subsequent shop edits write the correct device ID to Supabase.
+
+- **Device conflict detection in `syncService.ts`.** `checkShopStatus()` now fetches `is_active, active_device_id, ai_consent`. For `aiConsent = true` users: if `active_device_id` in Supabase ≠ local device ID → `onDeviceConflict()` is called. Admin deactivation check runs first and applies to all users. Offline-only (`aiConsent = false`) users are never checked — their `active_device_id` is always null. `startSyncService()` signature extended to `(onDeactivated, onDeviceConflict)`.
+
+- **`AuthContext.tsx` extended.** New `isDeviceConflict: boolean` state. New `claimSession()` function: updates `active_device_id` in Supabase to this device's ID, resets `isDeviceConflict = false`. All three `startSyncService()` call sites (`onMount`, `login`, `completeSetup`) pass both callbacks. `logout()` resets `isDeviceConflict`.
+
+- **`DeviceConflictScreen.tsx` built.** Blocking fullscreen shown when `isDeviceConflict = true`. Amber icon. "Use on This Device" → confirmation alert → `claimSession()` (the other device detects mismatch on its next foreground and is blocked). "Logout" → `logout()`. Shows registered phone number for context.
+
+- **`RootNavigator.tsx` updated to 5-way guard.** Order: Auth → ShopSetup → ShopDeactivated → **DeviceConflict** → MainTabs.
+
+---
 
 ### v2.9 — April 17, 2026
 
@@ -860,5 +991,5 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 
 ---
 
-*Document prepared: April 2026*
-*Version: 2.7 — Reflects Digital Receipts (PDF Share), Sync Audit, Data Backup & Recovery*
+*Document prepared: April 2026 | Last updated: May 2026*
+*Version: 3.3 — Reflects Device Conflict Race Fix, ai_consent Restoration, Per-User SQLite Isolation*

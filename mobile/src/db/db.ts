@@ -82,7 +82,10 @@ export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): vo
         row.id,
       ]
     );
-    addToSyncQueue('shop', 'UPDATE', row.id, { ...data, phone: row.phone });
+    // Exclude aiConsent — consent is pushed directly from EditShopScreen to avoid
+    // stale local values overwriting Supabase (which would break device-conflict detection).
+    const { aiConsent: _omit, ...syncData } = data;
+    addToSyncQueue('shop', 'UPDATE', row.id, { ...syncData, phone: row.phone });
   } catch (e) {
     console.error('updateShop error:', e);
   }
@@ -113,6 +116,8 @@ export interface Product {
   stock_quantity: number;
   min_stock_threshold: number;
   uom: string;
+  purchase_uom: string | null;
+  units_per_pack: number | null;
   updated_at: string;
   // joined fields (populated by getAllProducts)
   category_name?: string;
@@ -136,6 +141,7 @@ export interface BillItem {
   qty: number;
   unit_price: number;
   line_total: number;
+  display_qty?: string | null;
 }
 
 export interface Bill {
@@ -313,12 +319,14 @@ export const insertProduct = (product: {
   stock_quantity: number;
   min_stock_threshold: number;
   uom: string;
+  purchase_uom?: string | null;
+  units_per_pack?: number | null;
 }): void => {
   const id = genId();
   try {
     db.runSync(
-      `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         product.name,
@@ -329,6 +337,8 @@ export const insertProduct = (product: {
         product.stock_quantity,
         product.min_stock_threshold,
         product.uom,
+        product.purchase_uom ?? null,
+        product.units_per_pack ?? null,
       ]
     );
     addToSyncQueue('products', 'INSERT', id, { id, ...product });
@@ -511,9 +521,9 @@ export const insertBill = (
 
         // 2. Insert bill item
         db.runSync(
-          `INSERT INTO bill_items (id, bill_id, product_id, product_name, qty, unit_price, line_total)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total]
+          `INSERT INTO bill_items (id, bill_id, product_id, product_name, qty, unit_price, line_total, display_qty)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null]
         );
 
         // 3. Deduct stock
@@ -537,6 +547,7 @@ export const insertBill = (
           qty: item.qty,
           unit_price: item.unit_price,
           line_total: item.line_total,
+          display_qty: item.display_qty ?? null,
         });
         salesLogForSync.push({
           id: logId,

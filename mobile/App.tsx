@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { initDatabase } from "./src/db/sqlite";
 import { AuthProvider } from "./src/context/AuthContext";
 import { stopSyncService } from "./src/services/syncService";
 import RootNavigator from "./src/navigation/RootNavigator";
@@ -10,12 +9,6 @@ import RootNavigator from "./src/navigation/RootNavigator";
  */
 function AppContent() {
   useEffect(() => {
-    try {
-      initDatabase();
-    } catch (e) {
-      console.error('DB init failed:', e);
-    }
-
     return () => {
       stopSyncService();
     };

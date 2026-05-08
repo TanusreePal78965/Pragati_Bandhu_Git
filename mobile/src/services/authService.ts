@@ -1,11 +1,12 @@
 import { supabase } from '../lib/supabase';
 import {
-  clearShopInfo,
+  clearAllUserData,
   getShopInfo,
   setShopInfo,
   setHasConsent,
+  getOrCreateDeviceId,
 } from '../utils/storage';
-import db from '../db/sqlite';
+import db, { openUserDatabase, closeUserDatabase } from '../db/sqlite';
 import { restoreFromCloud } from './restoreService';
 import { emitRestoreEvent } from '../utils/restoreEvents';
 
@@ -56,6 +57,16 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
     refresh_token: body.refresh_token,
   });
   if (error) throw error;
+
+  // Record login event for activity tracking.
+  // active_device_id is NOT claimed here — checkShopStatus claims it on first check
+  // (when no device is active) or blocks via DeviceConflictScreen (when another device
+  // is active). Claiming here races with the status check and lets every login through.
+  const deviceId = await getOrCreateDeviceId();
+  supabase.from('login_events')
+    .insert({ shop_id: phone, device_id: deviceId })
+    .then(() => {})
+    .catch(() => {});
 };
 
 // ─── Session ──────────────────────────────────────────────────────────────────
@@ -63,10 +74,12 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
 /**
  * Check persisted auth state on app launch.
  *
- * If the session is valid but local shop info is missing (e.g. fresh install
- * or data wipe), attempts to recover the shop from Supabase before deciding
- * isShopSetup. This prevents an already-registered shop from being forced
- * through setup again.
+ * Opens the user-specific SQLite database (shopai_<phone>.db) before any
+ * local reads — each user's data is fully isolated at the file level, so
+ * there is no cross-user bleed and no need to wipe on logout.
+ *
+ * If the session is valid but local shop info is missing (e.g. fresh install),
+ * attempts to recover the shop from Supabase before deciding isShopSetup.
  */
 export const getStoredAuth = async (): Promise<{
   isAuthenticated: boolean;
@@ -82,6 +95,11 @@ export const getStoredAuth = async (): Promise<{
   // Extract 10-digit phone — auth.users.phone may be '+91XXXXXXXXXX', '91XXXXXXXXXX', or 'XXXXXXXXXX'
   const rawPhone = (session.user.phone ?? '') as string;
   const phone = rawPhone.slice(-10);
+
+  // Open this user's isolated DB before any SQLite access.
+  // shopai_<phone>.db is created on first open and reused on subsequent logins.
+  // A different user logging in simply opens a different file — no wipe needed.
+  openUserDatabase(phone);
 
   let shopInfo = await getShopInfo();
 
@@ -157,9 +175,12 @@ export const getStoredAuth = async (): Promise<{
 };
 
 /**
- * Clear Supabase session and local shop info on logout.
+ * Clear Supabase session and all user-specific AsyncStorage keys on logout.
+ * SQLite is NOT wiped — each user's data lives in their own shopai_<phone>.db
+ * file and is safe to keep for when they log back in.
  */
 export const logout = async (): Promise<void> => {
   await supabase.auth.signOut();
-  await clearShopInfo();
+  closeUserDatabase();
+  await clearAllUserData();
 };

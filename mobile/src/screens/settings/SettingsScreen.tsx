@@ -23,7 +23,7 @@ import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { useAuth } from "../../context/AuthContext";
-import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearShopInfo, setHasConsent } from "../../utils/storage";
+import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent } from "../../utils/storage";
 import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
 import { exportAsSql, queueAllLocalData, updateShop, getShop } from "../../db/db";
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
@@ -395,7 +395,7 @@ export default function SettingsScreen() {
                     onPress: async () => {
                         setIsDeleting(true);
                         clearAllLocalData();
-                        await clearShopInfo();
+                        await clearAllUserData();
                         await setHasConsent(false);
                         setIsDeleting(false);
                         await logout();
@@ -423,7 +423,7 @@ export default function SettingsScreen() {
                             return;
                         }
                         clearAllLocalData();
-                        await clearShopInfo();
+                        await clearAllUserData();
                         await setHasConsent(false);
                         setIsDeleting(false);
                         await logout();

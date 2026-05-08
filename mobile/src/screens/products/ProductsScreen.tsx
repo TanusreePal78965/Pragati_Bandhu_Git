@@ -63,14 +63,17 @@ export default function ProductsScreen() {
         );
     };
 
-    const handleBulkStockUpdate = (qty: number, mode: "add" | "reduce") => {
+    const handleBulkStockUpdate = (qty: number, mode: "add" | "reduce", isPackMode: boolean) => {
         selectedItems.forEach((id) => {
             const product = products.find((p) => p.id === id);
             if (!product) return;
+            const baseQty = isPackMode && product.units_per_pack
+                ? qty * product.units_per_pack
+                : qty;
             const newQty =
                 mode === "add"
-                    ? product.stock_quantity + qty
-                    : Math.max(0, product.stock_quantity - qty);
+                    ? product.stock_quantity + baseQty
+                    : Math.max(0, product.stock_quantity - baseQty);
             updateProductStock(id, newQty);
         });
         setIsUpdateStockVisible(false);
@@ -127,10 +130,6 @@ export default function ProductsScreen() {
             ]
         );
     };
-
-    const selectedItemsNames = products
-        .filter((p) => selectedItems.includes(p.id))
-        .map((p) => p.name);
 
     const categoryChips = ["All", ...categories.map((c) => c.name)];
     const categoryNames = categories.map((c) => c.name);
@@ -262,8 +261,7 @@ export default function ProductsScreen() {
             <UpdateStockModal
                 isVisible={isUpdateStockVisible}
                 onClose={() => setIsUpdateStockVisible(false)}
-                selectedCount={selectedItems.length}
-                selectedItemsNames={selectedItemsNames}
+                selectedProducts={products.filter((p) => selectedItems.includes(p.id))}
                 onUpdate={handleBulkStockUpdate}
             />
 

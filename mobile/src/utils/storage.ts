@@ -6,6 +6,7 @@ export const StorageKeys = {
   USER_ID: 'user_id',
   SHOP_ID: 'shop_id',
   SHOP_INFO: 'shop_info',
+  DEVICE_ID: 'device_id',
 };
 
 // ─── Consent ────────────────────────────────────────────────────────────────
@@ -53,4 +54,37 @@ export const getShopInfo = async (): Promise<StoredShopInfo | null> => {
 
 export const clearShopInfo = async (): Promise<void> => {
   await AsyncStorage.removeItem(StorageKeys.SHOP_INFO);
+};
+
+// Clears all user-specific keys. DEVICE_ID is intentionally preserved —
+// it identifies this physical device and must survive user switches.
+export const clearAllUserData = async (): Promise<void> => {
+  await AsyncStorage.multiRemove([
+    StorageKeys.HAS_CONSENT,
+    StorageKeys.LAST_SYNC,
+    StorageKeys.USER_ID,
+    StorageKeys.SHOP_ID,
+    StorageKeys.SHOP_INFO,
+  ]);
+};
+
+// ─── Device ID ───────────────────────────────────────────────────────────────
+
+// Generates a UUID-like string without the 'crypto' module.
+const generateDeviceId = (): string => {
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+  return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
+};
+
+/**
+ * Returns a stable device identifier persisted in AsyncStorage.
+ * Generated once on first call; survives app restarts but not uninstalls.
+ * Uninstall = new device_id = clean session claim on next login.
+ */
+export const getOrCreateDeviceId = async (): Promise<string> => {
+  const existing = await AsyncStorage.getItem(StorageKeys.DEVICE_ID);
+  if (existing) return existing;
+  const newId = generateDeviceId();
+  await AsyncStorage.setItem(StorageKeys.DEVICE_ID, newId);
+  return newId;
 };

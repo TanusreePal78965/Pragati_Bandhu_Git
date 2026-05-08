@@ -1,6 +1,7 @@
 import db from './sqlite';
 import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
+import { getOrCreateDeviceId } from '../utils/storage';
 
 const MAX_ATTEMPTS = 5;
 let isFlushing = false;
@@ -92,8 +93,7 @@ async function syncItem(
   if (operation === 'DELETE') {
     await syncDelete(tableName, dataId);
   } else {
-    // INSERT and UPDATE both use upsert
-    await syncUpsert(tableName, payload);
+    await syncUpsert(tableName, operation, payload);
   }
 }
 
@@ -107,7 +107,7 @@ async function getShopId(): Promise<string> {
   return phone;
 }
 
-async function syncUpsert(tableName: string, payload: any): Promise<void> {
+async function syncUpsert(tableName: string, operation: string, payload: any): Promise<void> {
   switch (tableName) {
     case 'products':
     case 'categories':
@@ -125,20 +125,37 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
 
     case 'shop': {
       const phone = await getShopId();
+      const deviceId = await getOrCreateDeviceId();
       const { shopName, ownerName, category, whatsappNumber, aiConsent } = payload;
-      const { error } = await supabase.from('shops').upsert(
-        {
-          id: phone,
-          phone,
+
+      if (operation === 'INSERT') {
+        // First-time shop creation — include ai_consent and claim active device.
+        const { error } = await supabase.from('shops').upsert(
+          {
+            id: phone,
+            phone,
+            shop_name: shopName,
+            owner_name: ownerName,
+            business_category: category ?? null,
+            whatsapp_number: whatsappNumber ?? null,
+            ai_consent: aiConsent ?? false,
+            active_device_id: deviceId,
+          },
+          { onConflict: 'id' }
+        );
+        if (error) throw error;
+      } else {
+        // UPDATE — never overwrite ai_consent from local state; it may be stale.
+        // Consent changes are pushed directly from EditShopScreen via a targeted update.
+        const { error } = await supabase.from('shops').update({
           shop_name: shopName,
           owner_name: ownerName,
           business_category: category ?? null,
           whatsapp_number: whatsappNumber ?? null,
-          ai_consent: aiConsent ?? false,
-        },
-        { onConflict: 'id' }
-      );
-      if (error) throw error;
+          active_device_id: deviceId,
+        }).eq('id', phone);
+        if (error) throw error;
+      }
       break;
     }
 

@@ -55,6 +55,11 @@ export default function EditProductScreen() {
     const [minThreshold, setMinThreshold] = useState(
         product?.min_stock_threshold != null ? String(product.min_stock_threshold) : "5"
     );
+    const [hasPackSize, setHasPackSize] = useState(!!product?.purchase_uom);
+    const [purchaseUom, setPurchaseUom] = useState(product?.purchase_uom ?? "");
+    const [unitsPerPack, setUnitsPerPack] = useState(
+        product?.units_per_pack != null ? String(product.units_per_pack) : ""
+    );
     const [saving, setSaving] = useState(false);
 
     useFocusEffect(
@@ -145,6 +150,8 @@ export default function EditProductScreen() {
                 stock_quantity: parseInt(stockQuantity) || 0,
                 min_stock_threshold: parseInt(minThreshold) || 5,
                 uom: selectedUom,
+                purchase_uom: hasPackSize && purchaseUom.trim() ? purchaseUom.trim() : null,
+                units_per_pack: hasPackSize && unitsPerPack ? parseInt(unitsPerPack) || null : null,
             });
             Alert.alert("Updated!", `"${name.trim()}" has been updated.`, [
                 { text: "OK", onPress: () => navigation.goBack() },
@@ -270,6 +277,71 @@ export default function EditProductScreen() {
                         setSelectedUom
                     )}
 
+                    <View style={styles.separator} />
+
+                    {/* Pack Size (Optional) */}
+                    <Text style={styles.sectionTitle}>BULK / PACK SIZE (OPTIONAL)</Text>
+
+                    <TouchableOpacity
+                        style={styles.packToggleRow}
+                        onPress={() => setHasPackSize((v) => !v)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.packToggleLeft}>
+                            <Ionicons name="cube-outline" size={20} color={colors.primary} />
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text style={styles.packToggleTitle}>Sells in packs / boxes / bags?</Text>
+                                <Text style={styles.packToggleSubtitle}>
+                                    Enable if you buy in bulk (e.g. 1 Box = 12 Pcs)
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={[styles.toggleTrack, hasPackSize && styles.toggleTrackActive]}>
+                            <View style={[styles.toggleThumb, hasPackSize && styles.toggleThumbActive]} />
+                        </View>
+                    </TouchableOpacity>
+
+                    {hasPackSize && (
+                        <>
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Pack / Bulk Unit Name</Text>
+                                <View style={styles.inputWithIcon}>
+                                    <Ionicons name="pricetag-outline" size={20} color="#6b7280" />
+                                    <TextInput
+                                        style={styles.flexInput}
+                                        placeholder="e.g. Box, Bag, Dozen, Crate"
+                                        value={purchaseUom}
+                                        onChangeText={setPurchaseUom}
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                                <Text style={styles.helperText}>What do you call the big unit? (shown on receipts)</Text>
+                            </View>
+
+                            <View style={styles.section}>
+                                <Text style={styles.label}>
+                                    {purchaseUom.trim() ? `${selectedUom}s per ${purchaseUom.trim()}` : `${selectedUom}s per pack`}
+                                </Text>
+                                <View style={styles.inputWithIcon}>
+                                    <Ionicons name="layers-outline" size={20} color="#6b7280" />
+                                    <TextInput
+                                        style={styles.flexInput}
+                                        placeholder="e.g. 12"
+                                        value={unitsPerPack}
+                                        onChangeText={setUnitsPerPack}
+                                        keyboardType="numeric"
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                                <Text style={styles.helperText}>
+                                    {purchaseUom.trim() && unitsPerPack
+                                        ? `1 ${purchaseUom.trim()} = ${unitsPerPack} ${selectedUom}`
+                                        : "How many base units fit in one pack?"}
+                                </Text>
+                            </View>
+                        </>
+                    )}
+
                     <View style={{ height: 24 }} />
                 </ScrollView>
 
@@ -350,4 +422,35 @@ const styles = StyleSheet.create({
     },
     saveButtonDisabled: { backgroundColor: colors.tabInactive },
     saveButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+    packToggleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#f8fafc",
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#e5e7eb",
+    },
+    packToggleLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
+    packToggleTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
+    packToggleSubtitle: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+    toggleTrack: {
+        width: 44,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: "#d1d5db",
+        padding: 2,
+        justifyContent: "center",
+    },
+    toggleTrackActive: { backgroundColor: colors.primary },
+    toggleThumb: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: "#fff",
+        alignSelf: "flex-start",
+    },
+    toggleThumbActive: { alignSelf: "flex-end" },
 });

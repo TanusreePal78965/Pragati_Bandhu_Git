@@ -1,9 +1,30 @@
 import * as SQLite from 'expo-sqlite';
 
-const db = SQLite.openDatabaseSync('shopai.db');
+// ─── Per-user database isolation ─────────────────────────────────────────────
+//
+// Each user gets their own SQLite file: shopai_<phone>.db
+// This prevents data bleed between accounts on the same device without
+// ever needing to wipe data on logout — isolation is structural.
+//
+// All callers keep `import db from './sqlite'` unchanged.
+// The Proxy below forwards every property access to the current _db instance
+// at call time, so switching users just means swapping _db.
 
-export const initDatabase = () => {
-  db.execSync(`
+let _db: SQLite.SQLiteDatabase | null = null;
+let _currentPhone: string | null = null;
+
+const db = new Proxy({} as SQLite.SQLiteDatabase, {
+  get(_, prop: string | symbol) {
+    if (!_db) throw new Error(`[SQLite] No database open — openUserDatabase(phone) must be called first`);
+    const val = (_db as any)[prop];
+    return typeof val === 'function' ? val.bind(_db) : val;
+  },
+});
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
+
+function initTables(database: SQLite.SQLiteDatabase): void {
+  database.execSync(`
     PRAGMA journal_mode = WAL;
 
     CREATE TABLE IF NOT EXISTS categories (
@@ -104,8 +125,59 @@ export const initDatabase = () => {
     );
   `);
 
-  // Migration: add is_active to existing installs that predate this column
-  try { db.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
+  // Additive migrations — safe to run on every open (ALTER TABLE fails silently if column exists)
+  try { database.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
+  try { database.runSync('ALTER TABLE products ADD COLUMN purchase_uom TEXT DEFAULT NULL'); } catch (_) {}
+  try { database.runSync('ALTER TABLE products ADD COLUMN units_per_pack INTEGER DEFAULT NULL'); } catch (_) {}
+  try { database.runSync('ALTER TABLE bill_items ADD COLUMN display_qty TEXT DEFAULT NULL'); } catch (_) {}
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Open the database file for the given phone number.
+ * Must be called once after authentication before any SQLite access.
+ * Safe to call multiple times with the same phone — no-ops on repeated calls.
+ */
+export const openUserDatabase = (phone: string): void => {
+  if (_currentPhone === phone && _db) return;
+  if (_db) {
+    try { _db.closeSync(); } catch (_) {}
+  }
+  _db = SQLite.openDatabaseSync(`shopai_${phone}.db`);
+  _currentPhone = phone;
+  initTables(_db);
+};
+
+/**
+ * Close the current database. Called on logout so file handles are released.
+ */
+export const closeUserDatabase = (): void => {
+  if (_db) {
+    try { _db.closeSync(); } catch (_) {}
+    _db = null;
+    _currentPhone = null;
+  }
+};
+
+/**
+ * Wipe all rows from the current user's database (schema preserved).
+ * Used by the "Delete All Data" flow — NOT called on logout.
+ */
+export const clearDatabase = (): void => {
+  if (!_db) return;
+  _db.execSync(`
+    DELETE FROM sync_queue;
+    DELETE FROM suggestions_cache;
+    DELETE FROM sales_log;
+    DELETE FROM bill_items;
+    DELETE FROM bills;
+    DELETE FROM customers;
+    DELETE FROM products;
+    DELETE FROM categories;
+    DELETE FROM brands;
+    DELETE FROM shop;
+  `);
 };
 
 export default db;

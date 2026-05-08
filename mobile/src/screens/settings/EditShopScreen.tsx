@@ -22,6 +22,7 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import { getShopInfo, setShopInfo, setHasConsent } from "../../utils/storage";
 import { updateShop } from "../../db/db";
 import { flushSyncQueue } from "../../db/syncQueue";
+import { supabase } from "../../lib/supabase";
 
 export default function EditShopScreen() {
     const navigation = useNavigation();
@@ -31,6 +32,7 @@ export default function EditShopScreen() {
     const [category, setCategory] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
     const [aiConsent, setAiConsent] = useState(true);
+    const [phone, setPhone] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -42,6 +44,7 @@ export default function EditShopScreen() {
                 setCategory(info.category ?? "");
                 setWhatsappNumber(info.whatsappNumber ?? "");
                 setAiConsent(info.aiConsent ?? true);
+                setPhone(info.phone ?? "");
             }
             setIsLoading(false);
         });
@@ -100,7 +103,16 @@ export default function EditShopScreen() {
                 aiConsent,
             });
 
-            // 4. Flush queue immediately — don't wait for the next foreground/network event
+            // 4. Push ai_consent directly — the sync queue UPDATE path omits it to prevent
+            //    stale local values from overwriting Supabase on other devices.
+            if (phone) {
+                supabase.from('shops')
+                    .update({ ai_consent: aiConsent })
+                    .eq('id', phone)
+                    .then(() => {}).catch(() => {});
+            }
+
+            // 5. Flush queue immediately — don't wait for the next foreground/network event
             await flushSyncQueue();
 
             Alert.alert("Saved", "Your shop details have been updated.", [

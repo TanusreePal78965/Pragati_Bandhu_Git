@@ -24,9 +24,12 @@ import { getAllProducts, getAllCustomers, insertBill, Product, Customer } from "
 interface BillItem {
     product_id: string;
     product_name: string;
-    qty: number;
-    unit_price: number;
-    uom: string;
+    qty: number;           // always in base units
+    unit_price: number;    // always per base unit
+    uom: string;           // base UOM (e.g. "Pcs")
+    units_per_pack: number | null;
+    purchase_uom: string | null;
+    is_pack_mode: boolean; // currently selling in pack units
 }
 
 export default function NewBillScreen() {
@@ -82,6 +85,9 @@ export default function NewBillScreen() {
                     qty: 1,
                     unit_price: product.selling_price,
                     uom: product.uom,
+                    units_per_pack: product.units_per_pack ?? null,
+                    purchase_uom: product.purchase_uom ?? null,
+                    is_pack_mode: false,
                 },
             ]);
         }
@@ -89,23 +95,67 @@ export default function NewBillScreen() {
     };
 
     const updateQty = (productId: string, delta: number) => {
+        const item = billItems.find((i) => i.product_id === productId);
+        const product = products.find((p) => p.id === productId);
+        if (!item || !product) return;
+
+        const step = item.is_pack_mode && item.units_per_pack ? item.units_per_pack : 1;
+        const baseStep = delta > 0 ? step : -step;
+
         if (delta > 0) {
-            const product = products.find((p) => p.id === productId);
-            const current = billItems.find((i) => i.product_id === productId);
-            if (product && current && current.qty >= product.stock_quantity) {
-                Alert.alert("Stock Limit", `Only ${product.stock_quantity} unit(s) of "${product.name}" available.`);
+            if (item.qty + step > product.stock_quantity) {
+                const availPacks = item.units_per_pack
+                    ? Math.floor(product.stock_quantity / item.units_per_pack)
+                    : product.stock_quantity;
+                const unit = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : product.uom;
+                Alert.alert("Stock Limit", `Only ${availPacks} ${unit}(s) of "${product.name}" available.`);
                 return;
             }
         }
         setBillItems((prev) =>
             prev
-                .map((i) => (i.product_id === productId ? { ...i, qty: i.qty + delta } : i))
+                .map((i) => (i.product_id === productId ? { ...i, qty: i.qty + baseStep } : i))
                 .filter((i) => i.qty > 0)
+        );
+    };
+
+    const togglePackMode = (productId: string) => {
+        setBillItems((prev) =>
+            prev.map((i) => {
+                if (i.product_id !== productId || !i.units_per_pack) return i;
+                const newPackMode = !i.is_pack_mode;
+                // Snap qty to nearest pack boundary when switching to pack mode
+                const snappedQty = newPackMode
+                    ? Math.max(i.units_per_pack, Math.round(i.qty / i.units_per_pack) * i.units_per_pack)
+                    : i.qty;
+                return { ...i, is_pack_mode: newPackMode, qty: snappedQty };
+            })
         );
     };
 
     const totalItems = billItems.reduce((acc, i) => acc + i.qty, 0);
     const grandTotal = billItems.reduce((acc, i) => acc + i.qty * i.unit_price, 0);
+
+    const getDisplayQty = (item: BillItem): string => {
+        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
+            return `${item.qty / item.units_per_pack} ${item.purchase_uom}`;
+        }
+        return `${item.qty} ${item.uom}`;
+    };
+
+    const getDisplayPrice = (item: BillItem): string => {
+        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
+            return `₹${(item.unit_price * item.units_per_pack).toFixed(2)} / ${item.purchase_uom}`;
+        }
+        return `₹${item.unit_price.toFixed(2)} / ${item.uom}`;
+    };
+
+    const getQtyStepDisplay = (item: BillItem): number => {
+        if (item.is_pack_mode && item.units_per_pack) {
+            return item.qty / item.units_per_pack;
+        }
+        return item.qty;
+    };
 
     const handleCheckout = () => {
         if (billItems.length === 0) {
@@ -132,6 +182,7 @@ export default function NewBillScreen() {
                     qty: i.qty,
                     unit_price: i.unit_price,
                     line_total: i.qty * i.unit_price,
+                    display_qty: getDisplayQty(i),
                 }))
             );
             Alert.alert("Bill Saved!", `₹${grandTotal.toFixed(2)} bill saved successfully.`, [
@@ -308,9 +359,34 @@ export default function NewBillScreen() {
                                 </Text>
                             </View>
                             <View style={styles.itemDetailsRow}>
-                                <View style={styles.priceContainer}>
-                                    <Text style={styles.priceText}>₹{item.unit_price.toFixed(2)}</Text>
-                                    <Text style={styles.unitText}> / {item.uom}</Text>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                                    <View style={styles.priceContainer}>
+                                        <Text style={styles.priceText}>
+                                            {getDisplayPrice(item)}
+                                        </Text>
+                                    </View>
+                                    {/* Pack toggle — shown only if product has pack config */}
+                                    {item.units_per_pack && item.purchase_uom && (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.unitToggleBtn,
+                                                item.is_pack_mode && styles.unitToggleBtnActive,
+                                            ]}
+                                            onPress={() => togglePackMode(item.product_id)}
+                                        >
+                                            <Ionicons
+                                                name="cube-outline"
+                                                size={12}
+                                                color={item.is_pack_mode ? colors.primary : "#94A3B8"}
+                                            />
+                                            <Text style={[
+                                                styles.unitToggleText,
+                                                item.is_pack_mode && styles.unitToggleTextActive,
+                                            ]}>
+                                                {item.is_pack_mode ? item.purchase_uom : item.uom}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                                 <View style={styles.qtyContainer}>
                                     <TouchableOpacity
@@ -319,7 +395,7 @@ export default function NewBillScreen() {
                                     >
                                         <Ionicons name="remove" size={18} color="#475569" />
                                     </TouchableOpacity>
-                                    <Text style={styles.qtyValue}>{item.qty}</Text>
+                                    <Text style={styles.qtyValue}>{getQtyStepDisplay(item)}</Text>
                                     <TouchableOpacity
                                         style={[styles.qtyBtn, styles.qtyAddBtn]}
                                         onPress={() => updateQty(item.product_id, 1)}
@@ -439,7 +515,7 @@ export default function NewBillScreen() {
                                     <View>
                                         <Text style={styles.estimateItemName}>{item.product_name}</Text>
                                         <Text style={styles.estimateItemMeta}>
-                                            ₹{item.unit_price.toFixed(2)} × {item.qty} {item.uom}
+                                            {getDisplayPrice(item)} × {getQtyStepDisplay(item)}
                                         </Text>
                                     </View>
                                 </View>
@@ -679,14 +755,31 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "baseline",
         backgroundColor: "#F8FAFC",
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: "#F1F5F9",
     },
-    priceText: { fontSize: 15, fontWeight: "700", color: "#1e293b" },
+    priceText: { fontSize: 13, fontWeight: "700", color: "#1e293b" },
     unitText: { fontSize: 11, color: "#94A3B8" },
+    unitToggleBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        backgroundColor: "#F1F5F9",
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    unitToggleBtnActive: {
+        backgroundColor: "#EFF6FF",
+        borderColor: colors.primary,
+    },
+    unitToggleText: { fontSize: 11, fontWeight: "700", color: "#94A3B8" },
+    unitToggleTextActive: { color: colors.primary },
     qtyContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F5F9", borderRadius: 8, overflow: "hidden" },
     qtyBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
     qtyAddBtn: { backgroundColor: colors.primary },
