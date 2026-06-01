@@ -819,6 +819,292 @@ export const exportAsSql = (shopId: string): string => {
   return lines.join('\n');
 };
 
+// ─── Draft Bills ──────────────────────────────────────────────────────────────
+
+export interface DraftBill {
+  id: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  payment_mode: 'cash' | 'udhar' | 'upi';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DraftBillItemRecord {
+  id: string;
+  draft_id: string;
+  product_id: string;
+  product_name: string;
+  qty: number;
+  unit_price: number;
+  line_total: number;
+  display_qty: string | null;
+  uom: string;
+  units_per_pack: number | null;
+  purchase_uom: string | null;
+  is_pack_mode: number; // 0 or 1
+}
+
+export interface DraftSummary {
+  id: string;
+  customer_name: string | null;
+  payment_mode: 'cash' | 'udhar' | 'upi';
+  item_count: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const createDraft = (): string => {
+  const id = genId();
+  try {
+    db.runSync(`INSERT INTO draft_bills (id, payment_mode) VALUES (?, 'cash')`, [id]);
+    return id;
+  } catch (e) {
+    console.error('createDraft error:', e);
+    throw e;
+  }
+};
+
+export const upsertDraft = (
+  draftId: string,
+  customer: { id: string | null; name: string | null } | null,
+  paymentMode: 'cash' | 'udhar' | 'upi'
+): void => {
+  try {
+    db.runSync(
+      `UPDATE draft_bills SET customer_id = ?, customer_name = ?, payment_mode = ?, updated_at = datetime('now') WHERE id = ?`,
+      [customer?.id ?? null, customer?.name ?? null, paymentMode, draftId]
+    );
+  } catch (e) {
+    console.error('upsertDraft error:', e);
+  }
+};
+
+export const upsertDraftItems = (
+  draftId: string,
+  items: Array<{
+    product_id: string;
+    product_name: string;
+    qty: number;
+    unit_price: number;
+    line_total: number;
+    display_qty?: string | null;
+    uom: string;
+    units_per_pack: number | null;
+    purchase_uom: string | null;
+    is_pack_mode: boolean;
+  }>
+): void => {
+  try {
+    db.withTransactionSync(() => {
+      db.runSync(`DELETE FROM draft_bill_items WHERE draft_id = ?`, [draftId]);
+      for (const item of items) {
+        const id = genId();
+        db.runSync(
+          `INSERT INTO draft_bill_items
+             (id, draft_id, product_id, product_name, qty, unit_price, line_total, display_qty, uom, units_per_pack, purchase_uom, is_pack_mode)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id, draftId,
+            item.product_id, item.product_name,
+            item.qty, item.unit_price, item.line_total,
+            item.display_qty ?? null,
+            item.uom, item.units_per_pack ?? null, item.purchase_uom ?? null,
+            item.is_pack_mode ? 1 : 0,
+          ]
+        );
+      }
+    });
+  } catch (e) {
+    console.error('upsertDraftItems error:', e);
+  }
+};
+
+export const getDraftById = (
+  draftId: string
+): { draft: DraftBill | null; items: DraftBillItemRecord[] } => {
+  try {
+    const draft = db.getFirstSync(`SELECT * FROM draft_bills WHERE id = ?`, [draftId]) as DraftBill | null;
+    if (!draft) return { draft: null, items: [] };
+    const items = db.getAllSync(
+      `SELECT * FROM draft_bill_items WHERE draft_id = ?`,
+      [draftId]
+    ) as DraftBillItemRecord[];
+    return { draft, items };
+  } catch (e) {
+    console.error('getDraftById error:', e);
+    return { draft: null, items: [] };
+  }
+};
+
+export const getAllDrafts = (): DraftSummary[] => {
+  try {
+    return db.getAllSync(`
+      SELECT
+        db2.id, db2.customer_name, db2.payment_mode, db2.created_at, db2.updated_at,
+        COUNT(dbi.id) AS item_count,
+        COALESCE(SUM(dbi.line_total), 0) AS total_amount
+      FROM draft_bills db2
+      LEFT JOIN draft_bill_items dbi ON dbi.draft_id = db2.id
+      GROUP BY db2.id
+      ORDER BY db2.updated_at DESC
+    `) as DraftSummary[];
+  } catch (e) {
+    console.error('getAllDrafts error:', e);
+    return [];
+  }
+};
+
+export const deleteDraft = (draftId: string): void => {
+  try {
+    db.runSync(`DELETE FROM draft_bill_items WHERE draft_id = ?`, [draftId]);
+    db.runSync(`DELETE FROM draft_bills WHERE id = ?`, [draftId]);
+  } catch (e) {
+    console.error('deleteDraft error:', e);
+  }
+};
+
+/**
+ * Returns a map of product_id → total qty reserved in ALL drafts except the given one.
+ * Pass the current draft's id to exclude its own reservations from the result.
+ * Pass null (or omit) to include all draft reservations.
+ */
+export const getReservationsMap = (excludeDraftId: string | null = null): Record<string, number> => {
+  try {
+    const rows = db.getAllSync(
+      `SELECT product_id, COALESCE(SUM(qty), 0) AS reserved
+       FROM draft_bill_items
+       WHERE draft_id != ?
+       GROUP BY product_id`,
+      [excludeDraftId ?? '']
+    ) as Array<{ product_id: string; reserved: number }>;
+    const map: Record<string, number> = {};
+    rows.forEach(r => { map[r.product_id] = r.reserved; });
+    return map;
+  } catch (e) {
+    console.error('getReservationsMap error:', e);
+    return {};
+  }
+};
+
+export const cleanupOldDrafts = (): void => {
+  try {
+    db.runSync(
+      `DELETE FROM draft_bill_items WHERE draft_id IN (
+         SELECT id FROM draft_bills WHERE created_at < datetime('now', '-1 day')
+       )`
+    );
+    db.runSync(`DELETE FROM draft_bills WHERE created_at < datetime('now', '-1 day')`);
+  } catch (e) {
+    console.error('cleanupOldDrafts error:', e);
+  }
+};
+
+/**
+ * Atomically finalizes a draft into a confirmed bill.
+ * Deducts stock, writes sales_log, updates udhar, queues sync, deletes the draft.
+ * Accepts current cart state directly — no need to pre-save the draft.
+ */
+export const finalizeDraft = (
+  draftId: string,
+  customer: { id: string | null; name: string | null } | null,
+  paymentMode: 'cash' | 'udhar' | 'upi',
+  items: Array<{
+    product_id: string;
+    product_name: string;
+    qty: number;
+    unit_price: number;
+    line_total: number;
+    display_qty?: string | null;
+  }>
+): string => {
+  const billId = genId();
+  const billItemsForSync: any[] = [];
+  const salesLogForSync: any[] = [];
+  const totalAmount = items.reduce((sum, i) => sum + i.line_total, 0);
+  const totalItems = items.reduce((sum, i) => sum + i.qty, 0);
+
+  try {
+    db.withTransactionSync(() => {
+      db.runSync(
+        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [billId, customer?.id ?? null, customer?.name ?? null, paymentMode, totalAmount, totalItems]
+      );
+
+      for (const item of items) {
+        const itemId = genId();
+        const logId = genId();
+
+        db.runSync(
+          `INSERT INTO bill_items (id, bill_id, product_id, product_name, qty, unit_price, line_total, display_qty)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null]
+        );
+        db.runSync(
+          `UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = datetime('now') WHERE id = ?`,
+          [item.qty, item.product_id]
+        );
+        db.runSync(
+          `INSERT INTO sales_log (id, product_id, product_name, qty_sold, sale_amount)
+           VALUES (?, ?, ?, ?, ?)`,
+          [logId, item.product_id, item.product_name, item.qty, item.line_total]
+        );
+
+        billItemsForSync.push({
+          id: itemId, bill_id: billId,
+          product_id: item.product_id, product_name: item.product_name,
+          qty: item.qty, unit_price: item.unit_price, line_total: item.line_total,
+          display_qty: item.display_qty ?? null,
+        });
+        salesLogForSync.push({
+          id: logId,
+          product_id: item.product_id, product_name: item.product_name,
+          qty_sold: item.qty, sale_amount: item.line_total,
+        });
+      }
+
+      if (paymentMode === 'udhar' && customer?.id) {
+        db.runSync(
+          `UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?`,
+          [totalAmount, customer.id]
+        );
+      }
+
+      addToSyncQueue('bills', 'INSERT', billId, {
+        bill: {
+          id: billId,
+          customer_id: customer?.id ?? null,
+          customer_name: customer?.name ?? null,
+          payment_mode: paymentMode,
+          total_amount: totalAmount,
+          total_items: totalItems,
+        },
+        items: billItemsForSync,
+        salesLog: salesLogForSync,
+      });
+
+      if (paymentMode === 'udhar' && customer?.id) {
+        const updatedCustomer = db.getFirstSync(
+          'SELECT * FROM customers WHERE id = ?',
+          [customer.id]
+        ) as Customer | null;
+        if (updatedCustomer) addToSyncQueue('customers', 'UPDATE', customer.id, updatedCustomer);
+      }
+
+      // Delete draft — cascade removes draft_bill_items
+      db.runSync(`DELETE FROM draft_bill_items WHERE draft_id = ?`, [draftId]);
+      db.runSync(`DELETE FROM draft_bills WHERE id = ?`, [draftId]);
+    });
+
+    return billId;
+  } catch (e) {
+    console.error('finalizeDraft error:', e);
+    throw e;
+  }
+};
+
 export const getTopProducts = (from: string, to: string, limit = 5): TopProduct[] => {
   try {
     return db.getAllSync(

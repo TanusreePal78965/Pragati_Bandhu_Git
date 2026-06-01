@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>প্রগতি বন্ধু — আপনার দোকানের স্মার্ট সাথী</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700;800&family=Inter:wght@400;600;700;800;900&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --green:  #22c55e;
+      --blue:   #3b82f6;
+      --purple: #a78bfa;
+      --gold:   #f59e0b;
+      --red:    #ef4444;
+      --cyan:   #06b6d4;
+    }
+
+    body {
+      font-family: 'Noto Sans Bengali', 'Inter', Arial, sans-serif;
+      background: #09090f;
+      color: #f0f0f5;
+      overflow-x: hidden;
+    }
+
+    /* ── scroll nav ── */
+    .nav {
+      position: fixed; right: 16px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 999;
+    }
+    .nav a {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(255,255,255,0.18); display: block;
+      transition: all 0.2s;
+    }
+    .nav a:hover { background: #fff; transform: scale(1.5); }
+
+    /* ── base slide ── */
+    .slide {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center;
+      padding: 56px 80px;
+      position: relative; overflow: hidden;
+    }
+    .slide-num {
+      position: absolute; bottom: 20px; right: 28px;
+      font-size: 11px; color: rgba(255,255,255,0.15);
+      letter-spacing: 3px; font-family: 'Inter', sans-serif;
+    }
+    .eyebrow {
+      font-size: 11px; font-weight: 700; letter-spacing: 4px;
+      text-transform: uppercase; font-family: 'Inter', sans-serif;
+      margin-bottom: 14px; opacity: 0.65;
+    }
+
+    /* ════════════════════════════════════════
+       SLIDE 1 — COVER
+    ════════════════════════════════════════ */
+    #s1 {
+      background:
+        radial-gradient(ellipse at 75% 25%, rgba(99,102,241,0.22) 0%, transparent 55%),
+        radial-gradient(ellipse at 20% 75%, rgba(16,185,129,0.12) 0%, transparent 50%),
+        #09090f;
+      text-align: center;
+    }
+    #s1 .icon { font-size: 88px; margin-bottom: 20px; }
+    #s1 h1 {
+      font-size: 88px; font-weight: 900; line-height: 1;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    #s1 .sub {
+      font-size: 26px; color: rgba(255,255,255,0.5);
+      margin-bottom: 40px; font-weight: 400;
+    }
+    #s1 .tagline {
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.3);
+      padding: 18px 36px; border-radius: 14px;
+      font-size: 20px; color: #a5b4fc; font-style: italic;
+      max-width: 660px; line-height: 1.55;
+    }
+
+    /* ════════════════════════════════════════
+       SLIDE 2 — THE COST (loss framing)
+    ════════════════════════════════════════ */
+    #s2 { background: linear-gradient(160deg, #110606 0%, #1c0a0a 100%); }
+    #s2 .main-q {
+      font-size: 54px; font-weight: 900; line-height: 1.15;
+      margin-bottom: 48px; max-width: 820px; text-align: center;
+    }
+    #s2 .main-q span { color: var(--red); }
+    .loss-row {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 20px; max-width: 900px; width: 100%;
+    }
+    .loss-card {
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.18);
+      border-radius: 20px; padding: 32px 24px; text-align: center;
+    }
+    .loss-card .big-num {
+      font-size: 56px; font-weight: 900; color: var(--red);
+      line-height: 1; margin-bottom: 8px; font-family: 'Inter', sans-serif;
+    }
+    .loss-card .loss-label { font-size: 18px; color: rgba(255,255,255,0.7); line-height: 1.4; }
+    .loss-card .loss-why { font-size: 14px; color: rgba(255,255,255,0.35); margin-top: 8px; }
+
+    /* ════════════════════════════════════════
+       FEATURE SLIDE TEMPLATE
+    ════════════════════════════════════════ */
+    .feat {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px; max-width: 1060px; width: 100%;
+      align-items: start;
+    }
+    .feat-icon-wrap {
+      width: 100%; height: 260px;
+      border-radius: 24px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 120px; margin-bottom: 28px;
+    }
+    .feat-tag {
+      font-size: 11px; font-weight: 700; letter-spacing: 4px;
+      text-transform: uppercase; font-family: 'Inter', sans-serif;
+      margin-bottom: 10px; opacity: 0.6;
+    }
+    .feat-title {
+      font-size: 48px; font-weight: 900;
+      line-height: 1.1; margin-bottom: 14px;
+    }
+    .feat-desc {
+      font-size: 18px; color: rgba(255,255,255,0.58);
+      line-height: 1.65; margin-bottom: 28px;
+    }
+
+    /* story boxes */
+    .story-box {
+      border-radius: 16px; padding: 22px 24px; margin-bottom: 16px;
+    }
+    .story-box .story-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase; font-family: 'Inter', sans-serif;
+      margin-bottom: 10px;
+    }
+    .story-box .story-text {
+      font-size: 17px; line-height: 1.6; font-weight: 500;
+    }
+    .story-now {
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.22);
+    }
+    .story-now .story-label { color: #f87171; }
+    .story-now .story-text { color: rgba(255,255,255,0.75); }
+    .story-pb {
+      background: rgba(52,211,153,0.07);
+      border: 1px solid rgba(52,211,153,0.25);
+    }
+    .story-pb .story-label { color: #34d399; }
+    .story-pb .story-text { color: rgba(255,255,255,0.88); }
+
+    /* benefit bar */
+    .benefit-bar {
+      border-radius: 12px; padding: 16px 20px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 4px;
+    }
+    .benefit-bar .b-icon { font-size: 24px; flex-shrink: 0; }
+    .benefit-bar .b-text { font-size: 16px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .benefit-bar .b-text strong { font-weight: 800; }
+
+    /* slide colours */
+    #s3 { background: linear-gradient(160deg, #071512 0%, #0c2018 100%); }
+    #s3 .feat-icon-wrap { background: rgba(34,197,94,0.07); border: 1px solid rgba(34,197,94,0.15); }
+    #s3 .feat-tag, #s3 .feat-title { color: var(--green); }
+
+    #s4 { background: linear-gradient(160deg, #06101a 0%, #0b1828 100%); }
+    #s4 .feat-icon-wrap { background: rgba(59,130,246,0.07); border: 1px solid rgba(59,130,246,0.15); }
+    #s4 .feat-tag, #s4 .feat-title { color: var(--blue); }
+
+    #s5 { background: linear-gradient(160deg, #0c0714 0%, #160b22 100%); }
+    #s5 .feat-icon-wrap { background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.15); }
+    #s5 .feat-tag, #s5 .feat-title { color: var(--purple); }
+
+    #s6 { background: linear-gradient(160deg, #0f0c05 0%, #1c1607 100%); }
+    #s6 .feat-icon-wrap { background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.15); }
+    #s6 .feat-tag, #s6 .feat-title { color: var(--gold); }
+
+    #s7 { background: linear-gradient(160deg, #060d10 0%, #0a181e 100%); }
+    #s7 .feat-icon-wrap { background: rgba(6,182,212,0.07); border: 1px solid rgba(6,182,212,0.15); }
+    #s7 .feat-tag, #s7 .feat-title { color: var(--cyan); }
+
+    /* ════════════════════════════════════════
+       SLIDE 8 — HOW EASY
+    ════════════════════════════════════════ */
+    #s8 { background: linear-gradient(160deg, #060910 0%, #0b0f1c 100%); }
+    #s8 .section-title {
+      font-size: 52px; font-weight: 900;
+      margin-bottom: 12px; text-align: center;
+    }
+    #s8 .section-sub {
+      font-size: 20px; color: rgba(255,255,255,0.5);
+      margin-bottom: 52px; text-align: center;
+    }
+    .steps { display: flex; flex-direction: column; gap: 20px; max-width: 780px; width: 100%; }
+    .step {
+      display: flex; align-items: center; gap: 28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px; padding: 28px 32px;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 900; flex-shrink: 0;
+      font-family: 'Inter', sans-serif;
+    }
+    .step-emoji { font-size: 38px; flex-shrink: 0; }
+    .step-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .step-body { font-size: 16px; color: rgba(255,255,255,0.55); line-height: 1.5; }
+
+    /* ════════════════════════════════════════
+       SLIDE 9 — CTA
+    ════════════════════════════════════════ */
+    #s9 {
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(99,102,241,0.18) 0%, transparent 60%),
+        #09090f;
+      text-align: center;
+    }
+    #s9 h2 {
+      font-size: 64px; font-weight: 900; line-height: 1.1;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    #s9 .cta-sub {
+      font-size: 22px; color: rgba(255,255,255,0.5);
+      max-width: 560px; line-height: 1.6; margin-bottom: 52px;
+    }
+    .cta-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 44px; }
+    .cta-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px; padding: 28px 32px; text-align: center; min-width: 190px;
+    }
+    .cta-card .c-icon { font-size: 40px; margin-bottom: 12px; display: block; }
+    .cta-card .c-lbl { font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 3px; text-transform: uppercase; font-family: 'Inter', sans-serif; margin-bottom: 6px; }
+    .cta-card .c-val { font-size: 18px; font-weight: 700; color: #a5b4fc; }
+    #s9 .footer { font-size: 16px; color: rgba(255,255,255,0.2); font-style: italic; }
+  </style>
+</head>
+<body>
+
+<nav class="nav" id="navDots">
+  <a href="#s1"></a><a href="#s2"></a><a href="#s3"></a>
+  <a href="#s4"></a><a href="#s5"></a><a href="#s6"></a>
+  <a href="#s7"></a><a href="#s8"></a><a href="#s9"></a>
+  <a href="#s10"></a>
+</nav>
+
+
+<!-- ═══════════════════════════════
+     1 — COVER
+═══════════════════════════════ -->
+<section class="slide" id="s1">
+  <div class="icon">🏪</div>
+  <h1>প্রগতি বন্ধু</h1>
+  <p class="sub">আপনার দোকানের স্মার্ট সাথী</p>
+  <div class="tagline">
+    "মাল শেষ হওয়ার আগেই প্রগতি বন্ধু আপনাকে জানিয়ে দেবে।"
+  </div>
+  <div class="slide-num">01 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     2 — THE REAL COST (hook)
+═══════════════════════════════ -->
+<section class="slide" id="s2">
+  <p class="main-q">
+    প্রতি মাসে আপনার দোকান থেকে<br/>
+    <span>হাজার হাজার টাকা বেরিয়ে যাচ্ছে</span><br/>
+    — আপনি জানেনও না।
+  </p>
+  <div class="loss-row">
+    <div class="loss-card">
+      <div class="big-num">₹৩০০+</div>
+      <div class="loss-label">মাল শেষ হয়ে গেছিল বলে বিক্রি মিস</div>
+      <div class="loss-why">প্রতি সপ্তাহে অন্তত একবার</div>
+    </div>
+    <div class="loss-card">
+      <div class="big-num">₹৫০০+</div>
+      <div class="loss-label">বাকির হিসাব না করায় টাকা আটকে</div>
+      <div class="loss-why">মনে ছিল না, চাইতে পারেননি</div>
+    </div>
+    <div class="loss-card">
+      <div class="big-num">৩০ মিন</div>
+      <div class="loss-label">প্রতিদিন শুধু হিসাব করতে নষ্ট</div>
+      <div class="loss-why">তবুও ভুল থাকে</div>
+    </div>
+  </div>
+  <div class="slide-num">02 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     3 — FEATURE: STOCK
+═══════════════════════════════ -->
+<section class="slide" id="s3">
+  <div class="feat">
+    <div class="feat-left">
+      <div class="feat-icon-wrap">📦</div>
+    </div>
+    <div>
+      <div class="feat-tag" style="color:var(--green);">ফিচার ১ — স্টক ম্যানেজমেন্ট</div>
+      <h2 class="feat-title" style="color:var(--green);">মাল শেষ হওয়ার<br/>আগেই জানুন</h2>
+      <p class="feat-desc">
+        আপনার দোকানে কোন মাল কতটা আছে — সবসময় মোবাইলে দেখতে পাবেন।
+        বিল বানালেই স্টক আপনাআপনি কমে যাবে।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এখন কি হচ্ছে?</div>
+        <div class="story-text">
+          শনিবার সকালে কাস্টমার এসে বলল — "দাদা, Surf Excel আছে?"
+          আপনি খুঁজলেন, নেই। কাল শেষ হয়ে গেছে। উনি চলে গেলেন
+          পাশের দোকানে। ₹১২০ গেল।
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          বৃহস্পতিবারই অ্যাপ দেখায় — "Surf Excel মাত্র ৩টা বাকি।"
+          আপনি শুক্রবার অর্ডার দিলেন। শনিবার মাল আছে,
+          বিক্রি হলো, কাস্টমার খুশি।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">💰</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> মাল না থাকায় বিক্রি মিস — এটা আর হবে না।</span>
+      </div>
+    </div>
+  </div>
+  <div class="slide-num">03 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     4 — FEATURE: BILLING
+═══════════════════════════════ -->
+<section class="slide" id="s4">
+  <div class="feat">
+    <div>
+      <div class="feat-tag" style="color:var(--blue);">ফিচার ২ — বিল বানানো</div>
+      <h2 class="feat-title" style="color:var(--blue);">৬০ সেকেন্ডে<br/>বিল রেডি</h2>
+      <p class="feat-desc">
+        কাস্টমারের নাম খুঁজুন, মাল বেছে নিন — বিল তৈরি।
+        ক্যাশ না বাকি — দুটো অপশনই আছে।
+        হিসাব করতে হবে না, অ্যাপ নিজেই করবে।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এখন কি হচ্ছে?</div>
+        <div class="story-text">
+          কাস্টমার ৫টা জিনিস নিলেন, আপনি কাগজে লিখলেন,
+          মাথায় যোগ করলেন — ভুল হলো, আবার করলেন।
+          ৪ মিনিট লাগল। পিছনে আরেকজন দাঁড়িয়ে বিরক্ত হচ্ছে।
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          মাল বেছে নিলেন, অ্যাপ যোগ করে ফেলল। "ক্যাশ"
+          চাপলেন — বিল হয়ে গেল। স্টকও কমে গেল।
+          ৪৫ সেকেন্ড। পরের কাস্টমার আসুন।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">⚡</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> দ্রুত বিল → কাস্টমার খুশি → বেশি বিক্রি।</span>
+      </div>
+    </div>
+    <div class="feat-left">
+      <div class="feat-icon-wrap">🧾</div>
+    </div>
+  </div>
+  <div class="slide-num">04 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     5 — FEATURE: UDHAR
+═══════════════════════════════ -->
+<section class="slide" id="s5">
+  <div class="feat">
+    <div class="feat-left">
+      <div class="feat-icon-wrap">👥</div>
+    </div>
+    <div>
+      <div class="feat-tag" style="color:var(--purple);">ফিচার ৩ — বাকির হিসাব</div>
+      <h2 class="feat-title" style="color:var(--purple);">বাকির টাকা<br/>আর ডুববে না</h2>
+      <p class="feat-desc">
+        প্রতিটা কাস্টমারের কত বাকি, কবে নিয়েছে —
+        সব অ্যাপে থাকবে। আপনাকে মনে রাখতে হবে না।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এখন কি হচ্ছে?</div>
+        <div class="story-text">
+          রমেশ বাবু ২ মাস আগে ৮০০ টাকার মাল নিয়ে গেছেন।
+          আপনি খাতায় লিখেছিলেন, এখন খুঁজে পাচ্ছেন না।
+          চাইতেও লজ্জা লাগছে — "পুরনো কাস্টমার, মনে না থাকলে সম্পর্ক নষ্ট হবে।"
+          টাকাটা কার্যত গেছে।
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          রমেশ বাবু দোকানে ঢুকলেন। আপনি মোবাইল খুললেন —
+          "রমেশ কুমার — বাকি ₹৮০০, ১৫ মার্চ থেকে।"
+          স্ক্রিন দেখালেন, নিজেই বুঝলেন। কোনো ঝামেলা নেই।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">💸</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> বাকির টাকা ঠিকমতো ফেরত আসবে — সম্পর্কও ঠিক থাকবে।</span>
+      </div>
+    </div>
+  </div>
+  <div class="slide-num">05 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     6 — FEATURE: AI / WHATSAPP ALERT
+═══════════════════════════════ -->
+<section class="slide" id="s6">
+  <div class="feat">
+    <div>
+      <div class="feat-tag" style="color:var(--gold);">ফিচার ৪ — WhatsApp অ্যালার্ট</div>
+      <h2 class="feat-title" style="color:var(--gold);">অ্যাপ খুলতে হবে না —<br/>WhatsApp-এ আসবে</h2>
+      <p class="feat-desc">
+        মাল কমে গেলে অ্যাপ নিজেই আপনার WhatsApp-এ
+        মেসেজ পাঠাবে। আপনাকে রোজ চেক করতে হবে না।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এখন কি হচ্ছে?</div>
+        <div class="story-text">
+          প্রতিদিন মাথায় রাখতে হয় — কোন মাল কমছে।
+          ভুলে গেলে হঠাৎ শেষ হয়ে যায়।
+          দোকান বন্ধ রেখে মাল আনতে দৌড়াতে হয়।
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          শনিবার সকালে WhatsApp-এ আসে:<br/>
+          <strong style="color:#fbbf24;">"🔔 চাল মাত্র ২ দিনের বাকি। এখনই অর্ডার করুন।"</strong><br/>
+          আপনি সাথে সাথে ফোন দিলেন সাপ্লায়ারকে। সমস্যা শেষ।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">📲</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> মাথায় রাখার ঝামেলা নেই — অ্যাপ মনে রাখবে।</span>
+      </div>
+    </div>
+    <div class="feat-left">
+      <div class="feat-icon-wrap">📲</div>
+    </div>
+  </div>
+  <div class="slide-num">06 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     7 — FEATURE: REPORT
+═══════════════════════════════ -->
+<section class="slide" id="s7">
+  <div class="feat">
+    <div class="feat-left">
+      <div class="feat-icon-wrap">📊</div>
+    </div>
+    <div>
+      <div class="feat-tag" style="color:var(--cyan);">ফিচার ৫ — দৈনিক রিপোর্ট</div>
+      <h2 class="feat-title" style="color:var(--cyan);">আজকে ঠিক কতটা<br/>লাভ হলো জানুন</h2>
+      <p class="feat-desc">
+        আজকে, এই সপ্তাহে, এই মাসে — কত বিক্রি হলো,
+        কত লাভ হলো, কোন মাল সবচেয়ে বেশি বিকোচ্ছে।
+        এক ট্যাপে, হিসাব ছাড়া।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এখন কি হচ্ছে?</div>
+        <div class="story-text">
+          রাত ৯টায় দোকান বন্ধ করে বসলেন হিসাব করতে।
+          ক্যাশ গুনলেন, খাতা দেখলেন — তবুও বোঝা গেল না
+          আজকে আসলে কতটা লাভ হলো। পরের দিনও একই।
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          দোকান বন্ধ করার আগে মোবাইল খুললেন —<br/>
+          <strong style="color:#06b6d4;">আজকে বিক্রি: ₹৪,২০০ | লাভ: ₹৮৪০ | সবচেয়ে বেশি বিকেছে: আটা।</strong><br/>
+          ৫ সেকেন্ডে সব জানলেন। বাড়ি গেলেন নিশ্চিন্তে।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">📈</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> জানবেন কোন মাল বেশি রাখতে হবে — লাভ বাড়বে।</span>
+      </div>
+    </div>
+  </div>
+  <div class="slide-num">07 / 09</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     8 — FEATURE: OFFLINE (trust builder)
+═══════════════════════════════ -->
+<section class="slide" id="s8" style="background:linear-gradient(160deg,#050d12 0%,#091828 100%);">
+  <div class="feat">
+    <div>
+      <div class="feat-tag" style="color:#38bdf8;">ফিচার ৬ — অফলাইন কাজ করে</div>
+      <h2 class="feat-title" style="color:#38bdf8;">নেট নেই?<br/>দোকান বন্ধ?<br/>একদমই না।</h2>
+      <p class="feat-desc">
+        সব ডেটা আপনার মোবাইলেই থাকে।
+        Internet না থাকলেও বিল হবে, স্টক দেখা যাবে, বাকি ট্র্যাক হবে।
+        নেট এলে নিজেই ব্যাকআপ হয়ে যাবে।
+      </p>
+
+      <div class="story-box story-now">
+        <div class="story-label">😓 এই ভয় অনেকের থাকে</div>
+        <div class="story-text">
+          "নেট না থাকলে কি অ্যাপ বন্ধ হয়ে যাবে?
+          আমার দোকানে অনেকসময় নেট কাজ করে না।
+          তখন কি বিল করতে পারব না?"
+        </div>
+      </div>
+
+      <div class="story-box story-pb">
+        <div class="story-label">✅ প্রগতি বন্ধু দিয়ে</div>
+        <div class="story-text">
+          নেট নেই — কোনো সমস্যা নেই।
+          বিল বানান, স্টক দেখুন, বাকি দেখুন — সব হবে।
+          নেট এলে সব ডেটা আপনাআপনি সেভ হয়ে যাবে।
+          আপনার একটা তথ্যও যাবে না।
+        </div>
+      </div>
+
+      <div class="benefit-bar">
+        <span class="b-icon">🔒</span>
+        <span class="b-text"><strong>আপনার লাভ:</strong> নেট থাকুক বা না থাকুক — দোকান চলবে।</span>
+      </div>
+    </div>
+    <div>
+      <div class="feat-icon-wrap" style="background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.15);height:260px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:120px;">⚡</div>
+    </div>
+  </div>
+  <div class="slide-num">08 / 10</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     9 — HOW EASY
+═══════════════════════════════ -->
+<section class="slide" id="s9">
+  <p class="eyebrow" style="color:#a5b4fc;">শুরু করা কি কঠিন?</p>
+  <h2 class="section-title">মোটেই না — মাত্র ৩টা কাজ</h2>
+  <p class="section-sub">কোনো পড়াশোনা লাগবে না। আমরা এসে সব করে দেব।</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num" style="background:linear-gradient(135deg,#6366f1,#a78bfa);color:#fff;">১</div>
+      <span class="step-emoji">📲</span>
+      <div>
+        <div class="step-title">অ্যাপ ইনস্টল করুন</div>
+        <div class="step-body">Android মোবাইলে ইনস্টল করব আমরা। ফোন নম্বর দিয়ে OTP — লগিন হয়ে গেল। পাসওয়ার্ড লাগে না।</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;">২</div>
+      <span class="step-emoji">📦</span>
+      <div>
+        <div class="step-title">আপনার মাল যোগ করুন</div>
+        <div class="step-body">যা বিক্রি করেন তার নাম, দাম আর স্টক লিখুন। একদিন লাগবে — তারপর আর করতে হবে না।</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">৩</div>
+      <span class="step-emoji">✅</span>
+      <div>
+        <div class="step-title">বিল বানান — বাকি সব অ্যাপ করবে</div>
+        <div class="step-body">বিল বানালেই স্টক কমবে, বাকি ট্র্যাক হবে, রিপোর্ট তৈরি হবে। আপনি শুধু দোকান চালান।</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-num">09 / 10</div>
+</section>
+
+
+<!-- ═══════════════════════════════
+     10 — CTA
+═══════════════════════════════ -->
+<section class="slide" id="s10"
+  style="background:radial-gradient(ellipse at 50% 35%,rgba(99,102,241,0.18) 0%,transparent 60%),#09090f;text-align:center;">
+  <p class="eyebrow" style="color:#a5b4fc;">আজই শুরু করুন</p>
+  <h2 style="font-size:64px;font-weight:900;line-height:1.1;margin-bottom:18px;background:linear-gradient(135deg,#fff 0%,#a5b4fc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">আপনার দোকান,<br/>আরো স্মার্ট হোক</h2>
+  <p style="font-size:22px;color:rgba(255,255,255,0.5);max-width:560px;line-height:1.6;margin:0 auto 52px;">
+    আমরা নিজে এসে সেটআপ করব, সব শিখিয়ে দেব।
+    আপনাকে কিছু জানতে হবে না। দেখুন, তারপর ঠিক করুন।
+  </p>
+  <div class="cta-row">
+    <div class="cta-card">
+      <span class="c-icon">📲</span>
+      <div class="c-lbl">WhatsApp করুন</div>
+      <div class="c-val">এখনই মেসেজ করুন</div>
+    </div>
+    <div class="cta-card">
+      <span class="c-icon">🤝</span>
+      <div class="c-lbl">দেখা করতে চান?</div>
+      <div class="c-val">আমরা আসব</div>
+    </div>
+    <div class="cta-card">
+      <span class="c-icon">📱</span>
+      <div class="c-lbl">ফ্রি ডেমো</div>
+      <div class="c-val">দেখুন তারপর ঠিক করুন</div>
+    </div>
+  </div>
+  <p style="font-size:16px;color:rgba(255,255,255,0.2);font-style:italic;">"প্রগতি বন্ধু — আপনার দোকানের পাকা সাথী"</p>
+  <div class="slide-num">10 / 10</div>
+</section>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dots   = Array.from(document.querySelectorAll('.nav a'));
+
+  // highlight active dot
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const i = slides.indexOf(e.target);
+        dots.forEach((d, j) => d.style.background = j === i ? '#fff' : 'rgba(255,255,255,0.18)');
+      }
+    });
+  }, { threshold: 0.5 });
+  slides.forEach(s => observer.observe(s));
+
+  // arrow key / page up/down navigation
+  document.addEventListener('keydown', e => {
+    const cur = slides.findIndex(s => {
+      const r = s.getBoundingClientRect();
+      return r.top >= -10 && r.top < window.innerHeight / 2;
+    });
+    if (['ArrowDown','ArrowRight','PageDown'].includes(e.key) && cur < slides.length - 1) {
+      e.preventDefault();
+      slides[cur + 1].scrollIntoView({ behavior: 'smooth' });
+    }
+    if (['ArrowUp','ArrowLeft','PageUp'].includes(e.key) && cur > 0) {
+      e.preventDefault();
+      slides[cur - 1].scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  // touch swipe
+  let ty = 0;
+  document.addEventListener('touchstart', e => { ty = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const diff = ty - e.changedTouches[0].clientY;
+    const cur  = slides.findIndex(s => {
+      const r = s.getBoundingClientRect();
+      return r.top >= -10 && r.top < window.innerHeight / 2;
+    });
+    if (diff > 50 && cur < slides.length - 1) slides[cur + 1].scrollIntoView({ behavior: 'smooth' });
+    if (diff < -50 && cur > 0)               slides[cur - 1].scrollIntoView({ behavior: 'smooth' });
+  }, { passive: true });
+</script>
+</body>
+</html>

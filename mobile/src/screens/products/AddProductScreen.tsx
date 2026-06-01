@@ -18,8 +18,7 @@ import { spacing } from "../../theme/spacing";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllCategories, getAllBrands, insertProduct, Category, Brand } from "../../db/db";
-
-const UOMS = ["kg", "Liter", "Pcs", "gm", "Pack", "Box", "Dozen"];
+import UomSelector from "../../components/products/UomSelector";
 
 export default function AddProductScreen() {
     const navigation = useNavigation();
@@ -224,12 +223,10 @@ export default function AddProductScreen() {
                         <Text style={styles.helperText}>Alert when stock falls below this number</Text>
                     </View>
 
-                    {renderChipSelector(
-                        "Unit of Measurement (UOM)",
-                        UOMS.map((u) => ({ id: u, label: u })),
-                        selectedUom,
-                        setSelectedUom
-                    )}
+                    <View style={styles.section}>
+                        <Text style={styles.label}>Unit of Measurement (UOM) *</Text>
+                        <UomSelector selectedUom={selectedUom} onSelect={setSelectedUom} />
+                    </View>
 
                     <View style={styles.separator} />
 

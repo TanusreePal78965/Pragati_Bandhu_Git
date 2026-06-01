@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -15,11 +15,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
-import { getAllProducts, getAllCustomers, insertBill, Product, Customer } from "../../db/db";
+import {
+    getAllProducts,
+    getAllCustomers,
+    getCustomerById,
+    createDraft,
+    upsertDraft,
+    upsertDraftItems,
+    getDraftById,
+    getAllDrafts,
+    deleteDraft,
+    finalizeDraft,
+    getReservationsMap,
+    cleanupOldDrafts,
+    DraftSummary,
+    Product,
+    Customer,
+} from "../../db/db";
+import DraftSwitcherModal from "../../components/billing/DraftSwitcherModal";
 
 interface BillItem {
     product_id: string;
@@ -33,7 +49,10 @@ interface BillItem {
 }
 
 export default function NewBillScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
+    const route = useRoute<any>();
+
+    const [draftId, setDraftId] = useState<string | null>(null);
     const [paymentMode, setPaymentMode] = useState<"cash" | "udhar" | "upi">("cash");
     const [billItems, setBillItems] = useState<BillItem[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -44,15 +63,128 @@ export default function NewBillScreen() {
     const [customerSearch, setCustomerSearch] = useState("");
     const [saving, setSaving] = useState(false);
     const [showEstimate, setShowEstimate] = useState(false);
+    const [allDrafts, setAllDrafts] = useState<DraftSummary[]>([]);
+    const [showDraftSwitcher, setShowDraftSwitcher] = useState(false);
+    const [reservedQtyMap, setReservedQtyMap] = useState<Record<string, number>>({});
 
+    const isDraftLoadedRef = useRef(false);
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ── Initialise draft on mount ─────────────────────────────────────────────
+    useEffect(() => {
+        cleanupOldDrafts();
+        const paramDraftId: string | undefined = route.params?.draftId;
+        if (paramDraftId) {
+            const { draft, items } = getDraftById(paramDraftId);
+            if (draft) {
+                setDraftId(paramDraftId);
+                setPaymentMode(draft.payment_mode);
+                setBillItems(
+                    items.map((i) => ({
+                        product_id: i.product_id,
+                        product_name: i.product_name,
+                        qty: i.qty,
+                        unit_price: i.unit_price,
+                        uom: i.uom,
+                        units_per_pack: i.units_per_pack,
+                        purchase_uom: i.purchase_uom,
+                        is_pack_mode: i.is_pack_mode === 1,
+                    }))
+                );
+                if (draft.customer_id) {
+                    const customer = getCustomerById(draft.customer_id);
+                    if (customer) setSelectedCustomer(customer);
+                }
+            } else {
+                // Draft was deleted (e.g. cleanup) — create fresh
+                const newId = createDraft();
+                setDraftId(newId);
+            }
+        } else {
+            const newId = createDraft();
+            setDraftId(newId);
+        }
+        isDraftLoadedRef.current = true;
+    }, []); // only on mount
+
+    // ── Refresh products, customers, drafts list, reservation map on focus ────
     useFocusEffect(
         useCallback(() => {
             setProducts(getAllProducts());
             setCustomers(getAllCustomers());
+            setAllDrafts(getAllDrafts());
         }, [])
     );
 
-    // Product search results (only show when search has text)
+    // Update reservation map whenever draftId is known
+    useEffect(() => {
+        if (draftId) {
+            setReservedQtyMap(getReservationsMap(draftId));
+        }
+    }, [draftId]);
+
+    // ── Auto-save draft on any cart/customer/mode change ─────────────────────
+    useEffect(() => {
+        if (!isDraftLoadedRef.current || !draftId) return;
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = setTimeout(() => {
+            upsertDraft(
+                draftId,
+                selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null,
+                paymentMode
+            );
+            upsertDraftItems(
+                draftId,
+                billItems.map((i) => ({
+                    product_id: i.product_id,
+                    product_name: i.product_name,
+                    qty: i.qty,
+                    unit_price: i.unit_price,
+                    line_total: i.qty * i.unit_price,
+                    display_qty: getDisplayQty(i),
+                    uom: i.uom,
+                    units_per_pack: i.units_per_pack,
+                    purchase_uom: i.purchase_uom,
+                    is_pack_mode: i.is_pack_mode,
+                }))
+            );
+            // Refresh drafts list so switcher shows latest totals
+            setAllDrafts(getAllDrafts());
+        }, 400);
+        return () => {
+            if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        };
+    }, [draftId, billItems, selectedCustomer, paymentMode]);
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    const getDisplayQty = (item: BillItem): string => {
+        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
+            return `${item.qty / item.units_per_pack} ${item.purchase_uom}`;
+        }
+        return `${item.qty} ${item.uom}`;
+    };
+
+    const getDisplayPrice = (item: BillItem): string => {
+        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
+            return `₹${(item.unit_price * item.units_per_pack).toFixed(2)} / ${item.purchase_uom}`;
+        }
+        return `₹${item.unit_price.toFixed(2)} / ${item.uom}`;
+    };
+
+    const getQtyStepDisplay = (item: BillItem): number => {
+        if (item.is_pack_mode && item.units_per_pack) {
+            return item.qty / item.units_per_pack;
+        }
+        return item.qty;
+    };
+
+    // Available qty for a product considering other drafts' reservations
+    const availQty = (productId: string, stockQty: number): number =>
+        Math.max(0, stockQty - (reservedQtyMap[productId] ?? 0));
+
+    // ── Cart actions ──────────────────────────────────────────────────────────
+
     const searchResults = search.trim().length > 1
         ? products.filter((p) =>
             p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -61,14 +193,15 @@ export default function NewBillScreen() {
         : [];
 
     const addProduct = (product: Product) => {
-        if (product.stock_quantity === 0) {
-            Alert.alert("Out of Stock", `"${product.name}" is out of stock and cannot be added to the bill.`);
+        const avail = availQty(product.id, product.stock_quantity);
+        if (avail <= 0) {
+            Alert.alert("Out of Stock", `"${product.name}" is out of stock or fully reserved in another bill.`);
             return;
         }
         const existing = billItems.find((i) => i.product_id === product.id);
         if (existing) {
-            if (existing.qty >= product.stock_quantity) {
-                Alert.alert("Stock Limit", `Only ${product.stock_quantity} unit(s) of "${product.name}" available.`);
+            if (existing.qty >= avail) {
+                Alert.alert("Stock Limit", `Only ${avail} unit(s) of "${product.name}" available.`);
                 return;
             }
             setBillItems((prev) =>
@@ -99,14 +232,15 @@ export default function NewBillScreen() {
         const product = products.find((p) => p.id === productId);
         if (!item || !product) return;
 
+        const avail = availQty(product.id, product.stock_quantity);
         const step = item.is_pack_mode && item.units_per_pack ? item.units_per_pack : 1;
         const baseStep = delta > 0 ? step : -step;
 
         if (delta > 0) {
-            if (item.qty + step > product.stock_quantity) {
+            if (item.qty + step > avail) {
                 const availPacks = item.units_per_pack
-                    ? Math.floor(product.stock_quantity / item.units_per_pack)
-                    : product.stock_quantity;
+                    ? Math.floor(avail / item.units_per_pack)
+                    : avail;
                 const unit = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : product.uom;
                 Alert.alert("Stock Limit", `Only ${availPacks} ${unit}(s) of "${product.name}" available.`);
                 return;
@@ -124,7 +258,6 @@ export default function NewBillScreen() {
             prev.map((i) => {
                 if (i.product_id !== productId || !i.units_per_pack) return i;
                 const newPackMode = !i.is_pack_mode;
-                // Snap qty to nearest pack boundary when switching to pack mode
                 const snappedQty = newPackMode
                     ? Math.max(i.units_per_pack, Math.round(i.qty / i.units_per_pack) * i.units_per_pack)
                     : i.qty;
@@ -136,28 +269,85 @@ export default function NewBillScreen() {
     const totalItems = billItems.reduce((acc, i) => acc + i.qty, 0);
     const grandTotal = billItems.reduce((acc, i) => acc + i.qty * i.unit_price, 0);
 
-    const getDisplayQty = (item: BillItem): string => {
-        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
-            return `${item.qty / item.units_per_pack} ${item.purchase_uom}`;
+    // ── Navigation / draft actions ────────────────────────────────────────────
+
+    const saveNow = () => {
+        if (!draftId) return;
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
+            autoSaveTimerRef.current = null;
         }
-        return `${item.qty} ${item.uom}`;
+        upsertDraft(
+            draftId,
+            selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null,
+            paymentMode
+        );
+        upsertDraftItems(
+            draftId,
+            billItems.map((i) => ({
+                product_id: i.product_id,
+                product_name: i.product_name,
+                qty: i.qty,
+                unit_price: i.unit_price,
+                line_total: i.qty * i.unit_price,
+                display_qty: getDisplayQty(i),
+                uom: i.uom,
+                units_per_pack: i.units_per_pack,
+                purchase_uom: i.purchase_uom,
+                is_pack_mode: i.is_pack_mode,
+            }))
+        );
     };
 
-    const getDisplayPrice = (item: BillItem): string => {
-        if (item.is_pack_mode && item.units_per_pack && item.purchase_uom) {
-            return `₹${(item.unit_price * item.units_per_pack).toFixed(2)} / ${item.purchase_uom}`;
+    const handleBack = () => {
+        if (draftId) {
+            if (billItems.length === 0) {
+                deleteDraft(draftId);
+            } else {
+                saveNow();
+            }
         }
-        return `₹${item.unit_price.toFixed(2)} / ${item.uom}`;
+        navigation.goBack();
     };
 
-    const getQtyStepDisplay = (item: BillItem): number => {
-        if (item.is_pack_mode && item.units_per_pack) {
-            return item.qty / item.units_per_pack;
-        }
-        return item.qty;
+    const handleDiscard = () => {
+        Alert.alert(
+            "Discard Bill",
+            "Discard this bill? All items will be lost.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Discard",
+                    style: "destructive",
+                    onPress: () => {
+                        if (draftId) deleteDraft(draftId);
+                        navigation.goBack();
+                    },
+                },
+            ]
+        );
     };
 
-    const handleCheckout = () => {
+    const handleHoldAndNew = () => {
+        saveNow();
+        navigation.replace("NewBill");
+    };
+
+    const handleSelectDraft = (targetDraftId: string) => {
+        if (targetDraftId === draftId) return;
+        saveNow();
+        navigation.replace("NewBill", { draftId: targetDraftId });
+    };
+
+    const handleDiscardOtherDraft = (targetDraftId: string) => {
+        deleteDraft(targetDraftId);
+        setAllDrafts(getAllDrafts());
+        setReservedQtyMap(getReservationsMap(draftId));
+    };
+
+    // ── Finalize ──────────────────────────────────────────────────────────────
+
+    const handleFinalize = () => {
         if (billItems.length === 0) {
             Alert.alert("Empty Bill", "Please add at least one product to the bill.");
             return;
@@ -166,16 +356,14 @@ export default function NewBillScreen() {
             Alert.alert("Customer Required", "Please select a customer for Udhar payment.");
             return;
         }
+        if (!draftId) return;
+
         setSaving(true);
         try {
-            insertBill(
-                {
-                    customer_id: selectedCustomer?.id ?? null,
-                    customer_name: selectedCustomer?.name ?? null,
-                    payment_mode: paymentMode,
-                    total_amount: grandTotal,
-                    total_items: totalItems,
-                },
+            finalizeDraft(
+                draftId,
+                selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null,
+                paymentMode,
                 billItems.map((i) => ({
                     product_id: i.product_id,
                     product_name: i.product_name,
@@ -203,19 +391,45 @@ export default function NewBillScreen() {
         )
         : customers;
 
+    const otherDraftCount = allDrafts.filter((d) => d.id !== draftId).length;
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
+                <TouchableOpacity onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>New Bill</Text>
-                <TouchableOpacity onPress={() => setBillItems([])}>
-                    <Ionicons name="trash-outline" size={22} color={colors.error} />
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    {/* Drafts switcher button */}
+                    <TouchableOpacity
+                        style={styles.draftsBtn}
+                        onPress={() => {
+                            setAllDrafts(getAllDrafts());
+                            setShowDraftSwitcher(true);
+                        }}
+                    >
+                        <Ionicons name="layers-outline" size={18} color={colors.primary} />
+                        <Text style={styles.draftsBtnText}>Bills</Text>
+                        {otherDraftCount > 0 && (
+                            <View style={styles.draftsBadge}>
+                                <Text style={styles.draftsBadgeText}>{otherDraftCount}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Discard current bill */}
+                    {billItems.length > 0 && (
+                        <TouchableOpacity onPress={handleDiscard} style={{ marginLeft: 8 }}>
+                            <Ionicons name="trash-outline" size={22} color={colors.error} />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -272,26 +486,32 @@ export default function NewBillScreen() {
                     )}
                 </View>
 
-                {/* Search Results Dropdown */}
+                {/* Search Results */}
                 {searchResults.length > 0 && (
                     <View style={styles.searchResults}>
-                        {searchResults.map((product) => (
-                            <TouchableOpacity
-                                key={product.id}
-                                style={styles.searchResultItem}
-                                onPress={() => addProduct(product)}
-                            >
-                                <View style={styles.searchResultInfo}>
-                                    <Text style={styles.searchResultName}>{product.name}</Text>
-                                    <Text style={styles.searchResultMeta}>
-                                        {product.category_name ?? "No category"} · Stock: {product.stock_quantity}
+                        {searchResults.map((product) => {
+                            const avail = availQty(product.id, product.stock_quantity);
+                            return (
+                                <TouchableOpacity
+                                    key={product.id}
+                                    style={[styles.searchResultItem, avail === 0 && styles.searchResultItemDisabled]}
+                                    onPress={() => addProduct(product)}
+                                >
+                                    <View style={styles.searchResultInfo}>
+                                        <Text style={styles.searchResultName}>{product.name}</Text>
+                                        <Text style={styles.searchResultMeta}>
+                                            {product.category_name ?? "No category"} ·{" "}
+                                            <Text style={avail === 0 ? styles.availQtyZero : avail <= 5 ? styles.availQtyLow : styles.availQtyOk}>
+                                                Avail: {avail}
+                                            </Text>
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.searchResultPrice}>
+                                        ₹{product.selling_price.toFixed(2)}
                                     </Text>
-                                </View>
-                                <Text style={styles.searchResultPrice}>
-                                    ₹{product.selling_price.toFixed(2)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 )}
                 {search.trim().length > 1 && searchResults.length === 0 && (
@@ -365,7 +585,6 @@ export default function NewBillScreen() {
                                             {getDisplayPrice(item)}
                                         </Text>
                                     </View>
-                                    {/* Pack toggle — shown only if product has pack config */}
                                     {item.units_per_pack && item.purchase_uom && (
                                         <TouchableOpacity
                                             style={[
@@ -409,7 +628,7 @@ export default function NewBillScreen() {
                 )}
             </ScrollView>
 
-            {/* Footer */}
+            {/* Footer totals */}
             <View style={styles.footer}>
                 <View style={styles.footerLeft}>
                     <Text style={styles.totalItemsLabel}>TOTAL ITEMS</Text>
@@ -420,7 +639,16 @@ export default function NewBillScreen() {
                     <Text style={styles.grandTotalValue}>₹{grandTotal.toFixed(2)}</Text>
                 </View>
             </View>
+
+            {/* Action buttons */}
             <View style={styles.actionsContainer}>
+                {/* Hold & New Bill */}
+                <TouchableOpacity style={styles.holdBtn} onPress={handleHoldAndNew}>
+                    <Ionicons name="pause-circle-outline" size={20} color="#475569" />
+                    <Text style={styles.holdBtnText}>HOLD</Text>
+                </TouchableOpacity>
+
+                {/* Estimate */}
                 <TouchableOpacity
                     style={styles.estimateBtn}
                     onPress={() => {
@@ -431,25 +659,37 @@ export default function NewBillScreen() {
                         setShowEstimate(true);
                     }}
                 >
-                    <Ionicons name="document-text-outline" size={24} color="#475569" />
+                    <Ionicons name="document-text-outline" size={20} color="#475569" />
                     <Text style={styles.estimateBtnText}>ESTIMATE</Text>
                 </TouchableOpacity>
+
+                {/* Checkout */}
                 <TouchableOpacity
                     style={[styles.checkoutBtn, saving && { opacity: 0.7 }]}
-                    onPress={handleCheckout}
+                    onPress={handleFinalize}
                     disabled={saving}
                 >
-                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    <Ionicons name="checkmark-circle" size={22} color="#fff" />
                     <Text style={styles.checkoutBtnText}>
-                        {saving ? "SAVING..." : "SAVE & CHECKOUT"}
+                        {saving ? "SAVING..." : "CHECKOUT"}
                     </Text>
                 </TouchableOpacity>
             </View>
 
+            {/* Draft Switcher Modal */}
+            <DraftSwitcherModal
+                visible={showDraftSwitcher}
+                onClose={() => setShowDraftSwitcher(false)}
+                drafts={allDrafts}
+                currentDraftId={draftId}
+                onSelectDraft={handleSelectDraft}
+                onDiscardDraft={handleDiscardOtherDraft}
+                onNewBill={handleHoldAndNew}
+            />
+
             {/* Estimate Preview Modal */}
             <Modal visible={showEstimate} transparent={false} animationType="slide">
                 <RNSafeAreaView style={styles.estimateContainer}>
-                    {/* Estimate Header */}
                     <View style={styles.estimateHeader}>
                         <TouchableOpacity onPress={() => setShowEstimate(false)} style={styles.estimateCloseBtn}>
                             <Ionicons name="close" size={24} color="#475569" />
@@ -459,7 +699,6 @@ export default function NewBillScreen() {
                     </View>
 
                     <ScrollView contentContainerStyle={styles.estimateScroll}>
-                        {/* Estimate Badge */}
                         <View style={styles.estimateBadgeRow}>
                             <View style={styles.estimateBadge}>
                                 <Ionicons name="document-text-outline" size={14} color="#92400e" />
@@ -472,7 +711,6 @@ export default function NewBillScreen() {
                             </Text>
                         </View>
 
-                        {/* Customer */}
                         <View style={styles.estimateSection}>
                             <Text style={styles.estimateSectionLabel}>CUSTOMER</Text>
                             <Text style={styles.estimateCustomerName}>
@@ -483,7 +721,6 @@ export default function NewBillScreen() {
                             )}
                         </View>
 
-                        {/* Payment Mode */}
                         <View style={styles.estimatePaymentRow}>
                             <View style={[
                                 styles.estimatePaymentBadge,
@@ -503,10 +740,8 @@ export default function NewBillScreen() {
                             </View>
                         </View>
 
-                        {/* Divider */}
                         <View style={styles.estimateDivider} />
 
-                        {/* Items */}
                         <Text style={styles.estimateSectionLabel}>ITEMS</Text>
                         {billItems.map((item, idx) => (
                             <View key={item.product_id} style={styles.estimateItem}>
@@ -525,10 +760,8 @@ export default function NewBillScreen() {
                             </View>
                         ))}
 
-                        {/* Divider */}
                         <View style={styles.estimateDivider} />
 
-                        {/* Totals */}
                         <View style={styles.estimateTotalRow}>
                             <Text style={styles.estimateTotalLabel}>Total Items</Text>
                             <Text style={styles.estimateTotalValue}>{totalItems}</Text>
@@ -538,16 +771,14 @@ export default function NewBillScreen() {
                             <Text style={styles.estimateGrandValue}>₹{grandTotal.toFixed(2)}</Text>
                         </View>
 
-                        {/* Disclaimer */}
                         <View style={styles.estimateDisclaimer}>
                             <Ionicons name="information-circle-outline" size={16} color="#92400e" />
                             <Text style={styles.estimateDisclaimerText}>
-                                This is a preview only. Tap "Save & Checkout" on the billing screen to finalise and record this bill.
+                                This is a preview only. Tap "Checkout" on the billing screen to finalise and record this bill.
                             </Text>
                         </View>
                     </ScrollView>
 
-                    {/* Close Footer */}
                     <View style={styles.estimateFooter}>
                         <TouchableOpacity
                             style={styles.estimateCloseFooterBtn}
@@ -635,6 +866,29 @@ const styles = StyleSheet.create({
         borderBottomColor: "#F1F5F9",
     },
     headerTitle: { fontSize: 18, fontWeight: "700", color: "#1e293b" },
+    headerRight: { flexDirection: "row", alignItems: "center" },
+    draftsBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        backgroundColor: "#EFF6FF",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#DBEAFE",
+    },
+    draftsBtnText: { fontSize: 13, fontWeight: "700", color: colors.primary },
+    draftsBadge: {
+        backgroundColor: colors.primary,
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 3,
+    },
+    draftsBadgeText: { fontSize: 10, fontWeight: "800", color: "#fff" },
     scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 40 },
     searchContainer: {
         flexDirection: "row",
@@ -665,9 +919,13 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
     },
+    searchResultItemDisabled: { opacity: 0.5 },
     searchResultInfo: { flex: 1 },
     searchResultName: { fontSize: 15, fontWeight: "600", color: colors.text },
     searchResultMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    availQtyOk: { color: "#16A34A", fontWeight: "700" },
+    availQtyLow: { color: "#D97706", fontWeight: "700" },
+    availQtyZero: { color: "#EF4444", fontWeight: "700" },
     searchResultPrice: { fontSize: 15, fontWeight: "700", color: colors.primary, marginLeft: 8 },
     noResults: { paddingVertical: 12, alignItems: "center" },
     noResultsText: { fontSize: 14, color: colors.textSecondary, textAlign: "center" },
@@ -723,11 +981,7 @@ const styles = StyleSheet.create({
     paymentBtnText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
     paymentBtnTextActive: { color: colors.primary },
     paymentBtnUpiText: { color: "#7C3AED" },
-    emptyBill: {
-        alignItems: "center",
-        paddingVertical: 32,
-        gap: 8,
-    },
+    emptyBill: { alignItems: "center", paddingVertical: 32, gap: 8 },
     emptyBillText: {
         fontSize: 14,
         color: colors.textSecondary,
@@ -762,7 +1016,6 @@ const styles = StyleSheet.create({
         borderColor: "#F1F5F9",
     },
     priceText: { fontSize: 13, fontWeight: "700", color: "#1e293b" },
-    unitText: { fontSize: 11, color: "#94A3B8" },
     unitToggleBtn: {
         flexDirection: "row",
         alignItems: "center",
@@ -780,7 +1033,13 @@ const styles = StyleSheet.create({
     },
     unitToggleText: { fontSize: 11, fontWeight: "700", color: "#94A3B8" },
     unitToggleTextActive: { color: colors.primary },
-    qtyContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F5F9", borderRadius: 8, overflow: "hidden" },
+    qtyContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#F1F5F9",
+        borderRadius: 8,
+        overflow: "hidden",
+    },
     qtyBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
     qtyAddBtn: { backgroundColor: colors.primary },
     qtyValue: { width: 40, textAlign: "center", fontSize: 16, fontWeight: "700", color: "#1e293b" },
@@ -803,9 +1062,20 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         paddingHorizontal: spacing.md,
         paddingBottom: 20,
-        gap: 12,
+        gap: 8,
         backgroundColor: "#F8FAFC",
     },
+    holdBtn: {
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 56,
+        height: 56,
+        backgroundColor: "#F1F5F9",
+        borderRadius: 12,
+        gap: 2,
+    },
+    holdBtnText: { fontSize: 9, fontWeight: "700", color: "#475569" },
     estimateBtn: {
         flex: 1,
         flexDirection: "row",
@@ -814,9 +1084,9 @@ const styles = StyleSheet.create({
         height: 56,
         backgroundColor: "#F1F5F9",
         borderRadius: 12,
-        gap: 8,
+        gap: 6,
     },
-    estimateBtnText: { fontSize: 15, fontWeight: "700", color: "#475569" },
+    estimateBtnText: { fontSize: 13, fontWeight: "700", color: "#475569" },
     checkoutBtn: {
         flex: 2,
         flexDirection: "row",
@@ -832,7 +1102,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
-    checkoutBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+    checkoutBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
     // Customer Modal
     modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalContent: {

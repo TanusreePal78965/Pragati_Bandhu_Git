@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v3.3 | May 2026
+### Project Scope Document v3.5 | May 2026
 
 ---
 
@@ -253,7 +253,7 @@ shopai/
     │   │   └── settings/    # SettingsScreen, EditShopScreen, ManageCategoriesScreen, AddCategoryScreen, ManageBrandsScreen, AddBrandScreen
     │   ├── components/
     │   │   ├── common/      # ScreenHeader, PrimaryButton, TextInputField
-    │   │   ├── products/    # ProductCard, UpdateStockModal, UpdateCategoryModal
+    │   │   ├── products/    # ProductCard, UpdateStockModal, UpdateCategoryModal, UomSelector
     │   │   └── home/        # SummaryCard
     │   ├── store/           # Zustand: useProductStore
     │   ├── db/              # SQLite schema setup, sync queue processor, backup engine
@@ -510,7 +510,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 |---|---|
 | Bottom navigation | Floating pill-style tab bar (5 tabs: Home, Inventory, Customers, Reports, Settings) |
 | Design system | Custom theme tokens: `colors.ts`, `spacing.ts`, `typography.ts` |
-| Reusable components | `ScreenHeader` (branding + sync badge + notifications), `PrimaryButton`, `TextInputField`, `ProductCard`, `UpdateStockModal`, `UpdateCategoryModal`, `SummaryCard` |
+| Reusable components | `ScreenHeader` (branding + sync badge + notifications), `PrimaryButton`, `TextInputField`, `ProductCard`, `UpdateStockModal`, `UpdateCategoryModal`, `UomSelector`, `SummaryCard` |
 | Language support | Bengali tagline on login screen ("আপনার দোকানের বন্ধু"), Hinglish consent cards. Full i18n planned for v3. |
 | Dark mode | Toggle in settings (UI built, theme switching WIP) |
 
@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** May 8, 2026 — v3.3
+> **Last updated:** May 9, 2026 — v3.5
 
 ---
 
@@ -620,6 +620,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Estimate preview in billing | ✅ | **v2.8.** ESTIMATE button in `NewBillScreen` opens a full-screen receipt-style modal showing current bill items, customer, payment mode, and grand total without saving. Clearly labelled "NOT SAVED — For preview only". Empty-bill guard shows an alert if pressed with no items. |
 | AI consent gate on Dashboard | ✅ | **v2.8.** `HomeScreen` reads `aiConsent` from SQLite via `getShop()` on every focus. Cloud users (`aiConsent=true`) see "AI Reorder Insights" with sparkle icon. Local-only users (`aiConsent=false`) see "Low Stock Alerts" with a warning icon — same threshold data, correct branding, no false "AI" label. Local-only users with low stock also see an upgrade nudge pointing to Settings → Enable Cloud Backup. |
 | Bulk/pack unit support | ✅ | **v3.1.** `purchase_uom` + `units_per_pack` on products; pack-mode toggle in stock update modal; per-item retail/bulk toggle in billing; `display_qty` on bill_items for receipt display. Stock always stored in base units internally. |
+| UOM selector — expanded + grouped UI | ✅ | **v3.4.** 7 hardcoded chips replaced with `UomSelector` component. 20 UOMs across 5 groups (Weight, Volume, Count, Packaging, Length) rendered as flexWrap grid with category labels. "Custom" chip reveals free-text input for any unlisted unit (Vial, Tablet, Ampule, etc.). Selected-unit badge always visible. Used in both `AddProductScreen` and `EditProductScreen`. |
 | Edit Customer screen + Udhar payment recording | ✅ | **v2.9.** `EditCustomerScreen`: reached by tapping any customer row in `CustomersScreen`. Displays udhar balance card (red when owed, green when cleared). "Record Payment" modal with ₹ input, quick chips (₹100/200/500/1000 + "Full ₹X"), validates amount > 0 and ≤ outstanding balance, calls `recordUdharPayment()` which clamps at ₹0 via `MAX(0, udhar_balance − ?)` in SQL. Contact form lets owner edit name, phone, address via `updateCustomer()`. Both DB functions re-read the full row before queuing sync to prevent partial-payload corruption. Registered as `"EditCustomer"` in `RootNavigator`. |
 | Customer transaction history | ✅ | **v2.9.** `EditCustomerScreen` Bill History section shows the last 10 bills for that customer via `getBillsByCustomer(customerId, 10)`. Each row shows date, total, payment mode, chevron; taps through to `BillDetailScreen` for the full receipt. Empty state shown when customer has no bills. |
 
@@ -694,6 +695,28 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.10b Parallel Billing — Draft Bills + Soft Inventory Reservation (v3.5)
+
+> Solves the "second customer wait" problem. Shopkeeper can hold any number of in-progress bills simultaneously and switch between them. Inventory is soft-reserved per open draft so overselling across concurrent bills is impossible.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 69 | `draft_bills` + `draft_bill_items` tables added to SQLite schema | ✅ | New tables in `sqlite.ts:initTables`. Drafts are **local-only** — never enter sync_queue, never hit Supabase. `clearDatabase()` also wipes both tables. |
+| 70 | Draft DB layer — 9 new functions in `db.ts` | ✅ | `createDraft`, `upsertDraft`, `upsertDraftItems`, `getDraftById`, `getAllDrafts`, `deleteDraft`, `getReservationsMap`, `cleanupOldDrafts`, `finalizeDraft`. See details below. |
+| 71 | `finalizeDraft` — atomic bill creation from draft | ✅ | Accepts current cart state directly (no DB read needed). Atomically: inserts bill + bill_items, deducts stock, writes sales_log, updates udhar balance, queues sync, **deletes the draft**. Identical correctness guarantees to the original `insertBill`. |
+| 72 | `getReservationsMap(excludeDraftId)` — soft reservation query | ✅ | Single SQL query: `SUM(qty) GROUP BY product_id` across all `draft_bill_items` except the current draft. Returns `Record<product_id, reserved_qty>`. `available_qty = stock_quantity − reserved_qty`. |
+| 73 | `cleanupOldDrafts` | ✅ | Deletes drafts older than 24 hours. Called on every NewBillScreen mount to prevent stale reservations locking inventory. |
+| 74 | `DraftSwitcherModal` component | ✅ | New `components/billing/DraftSwitcherModal.tsx`. Bottom-sheet modal listing all open drafts (customer, item count, total, payment mode). Current draft highlighted with CURRENT badge. Non-current drafts have a discard (×) button with confirmation. "Start New Bill" action at bottom. |
+| 75 | `NewBillScreen` — full refactor for draft lifecycle | ✅ | **Draft creation:** on mount, creates a new draft via `createDraft()` or loads existing via `getDraftById(route.params.draftId)`. **Auto-save:** `useEffect` on `[draftId, billItems, selectedCustomer, paymentMode]` — debounced 400ms, always cancelled on unmount. **Available qty:** search results show colour-coded `Avail: N` (green/amber/red) computed from `reservedQtyMap`. Stock checks use available qty (not raw stock) for both `addProduct` and `updateQty`. |
+| 76 | `NewBillScreen` — HOLD button + Drafts switcher in header | ✅ | Header right: "Bills" button with badge count of OTHER open drafts. Tapping opens `DraftSwitcherModal`. Footer action row: `[HOLD] [ESTIMATE] [CHECKOUT]` — HOLD saves current draft immediately and navigates to a fresh NewBillScreen (`navigation.replace`). Switching drafts from modal also uses `replace` — stack stays shallow. |
+| 77 | Back button + discard behaviour | ✅ | Tapping back: if cart has items → `saveNow()` (immediate save, cancels debounce timer) → `goBack()`. If cart empty → `deleteDraft()` → `goBack()`. Trash icon → confirmation alert → `deleteDraft()` → `goBack()`. |
+
+**Key design decisions:**
+- Drafts local-only: no Supabase schema changes required
+- `finalizeDraft` accepts cart state directly — avoids read-after-write latency
+- `navigation.replace` for draft switching keeps stack depth = 1
+- `isDraftLoadedRef` (useRef, not state) prevents auto-save from firing during initial draft load
+
 ### 14.11 Future Screens (UI not yet built)
 
 | Item | Status | Notes |
@@ -708,15 +731,78 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.12 Inventory Costing & Purchase Tracking (Planned — 3 Phases)
+
+> **Current state:** The project uses a flat single-price-per-product model. Each product has one `purchase_price` and one `selling_price` — no batch tracking, no cost history, no WAC/FIFO. The profit report (`getSalesByRange`) joins `bill_items → products` and uses the **live** `purchase_price` from the products table, meaning a price update retroactively changes Net Profit for all historical bills.
+
+#### Phase 1 — Snapshot Cost at Sale Time (Bug Fix — No UX Change)
+
+> **Priority:** High — fixes a real accounting bug with zero UX disruption.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 78 | `bill_items` — add `unit_cost REAL DEFAULT 0` column | 🔲 | SQLite: `ALTER TABLE` migration in `sqlite.ts`. Supabase: `ALTER TABLE bill_items ADD COLUMN unit_cost NUMERIC DEFAULT 0`. |
+| 79 | `insertBill` / `finalizeDraft` — capture `unit_cost` at sale time | 🔲 | Look up `product.purchase_price` during bill item insertion; write to `unit_cost`. Freeze the cost forever — immune to future price edits. |
+| 80 | `getSalesByRange` — use snapshotted cost | 🔲 | Change profit query from `bi.unit_price - COALESCE(p.purchase_price, 0)` to `bi.unit_price - bi.unit_cost`. Removes dependency on live product row. |
+| 81 | `syncQueue.ts` — include `unit_cost` in bill_items upsert | 🔲 | Ensure Supabase bill_items upsert payload includes the new column. |
+| 82 | `exportAsSql` / `backup.ts` — include `unit_cost` | 🔲 | Add column to SQL export, JSON export, and JSON import flows. |
+
+**Selling price strategy (unchanged):** Product-level MRP — shopkeeper sets one `selling_price` per product. Billing uses `product.selling_price` as `unit_price` on each `bill_item`. No batch-level selling prices needed at this stage.
+
+---
+
+#### Phase 2 — Purchase Receipts & Auto WAC (New Feature)
+
+> **Priority:** Medium — adds purchase history and automatic cost tracking. Requires a new "Receive Stock" UX flow.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 83 | `stock_receipts` table — SQLite + Supabase | 🔲 | `id TEXT PK, product_id TEXT, qty_added REAL, unit_cost REAL, supplier_name TEXT, note TEXT, receipt_date TEXT`. Local + synced. Records every stock addition. |
+| 84 | "Receive Stock" flow — stock addition creates a receipt | 🔲 | `UpdateStockModal` and any stock-editing flow → inserts a `stock_receipts` row alongside the `stock_quantity` update. |
+| 85 | Auto WAC recalculation on every receipt | 🔲 | After inserting a receipt: `UPDATE products SET purchase_price = (SELECT SUM(unit_cost * qty_added) / NULLIF(SUM(qty_added), 0) FROM stock_receipts WHERE product_id = ?) WHERE id = ?`. Shopkeeper no longer needs to manually update purchase price. |
+| 86 | Purchase history UI — per-product | 🔲 | `EditProductScreen` gains a "Purchase History" section showing recent receipts (date, qty, cost, supplier). |
+| 87 | Sync + backup support for `stock_receipts` | 🔲 | Add to `syncQueue.ts` dispatch, `queueAllLocalData`, `exportAsSql`, `backup.ts` export/import flows, RLS policy. |
+
+**Key design decision:** `stock_receipts` is an append-only purchase diary at this stage — no `qty_remaining` column, no batch depletion. Stock quantity is still the single counter on `products`. This keeps complexity low while giving full purchase audit trail and auto WAC.
+
+---
+
+#### Phase 3 — FIFO Batch Tracking (Opt-in, Per Category)
+
+> **Priority:** Low — only needed for pharmacy/FMCG shops that require expiry tracking or true FIFO costing. Build only when user demand exists.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 88 | `products` — add `costing_method TEXT DEFAULT 'wac'` | 🔲 | Values: `'wac'` (default), `'fifo'`. Set per product or per category. |
+| 89 | `stock_receipts` — add `qty_remaining REAL`, `expiry_date TEXT` | 🔲 | Turns receipts into consumable batches. `qty_remaining` decremented on each sale. `expiry_date` enables near-expiry alerts. |
+| 90 | `bill_items` — add `batch_id TEXT` (nullable) | 🔲 | Links each sale line to the batch it was consumed from. NULL for WAC products. |
+| 91 | FIFO allocation logic in billing | 🔲 | On sale of a FIFO product: query batches `ORDER BY receipt_date ASC, id ASC WHERE qty_remaining > 0`, consume oldest first, split across batches if needed. `unit_cost` = actual batch cost per line. |
+| 92 | Expiry alerts — near-expiry detection | 🔲 | Local query: `SELECT * FROM stock_receipts WHERE expiry_date <= date('now', '+30 days') AND qty_remaining > 0`. Show in dashboard low-stock card. |
+
+**Decision table — which method to use:**
+
+| Factor | WAC (Phase 2) | FIFO (Phase 3) |
+|---|---|---|
+| Small kirana / general retail | ✅ Recommended | Overkill |
+| Pharmacy / FMCG (expiry tracking) | ❌ Can't track expiry | ✅ Essential |
+| Profit calculation accuracy | Good enough | High |
+| UI complexity for shopkeeper | Low | Higher |
+| Offline sync complexity | Low | Higher |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
 |---|---|---|
 | Barcode scanner (functional) | v2 | UI placeholder exists in billing; needs camera integration |
-| Expiry date tracking | v2 | Critical for medical stores |
+| Expiry date tracking | v2 | Critical for medical stores; depends on Phase 3 FIFO batch tracking (§14.12) |
 | Multi-shop support | v2 | One owner, multiple locations |
 | Supplier contact integration | v2 | One-tap WhatsApp to supplier from suggestion |
 | Unit variants (loose vs packet) | ✅ v3.1 | Bulk/pack unit support implemented — `purchase_uom` + `units_per_pack` per product; size/colour variants still v2 |
+| **Cost snapshot fix** | **v3.6** | **Phase 1 (§14.12): `unit_cost` on `bill_items` — fixes retroactive profit bug** |
+| **Purchase history + auto WAC** | **v4** | **Phase 2 (§14.12): `stock_receipts` table, auto WAC recalculation, purchase diary per product** |
+| **FIFO batch costing** | **v4+** | **Phase 3 (§14.12): opt-in per product/category; batch depletion, expiry tracking for pharmacy** |
 | UPI payment tracking | v2 | Payment mode split in reports (UI exists, needs backend) |
 | Offline mode (full) | v2 | Already partially built in v1 via sync queue |
 | Salon — usage per service | v3 | Track product consumed per customer |
@@ -767,6 +853,58 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v3.5 — May 9, 2026
+
+**Parallel Billing — Draft Bills + Soft Inventory Reservation (`sqlite.ts`, `db.ts`, `NewBillScreen.tsx`, `components/billing/DraftSwitcherModal.tsx` new)**
+
+- **Root problem solved:** shopkeeper could only bill one customer at a time — second customer had to wait while first bill was in progress.
+
+- **Draft Bills system.** Two new local-only SQLite tables (`draft_bills`, `draft_bill_items`) store in-progress bills. Drafts are never synced to Supabase — they exist only on device. On finalize, `finalizeDraft()` atomically converts the draft into a confirmed bill (same guarantees as the original `insertBill`: stock deduction, sales log, udhar update, sync queue).
+
+- **Soft inventory reservation.** `getReservationsMap(excludeDraftId)` computes total qty reserved across all other open drafts in one SQL query. `available_qty = stock_quantity − reserved_qty`. Search results in billing now show colour-coded **Avail: N** (green ≥ 6, amber ≤ 5, red = 0). Both `addProduct` and `updateQty` check available qty — overselling across concurrent drafts is blocked at entry time, not at checkout.
+
+- **Hold & New Bill.** New HOLD button in the billing footer. Saves current draft immediately (cancels debounce timer, writes synchronously) then `navigation.replace('NewBill')` — stack depth stays 1. Second customer billing starts instantly.
+
+- **Drafts switcher.** "Bills" button in billing header shows a badge count of other open drafts. Tapping opens `DraftSwitcherModal` — a bottom sheet listing all open bills with customer name, item count, total, payment mode. Tap any draft to switch to it (`navigation.replace`). Discard button (×) on each non-current draft with confirmation alert. "Start New Bill" shortcut at the bottom.
+
+- **Auto-save.** `useEffect` on `[draftId, billItems, selectedCustomer, paymentMode]` with 400ms debounce. Current draft is always persisted — no data loss if app crashes or user switches away. `isDraftLoadedRef` (useRef) prevents the auto-save from firing during the initial draft load, avoiding a redundant write on screen open.
+
+- **Back / discard handling.** Back button: if cart has items → `saveNow()` (immediate save) → `goBack()` — draft preserved for later. If cart empty → `deleteDraft()` → `goBack()` — no orphan empty drafts. Trash icon → confirm dialog → `deleteDraft()` → `goBack()`.
+
+- **Draft cleanup.** `cleanupOldDrafts()` deletes drafts older than 24 hours. Called on every NewBillScreen mount — prevents stale reservations permanently locking inventory.
+
+- **New file: `components/billing/DraftSwitcherModal.tsx`.** Self-contained bottom-sheet component. Props: `visible`, `drafts`, `currentDraftId`, `onSelectDraft`, `onDiscardDraft`, `onNewBill`. No navigation logic inside — all navigation handled by the caller (NewBillScreen).
+
+- **No Supabase schema changes required.** Drafts are local-only. Existing `bills`, `bill_items`, `sales_log` tables and all sync logic unchanged.
+
+---
+
+### v3.4 — May 9, 2026
+
+**UOM selector — expanded units + grouped UI (`UomSelector.tsx` new, `AddProductScreen.tsx`, `EditProductScreen.tsx`)**
+
+- **`UomSelector` component built (`components/products/UomSelector.tsx`).** Replaces the 7-chip horizontal scroll in both Add Product and Edit Product with a grouped flexWrap grid. All 20 UOMs visible at once — no horizontal hunting.
+
+- **20 UOMs across 5 groups:**
+
+  | Group | Units |
+  |---|---|
+  | Weight | kg, gm, mg, Quintal |
+  | Volume | Liter, ml |
+  | Count | Pcs, Dozen, Pair, Set |
+  | Packaging | Pack, Box, Bag, Carton, Sachet, Strip, Bottle, Roll, Ream, Bundle |
+  | Length | Meter, ft |
+
+- **"Custom" chip for unlisted units.** Tapping it reveals a `TextInput` where the owner can type any unit not in the list (e.g. Vial, Tablet, Ampule, Capsule). `EditProductScreen` auto-detects existing custom UOMs — the selector initialises into custom-input mode if the product's current UOM is not in the known list. Previously, the edit screen just appended the unknown UOM to the chip list with no way to type a new one.
+
+- **Selected-unit badge always shown.** A blue badge at the bottom of the selector shows the currently chosen unit — owner always knows what is picked even after scrolling.
+
+- **`ALL_KNOWN_UOMS` exported** from `UomSelector.tsx` — flat array of all 20 units; used internally for the `isCustom` detection on edit.
+
+- **Both product screens simplified.** `UOMS` constant and `uomList` memo removed. `renderChipSelector` call for UOM replaced with `<UomSelector selectedUom={selectedUom} onSelect={setSelectedUom} />`. No change to how the value is saved — still stored as plain text in `products.uom`.
+
+---
 
 ### v3.3 — May 8, 2026
 

@@ -102,6 +102,30 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS draft_bills (
+      id TEXT PRIMARY KEY NOT NULL,
+      customer_id TEXT,
+      customer_name TEXT,
+      payment_mode TEXT DEFAULT 'cash',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS draft_bill_items (
+      id TEXT PRIMARY KEY NOT NULL,
+      draft_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      qty REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      line_total REAL NOT NULL,
+      display_qty TEXT,
+      uom TEXT DEFAULT 'Pcs',
+      units_per_pack INTEGER,
+      purchase_uom TEXT,
+      is_pack_mode INTEGER DEFAULT 0
+    );
+
     CREATE TABLE IF NOT EXISTS sync_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,
@@ -172,6 +196,8 @@ export const clearDatabase = (): void => {
     DELETE FROM sales_log;
     DELETE FROM bill_items;
     DELETE FROM bills;
+    DELETE FROM draft_bill_items;
+    DELETE FROM draft_bills;
     DELETE FROM customers;
     DELETE FROM products;
     DELETE FROM categories;

@@ -3,6 +3,19 @@ import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { flushSyncQueue } from '../db/syncQueue';
 import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId } from '../utils/storage';
 import { supabase } from '../lib/supabase';
+import { restoreFromCloud } from './restoreService';
+
+// Minimum ms between background pulls — avoids hammering Supabase on rapid app switches
+const PULL_INTERVAL_MS = 2 * 60 * 1000;
+let _lastPullAt = 0;
+
+const pullIfStale = (): void => {
+  const now = Date.now();
+  if (now - _lastPullAt < PULL_INTERVAL_MS) return;
+  _lastPullAt = now;
+  // Fire-and-forget — non-blocking, non-critical
+  restoreFromCloud().catch(() => {});
+};
 
 let unsubscribeNetInfo: (() => void) | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
@@ -89,7 +102,10 @@ export const startSyncService = async (
       if (state === 'active') {
         await checkShopStatus(onDeactivated, onDeviceConflict);
         const hasConsent = await getHasConsent();
-        if (hasConsent) await flushSyncQueue();
+        if (hasConsent) {
+          await flushSyncQueue();
+          pullIfStale();
+        }
       }
     }
   );
@@ -98,10 +114,11 @@ export const startSyncService = async (
   const hasConsent = await getHasConsent();
   if (!hasConsent) return;
 
-  // Flush when network reconnects
+  // Flush and pull when network reconnects
   unsubscribeNetInfo = NetInfo.addEventListener(async (state: NetInfoState) => {
     if (state.isConnected) {
       await flushSyncQueue();
+      pullIfStale();
     }
   });
 
@@ -117,4 +134,5 @@ export const stopSyncService = (): void => {
   appStateSubscription = null;
   unsubscribeNetInfo?.();
   unsubscribeNetInfo = null;
+  _lastPullAt = 0;
 };
