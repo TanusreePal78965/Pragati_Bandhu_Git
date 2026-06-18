@@ -66,6 +66,7 @@ export default function NewBillScreen() {
     const [allDrafts, setAllDrafts] = useState<DraftSummary[]>([]);
     const [showDraftSwitcher, setShowDraftSwitcher] = useState(false);
     const [reservedQtyMap, setReservedQtyMap] = useState<Record<string, number>>({});
+    const [editingQty, setEditingQty] = useState<Record<string, string>>({});
 
     const isDraftLoadedRef = useRef(false);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +229,13 @@ export default function NewBillScreen() {
     };
 
     const updateQty = (productId: string, delta: number) => {
+        if (editingQty[productId] !== undefined) {
+            setEditingQty((prev) => {
+                const copy = { ...prev };
+                delete copy[productId];
+                return copy;
+            });
+        }
         const item = billItems.find((i) => i.product_id === productId);
         const product = products.find((p) => p.id === productId);
         if (!item || !product) return;
@@ -251,6 +259,76 @@ export default function NewBillScreen() {
                 .map((i) => (i.product_id === productId ? { ...i, qty: i.qty + baseStep } : i))
                 .filter((i) => i.qty > 0)
         );
+    };
+
+    const handleQtyTextChange = (productId: string, text: string) => {
+        const sanitized = text.replace(/[^0-9.]/g, "");
+        const dots = (sanitized.match(/\./g) || []).length;
+        if (dots > 1) return;
+
+        setEditingQty((prev) => ({ ...prev, [productId]: sanitized }));
+
+        if (sanitized === "" || sanitized === ".") {
+            return;
+        }
+
+        const newQty = parseFloat(sanitized);
+        if (isNaN(newQty) || newQty < 0) return;
+
+        const product = products.find((p) => p.id === productId);
+        const item = billItems.find((i) => i.product_id === productId);
+        if (!product || !item) return;
+
+        const factor = item.is_pack_mode && item.units_per_pack ? item.units_per_pack : 1;
+        const baseQty = newQty * factor;
+
+        const avail = availQty(product.id, product.stock_quantity);
+        if (baseQty > avail) {
+            const availDisplay = item.is_pack_mode && item.units_per_pack
+                ? Math.floor(avail / item.units_per_pack)
+                : avail;
+            const unit = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : product.uom;
+            Alert.alert("Stock Limit", `Only ${availDisplay} ${unit}(s) of "${product.name}" available.`);
+            
+            const snappedText = String(availDisplay);
+            setEditingQty((prev) => ({ ...prev, [productId]: snappedText }));
+            setBillItems((prev) =>
+                prev.map((i) => (i.product_id === productId ? { ...i, qty: avail } : i))
+            );
+            return;
+        }
+
+        setBillItems((prev) =>
+            prev.map((i) => (i.product_id === productId ? { ...i, qty: baseQty } : i))
+        );
+    };
+
+    const handleQtyBlur = (productId: string) => {
+        const item = billItems.find((i) => i.product_id === productId);
+        if (!item) {
+            setEditingQty((prev) => {
+                const copy = { ...prev };
+                delete copy[productId];
+                return copy;
+            });
+            return;
+        }
+
+        const currentText = editingQty[productId];
+        const parsed = parseFloat(currentText);
+
+        if (!currentText || isNaN(parsed) || parsed <= 0) {
+            const defaultQty = item.is_pack_mode && item.units_per_pack ? item.units_per_pack : 1;
+            setBillItems((prev) =>
+                prev.map((i) => (i.product_id === productId ? { ...i, qty: defaultQty } : i))
+            );
+        }
+
+        setEditingQty((prev) => {
+            const copy = { ...prev };
+            delete copy[productId];
+            return copy;
+        });
     };
 
     const togglePackMode = (productId: string) => {
@@ -614,7 +692,14 @@ export default function NewBillScreen() {
                                     >
                                         <Ionicons name="remove" size={18} color="#475569" />
                                     </TouchableOpacity>
-                                    <Text style={styles.qtyValue}>{getQtyStepDisplay(item)}</Text>
+                                    <TextInput
+                                        style={styles.qtyInput}
+                                        value={editingQty[item.product_id] !== undefined ? editingQty[item.product_id] : String(getQtyStepDisplay(item))}
+                                        keyboardType="decimal-pad"
+                                        onChangeText={(text) => handleQtyTextChange(item.product_id, text)}
+                                        onBlur={() => handleQtyBlur(item.product_id)}
+                                        selectTextOnFocus
+                                    />
                                     <TouchableOpacity
                                         style={[styles.qtyBtn, styles.qtyAddBtn]}
                                         onPress={() => updateQty(item.product_id, 1)}
@@ -1043,6 +1128,15 @@ const styles = StyleSheet.create({
     qtyBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
     qtyAddBtn: { backgroundColor: colors.primary },
     qtyValue: { width: 40, textAlign: "center", fontSize: 16, fontWeight: "700", color: "#1e293b" },
+    qtyInput: {
+        width: 50,
+        textAlign: "center",
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#1e293b",
+        paddingVertical: 0,
+        paddingHorizontal: 2,
+    },
     footer: {
         flexDirection: "row",
         justifyContent: "space-between",

@@ -1,0 +1,12 @@
+Source: android-devtools
+Mode: nested
+Coordinates are normalized [0,1] fractions of the screen (x, y, width, height), not pixels — pass them straight to gesture-tap / gesture-swipe / gesture-pinch, which expect this same space. To tap an element, use its centre: tap_x = frame.x + frame.width / 2, tap_y = frame.y + frame.height / 2.
+
+ROOT  Screen (0.000, 0.000, 1.000, 1.000)
+
+  LinearLayoutCompat id="com.pragatibandhu.app:id/parentPanel"  (0.063, 0.437, 0.874, 0.176)
+    StaticText "Empty Bill" id="com.pragatibandhu.app:id/alert_title"  (0.120, 0.457, 0.760, 0.029)
+    ScrollView id="com.pragatibandhu.app:id/scrollView"  (0.063, 0.495, 0.874, 0.023)
+      StaticText "Please add at least one product to the bill." id="android:id/message"  (0.063, 0.495, 0.874, 0.023)
+    ScrollView id="com.pragatibandhu.app:id/buttonPanel"  (0.063, 0.546, 0.874, 0.067)
+      Button "OK" id="android:id/button1" [clickable]  (0.755, 0.551, 0.153, 0.058)
