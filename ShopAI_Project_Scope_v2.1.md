@@ -799,7 +799,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 |---|---|---|---|
 | 93 | Configure production build environment in `eas.json` | ✅ | Configured `production` build profile with correct Supabase environment variables. |
 | 94 | Install `expo-insights` for usage metrics | ✅ | Installed `expo-insights` package to track active users and app store version distributions. |
-| 95 | Install `expo-observe` for performance tracking | ✅ | Installed `expo-observe` package to track startup metrics and rendering issues. |
+| 95 | Install `expo-observe` for performance tracking | ❌ | Deferred — package requires Expo SDK 55+, not compatible with our current SDK 54. |
 | 96 | Generate release Android App Bundle (AAB) | ✅ | Successfully ran EAS production build. Keystore auto-generated; `versionCode` incremented to `2`. |
 | 97 | Exclude build artifacts in `.gitignore` | ✅ | Added `*.apk` rule to `.gitignore` and removed untracked APKs from version control. |
 
@@ -875,7 +875,7 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 - **EAS Production Configuration:** Added production env variables (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`) to `eas.json` to link the production build to the correct Supabase database.
 - **EAS Build Automation:** Built Android App Bundle (.aab) successfully using EAS CLI with `versionCode` incremented to `2`. Keystore generated and managed via EAS.
 - **Usage Metrics Integration:** Installed `expo-insights` to track application usage, versions, and launch trends on the EAS Dashboard.
-- **Performance Monitoring Integration:** Installed `expo-observe` to monitor launch times, render speed, and session performance.
+- **Performance Monitoring Integration:** Attempted `expo-observe` integration; deferred since it requires Expo SDK 55+ and is incompatible with our current SDK 54.
 - **Git Ignore Fixes:** Added `*.apk` to `.gitignore` and removed local `.apk` files from tracking.
 
 ---
