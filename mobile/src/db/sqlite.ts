@@ -91,6 +91,16 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       sold_date TEXT DEFAULT (date('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS purchase_log (
+      id TEXT PRIMARY KEY NOT NULL,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      qty REAL NOT NULL,
+      purchase_price REAL NOT NULL,
+      selling_price REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS suggestions_cache (
       id TEXT PRIMARY KEY NOT NULL,
       product_id TEXT NOT NULL,
@@ -154,6 +164,8 @@ function initTables(database: SQLite.SQLiteDatabase): void {
   try { database.runSync('ALTER TABLE products ADD COLUMN purchase_uom TEXT DEFAULT NULL'); } catch (_) {}
   try { database.runSync('ALTER TABLE products ADD COLUMN units_per_pack INTEGER DEFAULT NULL'); } catch (_) {}
   try { database.runSync('ALTER TABLE bill_items ADD COLUMN display_qty TEXT DEFAULT NULL'); } catch (_) {}
+  try { database.runSync('ALTER TABLE bill_items ADD COLUMN purchase_price REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE draft_bill_items ADD COLUMN purchase_price REAL DEFAULT 0'); } catch (_) {}
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

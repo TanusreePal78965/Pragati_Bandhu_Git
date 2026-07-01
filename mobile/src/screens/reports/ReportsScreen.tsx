@@ -116,7 +116,7 @@ export default function ReportsScreen() {
                 <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
                     <td style="padding:10px 12px;font-weight:700;color:${colors.primary};">#${i + 1}</td>
                     <td style="padding:10px 12px;font-weight:600;">${p.product_name}</td>
-                    <td style="padding:10px 12px;text-align:center;">${p.total_qty}</td>
+                    <td style="padding:10px 12px;text-align:center;">${p.total_qty} ${p.uom || ""}</td>
                     <td style="padding:10px 12px;text-align:right;font-weight:700;">${fmt(p.total_amount)}</td>
                 </tr>`).join("");
 
@@ -347,7 +347,7 @@ export default function ReportsScreen() {
                                     <Text style={styles.productName} numberOfLines={1}>
                                         {item.product_name}
                                     </Text>
-                                    <Text style={styles.productSales}>{item.total_qty} units sold</Text>
+                                    <Text style={styles.productSales}>{item.total_qty} {item.uom || "units"} sold</Text>
                                 </View>
                                 <Text style={styles.productAmount}>{fmt(item.total_amount)}</Text>
                             </View>

@@ -140,12 +140,13 @@ export default function ManageCategoriesScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
-    content: { flex: 1, paddingHorizontal: spacing.md },
+    content: { flex: 1 },
     searchContainer: {
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: colors.surface,
         borderRadius: 12,
+        marginHorizontal: spacing.md,
         marginVertical: spacing.md,
         paddingHorizontal: spacing.sm,
         height: 50,
@@ -163,13 +164,14 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.md,
         color: colors.text,
     },
-    listContent: { paddingBottom: 100 },
+    listContent: { paddingTop: 4, paddingBottom: 100 },
     card: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         backgroundColor: colors.surface,
         padding: spacing.md,
+        marginHorizontal: spacing.md,
         borderRadius: 12,
         marginBottom: spacing.md,
         shadowColor: "#000",

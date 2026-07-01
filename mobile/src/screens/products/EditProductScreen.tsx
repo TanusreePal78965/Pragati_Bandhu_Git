@@ -17,8 +17,9 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
-import { getAllCategories, getAllBrands, updateProduct, Product, Category, Brand } from "../../db/db";
+import { getAllCategories, getAllBrands, updateProduct, getPurchaseLogsByProduct, Product, Category, Brand, PurchaseLog } from "../../db/db";
 import UomSelector from "../../components/products/UomSelector";
+import { toUtcDate } from "../../utils/dateUtils";
 
 export default function EditProductScreen() {
     const navigation = useNavigation();
@@ -53,12 +54,16 @@ export default function EditProductScreen() {
         product?.units_per_pack != null ? String(product.units_per_pack) : ""
     );
     const [saving, setSaving] = useState(false);
+    const [purchaseLogs, setPurchaseLogs] = useState<PurchaseLog[]>([]);
 
     useFocusEffect(
         useCallback(() => {
             setCategories(getAllCategories());
             setBrands(getAllBrands());
-        }, [])
+            if (product?.id) {
+                setPurchaseLogs(getPurchaseLogsByProduct(product.id));
+            }
+        }, [product?.id])
     );
 
     if (!product) {
@@ -332,6 +337,53 @@ export default function EditProductScreen() {
                         </>
                     )}
 
+                    {/* ── Purchase / Restock History ───────────────────────────────────────── */}
+                    <Text style={styles.sectionTitle}>PURCHASE / RESTOCK HISTORY</Text>
+
+                    {purchaseLogs.length === 0 ? (
+                        <View style={styles.emptyHistory}>
+                            <Ionicons name="receipt-outline" size={36} color="#CBD5E1" />
+                            <Text style={styles.emptyHistoryText}>No restocking history recorded yet</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.historyList}>
+                            {purchaseLogs.map((log, index) => {
+                                const formatDateTime = (dateStr: string) => {
+                                    try {
+                                        const d = toUtcDate(dateStr);
+                                        const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                                        const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                                        return `${date} · ${time}`;
+                                    } catch (_) {
+                                        return dateStr;
+                                    }
+                                };
+                                return (
+                                    <View
+                                        key={log.id}
+                                        style={[
+                                            styles.historyRow,
+                                            index === purchaseLogs.length - 1 && { borderBottomWidth: 0 },
+                                        ]}
+                                    >
+                                        <View style={styles.historyIcon}>
+                                            <Ionicons name="add" size={18} color={colors.primary} />
+                                        </View>
+                                        <View style={styles.historyInfo}>
+                                            <Text style={styles.historyDate}>{formatDateTime(log.created_at)}</Text>
+                                            <Text style={styles.historyMeta}>
+                                                Cost: ₹{log.purchase_price.toFixed(2)} · Selling: ₹{log.selling_price.toFixed(2)}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.historyRight}>
+                                            <Text style={styles.historyQty}>+{log.qty} {selectedUom}</Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    )}
+
                     <View style={{ height: 24 }} />
                 </ScrollView>
 
@@ -443,4 +495,36 @@ const styles = StyleSheet.create({
         alignSelf: "flex-start",
     },
     toggleThumbActive: { alignSelf: "flex-end" },
+    emptyHistory: { alignItems: "center", paddingVertical: spacing.lg, gap: spacing.xs },
+    emptyHistoryText: { fontSize: 13, color: colors.textSecondary, textAlign: "center" },
+    historyList: {
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#e5e7eb",
+        overflow: "hidden",
+        marginBottom: spacing.md,
+    },
+    historyRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: spacing.md,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e5e7eb",
+    },
+    historyIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "#e0f2fe",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 12,
+    },
+    historyInfo: { flex: 1 },
+    historyDate: { fontSize: 13, fontWeight: "600", color: colors.text },
+    historyMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    historyRight: { flexDirection: "row", alignItems: "center" },
+    historyQty: { fontSize: 14, fontWeight: "700", color: colors.primary },
 });

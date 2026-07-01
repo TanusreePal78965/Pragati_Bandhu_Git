@@ -27,6 +27,8 @@ import {
     deleteProduct,
     updateProductStock,
     updateProduct,
+    insertProduct,
+    insertPurchaseLog,
     Product,
     Category,
 } from "../../db/db";
@@ -63,23 +65,91 @@ export default function ProductsScreen() {
         );
     };
 
-    const handleBulkStockUpdate = (qty: number, mode: "add" | "reduce", isPackMode: boolean) => {
-        selectedItems.forEach((id) => {
+    const handleBulkStockUpdate = (
+        qty: number,
+        mode: "add" | "reduce",
+        isPackMode: boolean,
+        purchasePrice?: number,
+        sellingPrice?: number,
+        strategy?: "average" | "batch" | "replace",
+        batchName?: string
+    ) => {
+        if (selectedItems.length === 1 && mode === "add") {
+            const id = selectedItems[0];
             const product = products.find((p) => p.id === id);
             if (!product) return;
+
             const baseQty = isPackMode && product.units_per_pack
                 ? qty * product.units_per_pack
                 : qty;
-            const newQty =
-                mode === "add"
-                    ? product.stock_quantity + baseQty
-                    : Math.max(0, product.stock_quantity - baseQty);
-            updateProductStock(id, newQty);
-        });
+
+            const newCost = purchasePrice ?? product.purchase_price;
+            const newSelling = sellingPrice ?? product.selling_price;
+
+            if (strategy === "batch" && batchName) {
+                // Option B: Create a new batch as a separate product listing
+                const newProductId = insertProduct({
+                    name: batchName,
+                    category_id: product.category_id,
+                    brand_id: product.brand_id,
+                    purchase_price: newCost,
+                    selling_price: newSelling,
+                    stock_quantity: baseQty,
+                    min_stock_threshold: product.min_stock_threshold,
+                    uom: product.uom,
+                    purchase_uom: product.purchase_uom,
+                    units_per_pack: product.units_per_pack,
+                });
+                insertPurchaseLog(newProductId, batchName, baseQty, newCost, newSelling);
+                Alert.alert("Success", `Created new batch "${batchName}" with ${qty} ${isPackMode && product.purchase_uom ? product.purchase_uom : product.uom} stock.`);
+            } else if (strategy === "average") {
+                // Option A: Mix & Average costing
+                const oldStock = product.stock_quantity;
+                const oldCost = product.purchase_price;
+                const totalStock = oldStock + baseQty;
+
+                const weightedAvgCost = totalStock > 0
+                    ? ((oldStock * oldCost) + (baseQty * newCost)) / totalStock
+                    : newCost;
+
+                updateProduct(id, {
+                    stock_quantity: totalStock,
+                    purchase_price: parseFloat(weightedAvgCost.toFixed(2)),
+                    selling_price: newSelling,
+                });
+                insertPurchaseLog(id, product.name, baseQty, newCost, newSelling);
+                Alert.alert("Success", `Stock updated to ${totalStock} ${product.uom}. Cost averaged to ₹${weightedAvgCost.toFixed(2)}.`);
+            } else {
+                // Option C: Replacement Cost (or fallback default)
+                const totalStock = product.stock_quantity + baseQty;
+                updateProduct(id, {
+                    stock_quantity: totalStock,
+                    purchase_price: newCost,
+                    selling_price: newSelling,
+                });
+                insertPurchaseLog(id, product.name, baseQty, newCost, newSelling);
+                Alert.alert("Success", `Stock updated to ${totalStock} ${product.uom}. Price snapped to new cost of ₹${newCost.toFixed(2)}.`);
+            }
+        } else {
+            // Bulk updates (Multi-product or reduce stock mode)
+            selectedItems.forEach((id) => {
+                const product = products.find((p) => p.id === id);
+                if (!product) return;
+                const baseQty = isPackMode && product.units_per_pack
+                    ? qty * product.units_per_pack
+                    : qty;
+                const newQty =
+                    mode === "add"
+                        ? product.stock_quantity + baseQty
+                        : Math.max(0, product.stock_quantity - baseQty);
+                updateProductStock(id, newQty);
+            });
+            Alert.alert("Success", `Stock updated for ${selectedItems.length} item(s).`);
+        }
+
         setIsUpdateStockVisible(false);
         setSelectedItems([]);
         setProducts(getAllProducts());
-        Alert.alert("Success", `Stock updated for ${selectedItems.length} item(s).`);
     };
 
     const handleBulkCategoryUpdate = (categoryName: string) => {
@@ -137,7 +207,33 @@ export default function ProductsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
-            <ScreenHeader title="Inventory" isMainTab={false} onNotificationPress={() => {}} />
+            <ScreenHeader
+                title="Inventory"
+                isMainTab={false}
+                rightElement={
+                    <View style={styles.headerButtonsRow}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => navigation.navigate("ManageCategories")}
+                        >
+                            <Ionicons name="folder-outline" size={22} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => navigation.navigate("ManageBrands")}
+                        >
+                            <Ionicons name="pricetag-outline" size={22} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => navigation.navigate("Notifications")}
+                        >
+                            <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+                            <View style={styles.notificationDot} />
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
 
             <View style={styles.searchContainer}>
                 <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
@@ -339,4 +435,28 @@ const styles = StyleSheet.create({
     selectionActions: { flexDirection: "row", alignItems: "center", gap: 16 },
     selectionAction: { alignItems: "center", gap: 4 },
     selectionActionText: { color: "#fff", fontSize: 9, fontWeight: "700" },
+    headerButtonsRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    headerButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: "#f8fafc",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    notificationDot: {
+        position: "absolute",
+        top: 10,
+        right: 10,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.error,
+        borderWidth: 2,
+        borderColor: "#fff",
+    },
 });

@@ -14,6 +14,7 @@ export interface BackupData {
   bills: any[];
   billItems: any[];
   salesLog: any[];
+  purchaseLog?: any[];
 }
 
 export interface ImportSummary {
@@ -24,6 +25,7 @@ export interface ImportSummary {
   bills: number;
   billItems: number;
   salesLog: number;
+  purchaseLog: number;
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ export const exportAsJson = (): BackupData => {
   const bills = db.getAllSync('SELECT * FROM bills ORDER BY bill_date ASC') as any[];
   const billItems = db.getAllSync('SELECT * FROM bill_items') as any[];
   const salesLog = db.getAllSync('SELECT * FROM sales_log') as any[];
+  const purchaseLog = db.getAllSync('SELECT * FROM purchase_log') as any[];
 
   return {
     version: 1,
@@ -53,6 +56,7 @@ export const exportAsJson = (): BackupData => {
     bills,
     billItems,
     salesLog,
+    purchaseLog,
   };
 };
 
@@ -72,6 +76,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     bills: 0,
     billItems: 0,
     salesLog: 0,
+    purchaseLog: 0,
   };
 
   db.withTransactionSync(() => {
@@ -166,9 +171,14 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     for (const row of data.billItems ?? []) {
       db.runSync(
         `INSERT OR REPLACE INTO bill_items
-           (id, bill_id, product_id, product_name, qty, unit_price, line_total)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [row.id, row.bill_id, row.product_id, row.product_name, row.qty, row.unit_price, row.line_total]
+           (id, bill_id, product_id, product_name, qty, unit_price, line_total, purchase_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.id, row.bill_id,
+          row.product_id, row.product_name,
+          row.qty, row.unit_price, row.line_total,
+          row.purchase_price ?? 0
+        ]
       );
       summary.billItems++;
     }
@@ -182,6 +192,21 @@ export const importFromJson = (data: BackupData): ImportSummary => {
         [row.id, row.product_id, row.product_name, row.qty_sold, row.sale_amount, row.sold_date ?? new Date().toISOString()]
       );
       summary.salesLog++;
+    }
+
+    // Purchase Log
+    for (const row of data.purchaseLog ?? []) {
+      db.runSync(
+        `INSERT OR REPLACE INTO purchase_log
+           (id, product_id, product_name, qty, purchase_price, selling_price, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.id, row.product_id, row.product_name,
+          row.qty, row.purchase_price, row.selling_price,
+          row.created_at ?? new Date().toISOString()
+        ]
+      );
+      summary.purchaseLog++;
     }
   });
 
@@ -198,6 +223,7 @@ export const clearAllLocalData = (): void => {
   db.withTransactionSync(() => {
     db.runSync('DELETE FROM bill_items');
     db.runSync('DELETE FROM sales_log');
+    db.runSync('DELETE FROM purchase_log');
     db.runSync('DELETE FROM bills');
     db.runSync('DELETE FROM customers');
     db.runSync('DELETE FROM products');

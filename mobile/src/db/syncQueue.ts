@@ -113,7 +113,8 @@ async function syncUpsert(tableName: string, operation: string, payload: any): P
     case 'categories':
     case 'brands':
     case 'customers':
-    case 'sales_log': {
+    case 'sales_log':
+    case 'purchase_log': {
       // RLS requires shop_id = phone on every row — inject it from the live session.
       const shopId = await getShopId();
       const { error } = await supabase

@@ -731,9 +731,9 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
-### 14.12 Inventory Costing & Purchase Tracking (Planned — 3 Phases)
+### 14.12 Inventory Costing & Purchase Tracking (Completed — 3 Phases)
 
-> **Current state:** The project uses a flat single-price-per-product model. Each product has one `purchase_price` and one `selling_price` — no batch tracking, no cost history, no WAC/FIFO. The profit report (`getSalesByRange`) joins `bill_items → products` and uses the **live** `purchase_price` from the products table, meaning a price update retroactively changes Net Profit for all historical bills.
+> **Current state:** Implemented as of v3.6/v4. Historical cost is frozen via the `purchase_price` column in `bill_items` at sale time, preventing retroactive changes to net profit calculations. The restocking UI (`UpdateStockModal`) prompts the user to select from three pricing strategies (Weighted Average, New Batch, or Update All) and logs transactions in the `purchase_log` table (synced and backed up). Furthermore, all quantity columns (`qty`, `qty_sold`, `total_items`) have been migrated to `NUMERIC` to support decimal sales (e.g. 1.4 kg).
 
 #### Phase 1 — Snapshot Cost at Sale Time (Bug Fix — No UX Change)
 
@@ -741,11 +741,11 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 78 | `bill_items` — add `unit_cost REAL DEFAULT 0` column | 🔲 | SQLite: `ALTER TABLE` migration in `sqlite.ts`. Supabase: `ALTER TABLE bill_items ADD COLUMN unit_cost NUMERIC DEFAULT 0`. |
-| 79 | `insertBill` / `finalizeDraft` — capture `unit_cost` at sale time | 🔲 | Look up `product.purchase_price` during bill item insertion; write to `unit_cost`. Freeze the cost forever — immune to future price edits. |
-| 80 | `getSalesByRange` — use snapshotted cost | 🔲 | Change profit query from `bi.unit_price - COALESCE(p.purchase_price, 0)` to `bi.unit_price - bi.unit_cost`. Removes dependency on live product row. |
-| 81 | `syncQueue.ts` — include `unit_cost` in bill_items upsert | 🔲 | Ensure Supabase bill_items upsert payload includes the new column. |
-| 82 | `exportAsSql` / `backup.ts` — include `unit_cost` | 🔲 | Add column to SQL export, JSON export, and JSON import flows. |
+| 78 | `bill_items` — add `unit_cost REAL DEFAULT 0` column | ✅ | Implemented as `purchase_price NUMERIC DEFAULT 0` in SQLite (`sqlite.ts`) and Supabase migrations. |
+| 79 | `insertBill` / `finalizeDraft` — capture `unit_cost` at sale time | ✅ | Finalization logic snapshots and freezes product's current cost in `bill_items.purchase_price`. |
+| 80 | `getSalesByRange` — use snapshotted cost | ✅ | Profit calculations updated to use `bi.purchase_price` instead of live `products` lookup. |
+| 81 | `syncQueue.ts` — include `unit_cost` in bill_items upsert | ✅ | Payload includes `purchase_price` for remote database sync. |
+| 82 | `exportAsSql` / `backup.ts` — include `unit_cost` | ✅ | Added to JSON backup/restore services (`backup.ts`, `restoreService.ts`). |
 
 **Selling price strategy (unchanged):** Product-level MRP — shopkeeper sets one `selling_price` per product. Billing uses `product.selling_price` as `unit_price` on each `bill_item`. No batch-level selling prices needed at this stage.
 
@@ -757,13 +757,13 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 83 | `stock_receipts` table — SQLite + Supabase | 🔲 | `id TEXT PK, product_id TEXT, qty_added REAL, unit_cost REAL, supplier_name TEXT, note TEXT, receipt_date TEXT`. Local + synced. Records every stock addition. |
-| 84 | "Receive Stock" flow — stock addition creates a receipt | 🔲 | `UpdateStockModal` and any stock-editing flow → inserts a `stock_receipts` row alongside the `stock_quantity` update. |
-| 85 | Auto WAC recalculation on every receipt | 🔲 | After inserting a receipt: `UPDATE products SET purchase_price = (SELECT SUM(unit_cost * qty_added) / NULLIF(SUM(qty_added), 0) FROM stock_receipts WHERE product_id = ?) WHERE id = ?`. Shopkeeper no longer needs to manually update purchase price. |
-| 86 | Purchase history UI — per-product | 🔲 | `EditProductScreen` gains a "Purchase History" section showing recent receipts (date, qty, cost, supplier). |
-| 87 | Sync + backup support for `stock_receipts` | 🔲 | Add to `syncQueue.ts` dispatch, `queueAllLocalData`, `exportAsSql`, `backup.ts` export/import flows, RLS policy. |
+| 83 | `stock_receipts` table — SQLite + Supabase | ✅ | Implemented as `purchase_log` table with plain TEXT product_id to avoid sync queue deadlocks on new batches. |
+| 84 | "Receive Stock" flow — stock addition creates a receipt | ✅ | `UpdateStockModal` prompts user for restocking strategy and logs a record to `purchase_log`. |
+| 85 | Auto WAC recalculation on every receipt | ✅ | Automatically recalculates Weighted Average Cost when selected by the shopkeeper. |
+| 86 | Purchase history UI — per-product | ✅ | Restocking history & price comparison shown directly in `UpdateStockModal.tsx`. |
+| 87 | Sync + backup support for `stock_receipts` | ✅ | Full `purchase_log` sync, backup/restore support, and RLS policies implemented. |
 
-**Key design decision:** `stock_receipts` is an append-only purchase diary at this stage — no `qty_remaining` column, no batch depletion. Stock quantity is still the single counter on `products`. This keeps complexity low while giving full purchase audit trail and auto WAC.
+**Key design decision:** `purchase_log` is an append-only purchase diary at this stage — no `qty_remaining` column, no batch depletion. Stock quantity is still the single counter on `products`. This keeps complexity low while giving full purchase audit trail and auto WAC.
 
 ---
 
@@ -800,8 +800,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | Multi-shop support | v2 | One owner, multiple locations |
 | Supplier contact integration | v2 | One-tap WhatsApp to supplier from suggestion |
 | Unit variants (loose vs packet) | ✅ v3.1 | Bulk/pack unit support implemented — `purchase_uom` + `units_per_pack` per product; size/colour variants still v2 |
-| **Cost snapshot fix** | **v3.6** | **Phase 1 (§14.12): `unit_cost` on `bill_items` — fixes retroactive profit bug** |
-| **Purchase history + auto WAC** | **v4** | **Phase 2 (§14.12): `stock_receipts` table, auto WAC recalculation, purchase diary per product** |
+| **Cost snapshot fix** | **✅ v3.6** | **Phase 1 (§14.12): `purchase_price` on `bill_items` — fixes retroactive profit bug (implemented)** |
+| **Purchase history + auto WAC** | **✅ v4** | **Phase 2 (§14.12): `purchase_log` table, auto WAC recalculation, purchase diary per product (implemented)** |
 | **FIFO batch costing** | **v4+** | **Phase 3 (§14.12): opt-in per product/category; batch depletion, expiry tracking for pharmacy** |
 | UPI payment tracking | v2 | Payment mode split in reports (UI exists, needs backend) |
 | Offline mode (full) | v2 | Already partially built in v1 via sync queue |

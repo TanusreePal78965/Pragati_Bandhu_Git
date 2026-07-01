@@ -94,6 +94,7 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
     const customersData  = await safeQuery(supabase.from('customers').select('*').eq('shop_id', phone), 'customers');
     const billsData      = await safeQuery(supabase.from('bills').select('*').eq('shop_id', phone), 'bills');
     const salesLogData   = await safeQuery(supabase.from('sales_log').select('*').eq('shop_id', phone), 'sales_log');
+    const purchaseLogData = await safeQuery(supabase.from('purchase_log').select('*').eq('shop_id', phone), 'purchase_log');
 
     // Fetch bill_items separately, chunked to handle shops with many bills (C3)
     const billIds = ((billsData as any[] | null) ?? []).map((b: any) => b.id);
@@ -146,6 +147,7 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       bills: normaliseBills(billsData as any[] | null),   // C9
       billItems,                                          // bill_items has no shop_id column
       salesLog: stripShopId(salesLogData as any[] | null),
+      purchaseLog: stripShopId(purchaseLogData as any[] | null),
     };
 
     const summary = importFromJson(backup);
@@ -184,6 +186,10 @@ export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
     // 1. sales_log
     const { error: slErr } = await supabase.from('sales_log').delete().eq('shop_id', phone);
     if (slErr) tableErrors['sales_log'] = slErr.message;
+
+    // 1.5 purchase_log
+    const { error: plErr } = await supabase.from('purchase_log').delete().eq('shop_id', phone);
+    if (plErr) tableErrors['purchase_log'] = plErr.message;
 
     // 2. bill_items — no shop_id; delete via parent bill IDs in chunks (C3)
     const { data: billRows, error: billFetchErr } = await supabase

@@ -6,12 +6,15 @@ import {
     ScrollView,
     TouchableOpacity,
     StatusBar,
+    Alert,
 } from "react-native";
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
@@ -29,6 +32,24 @@ const formatDateTime = (dateStr: string) => {
         minute: "2-digit",
         hour12: true,
     });
+};
+
+const renderItemDetails = (item: BillItem): string => {
+    if (item.display_qty) {
+        const parts = item.display_qty.trim().split(/\s+/);
+        if (parts.length >= 2) {
+            const qtyVal = parseFloat(parts[0]);
+            if (!isNaN(qtyVal) && qtyVal > 0) {
+                const displayPrice = item.line_total / qtyVal;
+                return `₹${displayPrice.toFixed(2)} × ${item.display_qty}`;
+            }
+        }
+        return `₹${item.unit_price.toFixed(2)} × ${item.display_qty}`;
+    }
+    if (item.uom) {
+        return `₹${item.unit_price.toFixed(2)} × ${item.qty} ${item.uom}`;
+    }
+    return `₹${item.unit_price.toFixed(2)} × ${item.qty}`;
 };
 
 export default function BillDetailScreen() {
@@ -53,73 +74,246 @@ export default function BillDetailScreen() {
         const customerName = bill.customer_name || "Walk-in Customer";
 
         const itemsHtml = items.length === 0
-            ? `<tr><td colspan="2" style="padding:12px;color:#888;text-align:center;">No items found</td></tr>`
-            : items.map((item) => `
-            <tr>
-                <td style="padding: 10px 0; border-bottom: 1px solid #eee;">
-                    <div style="font-weight: bold; font-size: 14px;">${item.product_name}</div>
-                    <div style="font-size: 12px; color: #666;">₹${item.unit_price.toFixed(2)} × ${item.qty}</div>
-                </td>
-                <td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">
-                    ₹${item.line_total.toFixed(2)}
-                </td>
-            </tr>
-        `).join("");
+            ? `<tr><td colspan="4" style="padding:12px;color:#888;text-align:center;">No items found</td></tr>`
+            : items.map((item) => {
+                let displayPrice = item.unit_price;
+                let displayQty = String(item.qty);
+                let uomStr = "";
+
+                if (item.display_qty) {
+                    const parts = item.display_qty.trim().split(/\s+/);
+                    if (parts.length >= 2) {
+                        const qtyVal = parseFloat(parts[0]);
+                        if (!isNaN(qtyVal) && qtyVal > 0) {
+                            displayPrice = item.line_total / qtyVal;
+                            displayQty = parts[0];
+                            uomStr = parts.slice(1).join(" ");
+                        }
+                    } else {
+                        uomStr = item.uom ?? "";
+                    }
+                } else if (item.uom) {
+                    uomStr = item.uom;
+                }
+
+                return `
+                <tr>
+                    <td class="text-left" style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">
+                        ${item.product_name}
+                    </td>
+                    <td class="text-right" style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">
+                        ₹${displayPrice.toFixed(2)}
+                    </td>
+                    <td class="text-center" style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0;">
+                        ${displayQty} ${uomStr}
+                    </td>
+                    <td class="text-right" style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 700;">
+                        ₹${item.line_total.toFixed(2)}
+                    </td>
+                </tr>
+                `;
+            }).join("");
 
         return `
             <html>
                 <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <style>
+                        @media print {
+                            body {
+                                -webkit-print-color-adjust: exact;
+                                padding: 0;
+                                margin: 0;
+                            }
+                            .no-print {
+                                display: none;
+                            }
+                        }
+                        * { box-sizing: border-box; }
+                        body {
+                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                            color: #0f172a;
+                            padding: 30px;
+                            background-color: #fff;
+                            line-height: 1.5;
+                        }
+                        .invoice-box {
+                            max-width: 800px;
+                            margin: auto;
+                        }
+                        .header {
+                            border-bottom: 2px solid #0f172a;
+                            padding-bottom: 15px;
+                            margin-bottom: 25px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-end;
+                        }
+                        .shop-info h1 {
+                            margin: 0;
+                            font-size: 26px;
+                            font-weight: 800;
+                            color: #0f172a;
+                        }
+                        .shop-info p {
+                            margin: 3px 0 0 0;
+                            font-size: 13px;
+                            color: #475569;
+                        }
+                        .invoice-title {
+                            text-align: right;
+                        }
+                        .invoice-title h2 {
+                            margin: 0;
+                            font-size: 22px;
+                            font-weight: 800;
+                            color: #0f172a;
+                            letter-spacing: 1px;
+                        }
+                        .invoice-title p {
+                            margin: 3px 0 0 0;
+                            font-size: 13px;
+                            color: #475569;
+                        }
+                        .details-row {
+                            display: flex;
+                            justify-content: space-between;
+                            margin-bottom: 30px;
+                            gap: 20px;
+                        }
+                        .details-box {
+                            flex: 1;
+                        }
+                        .details-box h3 {
+                            margin: 0 0 8px 0;
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: #64748b;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        .details-box p {
+                            margin: 2px 0;
+                            font-size: 14px;
+                            color: #0f172a;
+                        }
+                        .details-box .bold {
+                            font-weight: 700;
+                        }
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 30px;
+                        }
+                        th {
+                            background-color: #f8fafc;
+                            border-bottom: 2px solid #cbd5e1;
+                            padding: 10px 12px;
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: #475569;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        tr {
+                            page-break-inside: avoid;
+                        }
+                        .text-left { text-align: left; }
+                        .text-center { text-align: center; }
+                        .text-right { text-align: right; }
+                        .total-box {
+                            width: 100%;
+                            max-width: 320px;
+                            margin-left: auto;
+                            background-color: #f8fafc;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            padding: 15px;
+                        }
+                        .total-row {
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 6px 0;
+                            font-size: 14px;
+                            color: #475569;
+                        }
+                        .total-row.grand-total {
+                            border-top: 1px dashed #cbd5e1;
+                            margin-top: 8px;
+                            padding-top: 10px;
+                            font-size: 18px;
+                            font-weight: 800;
+                            color: #0f172a;
+                        }
+                        .footer {
+                            margin-top: 60px;
+                            text-align: center;
+                            color: #94a3b8;
+                            font-size: 12px;
+                            border-top: 1px solid #e2e8f0;
+                            padding-top: 20px;
+                        }
+                    </style>
                 </head>
-                <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #333;">
-                    <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid ${colors.primary}; padding-bottom: 20px;">
-                        <h1 style="margin: 0; color: ${colors.primary}; font-size: 28px;">${shopName}</h1>
-                        ${shopOwner ? `<p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Proprietor: ${shopOwner}</p>` : ""}
-                        ${shopPhone ? `<p style="margin: 2px 0 0 0; color: #666; font-size: 14px;">Contact: +91 ${shopPhone}</p>` : ""}
-                    </div>
+                <body>
+                    <div class="invoice-box">
+                        <div class="header">
+                            <div class="shop-info">
+                                <h1>${shopName}</h1>
+                                ${shopOwner ? `<p>Proprietor: ${shopOwner}</p>` : ""}
+                                ${shopPhone ? `<p>Contact: +91 ${shopPhone}</p>` : ""}
+                            </div>
+                            <div class="invoice-title">
+                                <h2>INVOICE</h2>
+                                <p>#${bill.id.toUpperCase()}</p>
+                            </div>
+                        </div>
 
-                    <div style="margin-bottom: 30px; display: flex; justify-content: space-between;">
-                        <div style="flex: 1;">
-                            <h3 style="margin: 0 0 10px 0; font-size: 12px; color: #888; text-transform: uppercase;">Customer</h3>
-                            <p style="margin: 0; font-weight: bold; font-size: 16px;">${customerName}</p>
+                        <div class="details-row">
+                            <div class="details-box">
+                                <h3>Billed To</h3>
+                                <p class="bold">${customerName}</p>
+                            </div>
+                            <div class="details-box text-right">
+                                <h3>Date of Issue</h3>
+                                <p>${date}</p>
+                                <p><span style="font-weight:600; color:#64748b; font-size:11px; text-transform:uppercase;">Payment:</span> ${bill.payment_mode === "udhar" ? "Udhar (Credit)" : bill.payment_mode === "upi" ? "UPI" : "Cash"}</p>
+                            </div>
                         </div>
-                        <div style="flex: 1; text-align: right;">
-                            <h3 style="margin: 0 0 10px 0; font-size: 12px; color: #888; text-transform: uppercase;">Bill Summary</h3>
-                            <p style="margin: 0; font-weight: bold; font-size: 14px;">ID: ${bill.id.toUpperCase()}</p>
-                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">${date}</p>
-                        </div>
-                    </div>
 
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-                        <thead>
-                            <tr>
-                                <th style="text-align: left; padding-bottom: 10px; border-bottom: 2px solid #eee; color: #999; font-size: 12px; text-transform: uppercase;">Description</th>
-                                <th style="text-align: right; padding-bottom: 10px; border-bottom: 2px solid #eee; color: #999; font-size: 12px; text-transform: uppercase;">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHtml}
-                        </tbody>
-                    </table>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="text-left" style="width: 50%;">Item Description</th>
+                                    <th class="text-right" style="width: 15%;">Price</th>
+                                    <th class="text-center" style="width: 15%;">Qty</th>
+                                    <th class="text-right" style="width: 20%;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
 
-                    <div style="background-color: #f9fafb; padding: 20px; border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                            <span style="color: #666;">Subtotal</span>
-                            <span style="font-weight: bold;">₹${bill.total_amount.toFixed(2)}</span>
+                        <div class="total-box">
+                            <div class="total-row">
+                                <span>Subtotal</span>
+                                <span>₹${bill.total_amount.toFixed(2)}</span>
+                            </div>
+                            <div class="total-row">
+                                <span>Payment Mode</span>
+                                <span style="font-weight:600;">${bill.payment_mode === "udhar" ? "Udhar" : bill.payment_mode === "upi" ? "UPI" : "Cash"}</span>
+                            </div>
+                            <div class="total-row grand-total">
+                                <span>Grand Total</span>
+                                <span>₹${bill.total_amount.toFixed(2)}</span>
+                            </div>
                         </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                            <span style="color: #666;">Payment Mode</span>
-                            <span style="font-weight: bold; color: ${bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success};">${bill.payment_mode === "udhar" ? "Udhar (Credit)" : bill.payment_mode === "upi" ? "UPI Payment" : "Cash"}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding-top: 15px; border-top: 1px solid #ddd;">
-                            <span style="font-size: 18px; font-weight: bold;">Grand Total</span>
-                            <span style="font-size: 24px; font-weight: 800; color: ${colors.primary};">₹${bill.total_amount.toFixed(2)}</span>
-                        </div>
-                    </div>
 
-                    <div style="margin-top: 50px; text-align: center; color: #999; font-size: 12px;">
-                        <p>Thank you for your business!</p>
-                        <p style="margin-top: 5px;">This is a computer generated receipt.</p>
+                        <div class="footer">
+                            <p>Thank you for your business!</p>
+                            <p style="margin-top: 3px; font-size: 10px;">This is a computer generated receipt.</p>
+                        </div>
                     </div>
                 </body>
             </html>
@@ -131,13 +325,18 @@ export default function BillDetailScreen() {
             const html = generateBillHtml();
             const { uri } = await Print.printToFileAsync({ html });
             
-            const fileName = `Bill_${bill.id.substring(0, 8)}_${new Date().getTime()}.pdf`;
-            const newUri = uri.substring(0, uri.lastIndexOf('/') + 1) + fileName;
+            const cleanShopName = shopInfo?.shopName ? shopInfo.shopName.replace(/[^a-zA-Z0-9]/g, "_") : "Store";
+            const cleanCustomerName = bill.customer_name ? bill.customer_name.replace(/[^a-zA-Z0-9]/g, "_") : "Walk_in";
             
-            // To rename the file on iOS/Android, we'd normally use FileSystem, 
-            // but for simple sharing, printToFileAsync's output is sufficient.
+            const readableFileName = `Invoice_${cleanShopName}_${cleanCustomerName}_${bill.id}.pdf`;
+            const newUri = FileSystem.cacheDirectory + readableFileName;
             
-            await Sharing.shareAsync(uri, {
+            await FileSystem.copyAsync({
+                from: uri,
+                to: newUri
+            });
+            
+            await Sharing.shareAsync(newUri, {
                 mimeType: 'application/pdf',
                 dialogTitle: `Share Bill #${bill.id.toUpperCase()}`,
                 UTI: 'com.adobe.pdf'
@@ -227,7 +426,15 @@ export default function BillDetailScreen() {
                     <View style={styles.divider} />
 
                     {/* Bill ID */}
-                    <Text style={styles.billId}>Bill ID: {bill.id.toUpperCase()}</Text>
+                    <TouchableOpacity 
+                        onPress={async () => {
+                            await Clipboard.setStringAsync(bill.id.toUpperCase());
+                            Alert.alert("Copied", "Bill ID copied to clipboard");
+                        }} 
+                        activeOpacity={0.6}
+                    >
+                        <Text style={styles.billId}>Bill ID: {bill.id.toUpperCase()}</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Items Section */}
@@ -250,7 +457,7 @@ export default function BillDetailScreen() {
                                         {item.product_name}
                                     </Text>
                                     <Text style={styles.itemMeta}>
-                                        ₹{item.unit_price.toFixed(2)} × {item.qty}
+                                        {renderItemDetails(item)}
                                     </Text>
                                 </View>
                                 <Text style={styles.itemTotal}>₹{item.line_total.toFixed(2)}</Text>
@@ -370,12 +577,14 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        backgroundColor: colors.primary,
+        backgroundColor: colors.surface,
         borderRadius: 12,
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
-    grandTotalLabel: { fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.8)" },
-    grandTotalValue: { fontSize: 24, fontWeight: "800", color: "#fff" },
+    grandTotalLabel: { fontSize: 13, fontWeight: "700", color: colors.textSecondary },
+    grandTotalValue: { fontSize: 24, fontWeight: "800", color: colors.primary },
     errorText: { textAlign: "center", color: colors.textSecondary, marginTop: 40 },
 });

@@ -142,6 +142,10 @@ export interface BillItem {
   unit_price: number;
   line_total: number;
   display_qty?: string | null;
+  purchase_price?: number;
+  uom?: string | null;
+  purchase_uom?: string | null;
+  units_per_pack?: number | null;
 }
 
 export interface Bill {
@@ -168,13 +172,18 @@ export interface TopProduct {
   product_name: string;
   total_qty: number;
   total_amount: number;
+  uom?: string | null;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
 
-export const getAllCategories = (): Category[] => {
+export const getAllCategories = (): (Category & { product_count?: number })[] => {
   try {
-    return db.getAllSync('SELECT * FROM categories ORDER BY name ASC') as Category[];
+    return db.getAllSync(`
+      SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) as product_count
+      FROM categories c
+      ORDER BY c.name ASC
+    `) as any[];
   } catch (e) {
     console.error('getAllCategories error:', e);
     return [];
@@ -220,9 +229,13 @@ export const deleteCategory = (id: string): void => {
 
 // ─── Brands ───────────────────────────────────────────────────────────────────
 
-export const getAllBrands = (): Brand[] => {
+export const getAllBrands = (): (Brand & { product_count?: number })[] => {
   try {
-    return db.getAllSync('SELECT * FROM brands ORDER BY name ASC') as Brand[];
+    return db.getAllSync(`
+      SELECT b.*, (SELECT COUNT(*) FROM products p WHERE p.brand_id = b.id) as product_count
+      FROM brands b
+      ORDER BY b.name ASC
+    `) as any[];
   } catch (e) {
     console.error('getAllBrands error:', e);
     return [];
@@ -321,7 +334,7 @@ export const insertProduct = (product: {
   uom: string;
   purchase_uom?: string | null;
   units_per_pack?: number | null;
-}): void => {
+}): string => {
   const id = genId();
   try {
     db.runSync(
@@ -342,6 +355,7 @@ export const insertProduct = (product: {
       ]
     );
     addToSyncQueue('products', 'INSERT', id, { id, ...product });
+    return id;
   } catch (e) {
     console.error('insertProduct error:', e);
     throw e;
@@ -385,6 +399,56 @@ export const updateProductStock = (id: string, newQty: number): void => {
   } catch (e) {
     console.error('updateProductStock error:', e);
     throw e;
+  }
+};
+
+export const insertPurchaseLog = (
+  productId: string,
+  productName: string,
+  qty: number,
+  purchasePrice: number,
+  sellingPrice: number
+): void => {
+  const id = genId();
+  try {
+    db.runSync(
+      `INSERT INTO purchase_log (id, product_id, product_name, qty, purchase_price, selling_price)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, productId, productName, qty, purchasePrice, sellingPrice]
+    );
+    addToSyncQueue('purchase_log', 'INSERT', id, {
+      id,
+      product_id: productId,
+      product_name: productName,
+      qty,
+      purchase_price: purchasePrice,
+      selling_price: sellingPrice,
+    });
+  } catch (e) {
+    console.error('insertPurchaseLog error:', e);
+    throw e;
+  }
+};
+
+export interface PurchaseLog {
+  id: string;
+  product_id: string;
+  product_name: string;
+  qty: number;
+  purchase_price: number;
+  selling_price: number;
+  created_at: string;
+}
+
+export const getPurchaseLogsByProduct = (productId: string, limit: number = 20): PurchaseLog[] => {
+  try {
+    return db.getAllSync(
+      `SELECT * FROM purchase_log WHERE product_id = ? ORDER BY created_at DESC LIMIT ?`,
+      [productId, limit]
+    ) as PurchaseLog[];
+  } catch (e) {
+    console.error('getPurchaseLogsByProduct error:', e);
+    return [];
   }
 };
 
@@ -618,7 +682,10 @@ export const getAllBills = (): Bill[] => {
 export const getBillItems = (billId: string): BillItem[] => {
   try {
     return db.getAllSync(
-      'SELECT * FROM bill_items WHERE bill_id = ?',
+      `SELECT bi.*, p.uom, p.purchase_uom, p.units_per_pack
+       FROM bill_items bi
+       LEFT JOIN products p ON bi.product_id = p.id
+       WHERE bi.bill_id = ?`,
       [billId]
     ) as BillItem[];
   } catch (e) {
@@ -673,10 +740,9 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
     // Real net profit: (unit_price - purchase_price) × qty for every bill item in range.
     // Falls back to 0 for products with no purchase price set (rather than inflating profit).
     const profitRow = db.getFirstSync(
-      `SELECT COALESCE(SUM(bi.qty * (bi.unit_price - COALESCE(p.purchase_price, 0))), 0) AS net_profit
+      `SELECT COALESCE(SUM(bi.qty * (bi.unit_price - COALESCE(bi.purchase_price, 0))), 0) AS net_profit
        FROM bills b
        JOIN bill_items bi ON bi.bill_id = b.id
-       LEFT JOIN products p ON p.id = bi.product_id
        WHERE date(b.bill_date) BETWEEN date(?) AND date(?)`,
       [from, to]
     ) as { net_profit: number } | null;
@@ -843,6 +909,7 @@ export interface DraftBillItemRecord {
   units_per_pack: number | null;
   purchase_uom: string | null;
   is_pack_mode: number; // 0 or 1
+  purchase_price?: number;
 }
 
 export interface DraftSummary {
@@ -894,6 +961,7 @@ export const upsertDraftItems = (
     units_per_pack: number | null;
     purchase_uom: string | null;
     is_pack_mode: boolean;
+    purchase_price?: number;
   }>
 ): void => {
   try {
@@ -903,8 +971,8 @@ export const upsertDraftItems = (
         const id = genId();
         db.runSync(
           `INSERT INTO draft_bill_items
-             (id, draft_id, product_id, product_name, qty, unit_price, line_total, display_qty, uom, units_per_pack, purchase_uom, is_pack_mode)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, draft_id, product_id, product_name, qty, unit_price, line_total, display_qty, uom, units_per_pack, purchase_uom, is_pack_mode, purchase_price)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, draftId,
             item.product_id, item.product_name,
@@ -912,6 +980,7 @@ export const upsertDraftItems = (
             item.display_qty ?? null,
             item.uom, item.units_per_pack ?? null, item.purchase_uom ?? null,
             item.is_pack_mode ? 1 : 0,
+            item.purchase_price ?? 0,
           ]
         );
       }
@@ -1017,6 +1086,7 @@ export const finalizeDraft = (
     unit_price: number;
     line_total: number;
     display_qty?: string | null;
+    purchase_price?: number;
   }>
 ): string => {
   const billId = genId();
@@ -1037,10 +1107,16 @@ export const finalizeDraft = (
         const itemId = genId();
         const logId = genId();
 
+        let costPrice = item.purchase_price;
+        if (costPrice === undefined) {
+          const prod = db.getFirstSync(`SELECT purchase_price FROM products WHERE id = ?`, [item.product_id]) as { purchase_price: number } | null;
+          costPrice = prod?.purchase_price ?? 0;
+        }
+
         db.runSync(
-          `INSERT INTO bill_items (id, bill_id, product_id, product_name, qty, unit_price, line_total, display_qty)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null]
+          `INSERT INTO bill_items (id, bill_id, product_id, product_name, qty, unit_price, line_total, display_qty, purchase_price)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null, costPrice]
         );
         db.runSync(
           `UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = datetime('now') WHERE id = ?`,
@@ -1057,6 +1133,7 @@ export const finalizeDraft = (
           product_id: item.product_id, product_name: item.product_name,
           qty: item.qty, unit_price: item.unit_price, line_total: item.line_total,
           display_qty: item.display_qty ?? null,
+          purchase_price: costPrice,
         });
         salesLogForSync.push({
           id: logId,
@@ -1108,12 +1185,14 @@ export const finalizeDraft = (
 export const getTopProducts = (from: string, to: string, limit = 5): TopProduct[] => {
   try {
     return db.getAllSync(
-      `SELECT product_id, product_name,
-              SUM(qty_sold) AS total_qty,
-              SUM(sale_amount) AS total_amount
-       FROM sales_log
-       WHERE date(sold_date) BETWEEN date(?) AND date(?)
-       GROUP BY product_id, product_name
+      `SELECT sl.product_id, sl.product_name,
+              SUM(sl.qty_sold) AS total_qty,
+              SUM(sl.sale_amount) AS total_amount,
+              p.uom
+       FROM sales_log sl
+       LEFT JOIN products p ON sl.product_id = p.id
+       WHERE date(sl.sold_date) BETWEEN date(?) AND date(?)
+       GROUP BY sl.product_id, sl.product_name
        ORDER BY total_qty DESC
        LIMIT ?`,
       [from, to, limit]

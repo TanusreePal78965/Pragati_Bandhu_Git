@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -6,6 +6,8 @@ import {
     Modal,
     TouchableOpacity,
     Pressable,
+    TextInput,
+    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -16,7 +18,15 @@ interface UpdateStockModalProps {
     isVisible: boolean;
     onClose: () => void;
     selectedProducts: Product[];
-    onUpdate: (quantity: number, mode: "add" | "reduce", isPackMode: boolean) => void;
+    onUpdate: (
+        quantity: number,
+        mode: "add" | "reduce",
+        isPackMode: boolean,
+        purchasePrice?: number,
+        sellingPrice?: number,
+        strategy?: "average" | "batch" | "replace",
+        batchName?: string
+    ) => void;
 }
 
 export default function UpdateStockModal({
@@ -26,25 +36,52 @@ export default function UpdateStockModal({
     onUpdate,
 }: UpdateStockModalProps) {
     const [mode, setMode] = useState<"add" | "reduce">("add");
-    const [quantity, setQuantity] = useState(1);
+    const [quantityInput, setQuantityInput] = useState("1");
     const [isPackMode, setIsPackMode] = useState(false);
 
+    // Pricing States for single product restock
+    const [purchasePriceInput, setPurchasePriceInput] = useState("");
+    const [sellingPriceInput, setSellingPriceInput] = useState("");
+    const [strategy, setStrategy] = useState<"average" | "batch" | "replace">("average");
+    const [batchName, setBatchName] = useState("");
+
     const selectedCount = selectedProducts.length;
-    const selectedItemsNames = selectedProducts.map((p) => p.name);
+    const singleProduct = selectedCount === 1 ? selectedProducts[0] : null;
+
+    // Reset state variables when modal becomes visible or selection changes
+    useEffect(() => {
+        if (isVisible) {
+            setMode("add");
+            setQuantityInput("1");
+            setIsPackMode(false);
+            if (singleProduct) {
+                setPurchasePriceInput(singleProduct.purchase_price > 0 ? String(singleProduct.purchase_price) : "");
+                setSellingPriceInput(singleProduct.selling_price > 0 ? String(singleProduct.selling_price) : "");
+                setStrategy("average");
+                setBatchName(singleProduct.name ? `${singleProduct.name} - Batch 2` : "");
+            } else {
+                setPurchasePriceInput("");
+                setSellingPriceInput("");
+                setStrategy("average");
+                setBatchName("");
+            }
+        }
+    }, [isVisible, selectedProducts]);
 
     // Pack mode available if at least one selected product has pack config
     const anyHasPack = selectedProducts.some(
         (p) => p.units_per_pack != null && p.units_per_pack > 0
     );
 
-    const handleIncrement = () => setQuantity((q) => q + 1);
-    const handleDecrement = () => setQuantity((q) => Math.max(1, q - 1));
+    const quantity = parseFloat(quantityInput) || 0;
 
-    const getBaseQty = (product: Product) => {
-        if (isPackMode && product.units_per_pack) {
-            return quantity * product.units_per_pack;
-        }
-        return quantity;
+    const handleIncrement = () => {
+        const current = parseFloat(quantityInput) || 0;
+        setQuantityInput(String(current + 1));
+    };
+    const handleDecrement = () => {
+        const current = parseFloat(quantityInput) || 0;
+        setQuantityInput(String(Math.max(1, current - 1)));
     };
 
     const getPreviewLabel = (product: Product) => {
@@ -54,6 +91,33 @@ export default function UpdateStockModal({
         }
         return `${quantity} ${product.uom}`;
     };
+
+    // Live Margin & Weighted Cost Math
+    const oldStock = singleProduct?.stock_quantity ?? 0;
+    const oldCost = singleProduct?.purchase_price ?? 0;
+    const oldSelling = singleProduct?.selling_price ?? 0;
+
+    const newCost = parseFloat(purchasePriceInput) || 0;
+    const newSelling = parseFloat(sellingPriceInput) || 0;
+    const isCostChanged = newCost !== oldCost;
+
+    const currentMarginPct = newSelling > 0 ? ((newSelling - newCost) / newSelling) * 100 : 0;
+    const originalMarginPct = oldSelling > 0 ? ((oldSelling - oldCost) / oldSelling) * 100 : 0;
+
+    const addedBaseQty = singleProduct && isPackMode && singleProduct.units_per_pack
+        ? quantity * singleProduct.units_per_pack
+        : quantity;
+
+    const totalStock = oldStock + addedBaseQty;
+    const weightedAvgCost = totalStock > 0
+        ? ((oldStock * oldCost) + (addedBaseQty * newCost)) / totalStock
+        : newCost;
+
+    // Suggest new selling price to keep original margin:
+    const originalMarginFactor = 1 - (originalMarginPct / 100);
+    const recommendedSellingPrice = originalMarginFactor > 0 && originalMarginFactor < 1
+        ? weightedAvgCost / originalMarginFactor
+        : weightedAvgCost * 1.25;
 
     const itemDots = ["#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6"];
 
@@ -68,7 +132,12 @@ export default function UpdateStockModal({
                 <Pressable style={styles.content}>
                     <View style={styles.handle} />
 
-                    <Text style={styles.title}>Update Stock</Text>
+                    <View style={styles.headerRow}>
+                        <Text style={styles.title}>Update Stock</Text>
+                        <TouchableOpacity style={styles.closeIconBtn} onPress={onClose} activeOpacity={0.7}>
+                            <Ionicons name="close" size={24} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
 
                     <View style={styles.selectionBadge}>
                         <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
@@ -107,11 +176,11 @@ export default function UpdateStockModal({
                         </TouchableOpacity>
                     </View>
 
-                    {/* Pack Mode Toggle — only shown if any product has pack config */}
+                    {/* Pack Mode Toggle */}
                     {anyHasPack && (
                         <TouchableOpacity
                             style={styles.packToggleRow}
-                            onPress={() => { setIsPackMode((v) => !v); setQuantity(1); }}
+                            onPress={() => { setIsPackMode((v) => !v); setQuantityInput("1"); }}
                             activeOpacity={0.7}
                         >
                             <View style={styles.packToggleLeft}>
@@ -132,7 +201,14 @@ export default function UpdateStockModal({
                         <TouchableOpacity style={styles.stepButton} onPress={handleDecrement}>
                             <Ionicons name="remove" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
-                        <Text style={styles.quantityValue}>{quantity}</Text>
+                        <TextInput
+                            style={styles.quantityInput}
+                            value={quantityInput}
+                            onChangeText={setQuantityInput}
+                            keyboardType="numeric"
+                            selectTextOnFocus
+                            textAlign="center"
+                        />
                         <TouchableOpacity style={styles.stepButton} onPress={handleIncrement}>
                             <Ionicons name="add" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
@@ -144,31 +220,160 @@ export default function UpdateStockModal({
                             : `This quantity will be applied to all ${selectedCount} selected products.`}
                     </Text>
 
-                    {/* Selected Items with per-item preview */}
-                    <View style={styles.chipsRow}>
-                        {selectedProducts.map((product, index) => (
-                            <View key={product.id} style={styles.chip}>
-                                <View
-                                    style={[
-                                        styles.dot,
-                                        { backgroundColor: itemDots[index % itemDots.length] },
-                                    ]}
-                                />
-                                <View>
-                                    <Text style={styles.chipText}>{product.name}</Text>
-                                    {isPackMode && (
-                                        <Text style={styles.chipSubText}>
-                                            {getPreviewLabel(product)}
-                                        </Text>
-                                    )}
+                    {/* Pricing Inputs (Only for single product restocks) */}
+                    {singleProduct && mode === "add" && (
+                        <View style={styles.pricingSection}>
+                            <View style={styles.pricingRow}>
+                                <View style={styles.pricingInputContainer}>
+                                    <Text style={styles.pricingInputLabel}>New Purchase Price</Text>
+                                    <View style={styles.pricingInputBox}>
+                                        <Text style={styles.currencySymbol}>₹</Text>
+                                        <TextInput
+                                            style={styles.pricingTextInput}
+                                            value={purchasePriceInput}
+                                            onChangeText={setPurchasePriceInput}
+                                            keyboardType="numeric"
+                                            placeholder="0.00"
+                                            placeholderTextColor="#9ca3af"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.pricingInputContainer}>
+                                    <Text style={styles.pricingInputLabel}>New Selling Price</Text>
+                                    <View style={styles.pricingInputBox}>
+                                        <Text style={styles.currencySymbol}>₹</Text>
+                                        <TextInput
+                                            style={styles.pricingTextInput}
+                                            value={sellingPriceInput}
+                                            onChangeText={setSellingPriceInput}
+                                            keyboardType="numeric"
+                                            placeholder="0.00"
+                                            placeholderTextColor="#9ca3af"
+                                        />
+                                    </View>
                                 </View>
                             </View>
-                        ))}
-                    </View>
+
+                            <Text style={styles.marginPreview}>
+                                Expected Margin: {currentMarginPct.toFixed(1)}% {originalMarginPct > 0 && `(Prev: ${originalMarginPct.toFixed(1)}%)`}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Pricing Strategy Selector (If purchase cost changed) */}
+                    {singleProduct && isCostChanged && mode === "add" && (
+                        <View style={styles.strategyContainer}>
+                            <Text style={styles.strategyLabel}>Cost price changed. Choose pricing strategy:</Text>
+                            
+                            <View style={styles.strategyOptions}>
+                                <TouchableOpacity
+                                    style={[styles.strategyOption, strategy === "average" && styles.strategyOptionActive]}
+                                    onPress={() => setStrategy("average")}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.radioDot, strategy === "average" && styles.radioDotActive]} />
+                                    <View style={styles.strategyTextContent}>
+                                        <Text style={styles.strategyOptionTitle}>Average Cost (Mix)</Text>
+                                        <Text style={styles.strategyOptionDesc}>
+                                            New average cost: ₹{weightedAvgCost.toFixed(2)}. Suggest selling at ₹{recommendedSellingPrice.toFixed(2)}.
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.strategyOption, strategy === "replace" && styles.strategyOptionActive]}
+                                    onPress={() => setStrategy("replace")}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.radioDot, strategy === "replace" && styles.radioDotActive]} />
+                                    <View style={styles.strategyTextContent}>
+                                        <Text style={styles.strategyOptionTitle}>Replacement (Update All)</Text>
+                                        <Text style={styles.strategyOptionDesc}>
+                                            Set all {totalStock} {singleProduct.uom} to restock purchase price ₹{newCost.toFixed(2)}.
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.strategyOption, strategy === "batch" && styles.strategyOptionActive]}
+                                    onPress={() => setStrategy("batch")}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.radioDot, strategy === "batch" && styles.radioDotActive]} />
+                                    <View style={styles.strategyTextContent}>
+                                        <Text style={styles.strategyOptionTitle}>Create New Batch</Text>
+                                        <Text style={styles.strategyOptionDesc}>
+                                            Keep old {oldStock} {singleProduct.uom} at old price. Create a new listing for new batch.
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+
+                            {strategy === "batch" && (
+                                <View style={styles.batchNameContainer}>
+                                    <Text style={styles.batchNameLabel}>New Batch Name Suffix</Text>
+                                    <TextInput
+                                        style={styles.batchNameInput}
+                                        value={batchName}
+                                        onChangeText={setBatchName}
+                                        placeholder="e.g. Minikit - Batch 2"
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Selected Items preview */}
+                    {!singleProduct && (
+                        <View style={styles.chipsRow}>
+                            {selectedProducts.map((product, index) => (
+                                <View key={product.id} style={styles.chip}>
+                                    <View
+                                        style={[
+                                            styles.dot,
+                                            { backgroundColor: itemDots[index % itemDots.length] },
+                                        ]}
+                                    />
+                                    <View>
+                                        <Text style={styles.chipText}>{product.name}</Text>
+                                        {isPackMode && (
+                                            <Text style={styles.chipSubText}>
+                                                {getPreviewLabel(product)}
+                                            </Text>
+                                        )}
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    )}
 
                     <TouchableOpacity
                         style={styles.updateButton}
-                        onPress={() => onUpdate(quantity, mode, isPackMode)}
+                        onPress={() => {
+                            if (quantity <= 0) {
+                                Alert.alert("Validation", "Please enter a valid quantity greater than 0.");
+                                return;
+                            }
+                            if (singleProduct && mode === "add") {
+                                if (strategy === "batch" && !batchName.trim()) {
+                                    Alert.alert("Validation", "Please provide a suffix or name for the new batch.");
+                                    return;
+                                }
+                                onUpdate(
+                                    quantity,
+                                    mode,
+                                    isPackMode,
+                                    newCost,
+                                    newSelling,
+                                    strategy,
+                                    strategy === "batch" ? batchName.trim() : undefined
+                                );
+                            } else {
+                                onUpdate(quantity, mode, isPackMode);
+                            }
+                        }}
                     >
                         <Text style={styles.updateButtonText}>Update Stock</Text>
                     </TouchableOpacity>
@@ -208,7 +413,16 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: "700",
         color: colors.text,
+    },
+    headerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
         marginBottom: 8,
+    },
+    closeIconBtn: {
+        padding: 4,
     },
     selectionBadge: {
         flexDirection: "row",
@@ -314,11 +528,153 @@ const styles = StyleSheet.create({
         fontWeight: "800",
         color: colors.text,
     },
+    quantityInput: {
+        fontSize: 28,
+        fontWeight: "800",
+        color: colors.text,
+        minWidth: 100,
+        textAlign: "center",
+        paddingVertical: 0,
+    },
     helperText: {
         fontSize: 12,
         color: colors.textSecondary,
         marginBottom: 20,
         textAlign: "center",
+    },
+    pricingSection: {
+        width: "100%",
+        marginBottom: 16,
+        backgroundColor: "#f8fafc",
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#cbd5e1",
+    },
+    pricingRow: {
+        flexDirection: "row",
+        gap: 12,
+    },
+    pricingInputContainer: {
+        flex: 1,
+    },
+    pricingInputLabel: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: colors.textSecondary,
+        marginBottom: 6,
+    },
+    pricingInputBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#fff",
+        borderWidth: 1,
+        borderColor: "#cbd5e1",
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        height: 40,
+    },
+    currencySymbol: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#64748b",
+        marginRight: 4,
+    },
+    pricingTextInput: {
+        flex: 1,
+        fontSize: 15,
+        color: colors.text,
+        fontWeight: "600",
+        padding: 0,
+    },
+    marginPreview: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: colors.primary,
+        marginTop: 8,
+        textAlign: "right",
+    },
+    strategyContainer: {
+        width: "100%",
+        marginBottom: 16,
+        padding: 12,
+        borderRadius: 12,
+        backgroundColor: "#fffbeb",
+        borderWidth: 1,
+        borderColor: "#fde68a",
+    },
+    strategyLabel: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#92400e",
+        marginBottom: 10,
+    },
+    strategyOptions: {
+        gap: 8,
+    },
+    strategyOption: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        padding: 10,
+        backgroundColor: "#fff",
+        borderWidth: 1,
+        borderColor: "#fcd34d",
+        borderRadius: 8,
+        gap: 10,
+    },
+    strategyOptionActive: {
+        borderColor: "#d97706",
+        backgroundColor: "#fffbeb",
+    },
+    radioDot: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 1.5,
+        borderColor: "#94a3b8",
+        marginTop: 2,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    radioDotActive: {
+        borderColor: "#d97706",
+        backgroundColor: "#d97706",
+    },
+    strategyTextContent: {
+        flex: 1,
+    },
+    strategyOptionTitle: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: colors.text,
+    },
+    strategyOptionDesc: {
+        fontSize: 11,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    batchNameContainer: {
+        marginTop: 12,
+        backgroundColor: "#fff",
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#fcd34d",
+    },
+    batchNameLabel: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: colors.textSecondary,
+        marginBottom: 4,
+    },
+    batchNameInput: {
+        height: 32,
+        fontSize: 13,
+        color: colors.text,
+        fontWeight: "600",
+        borderBottomWidth: 1,
+        borderBottomColor: "#e2e8f0",
+        padding: 0,
     },
     chipsRow: {
         flexDirection: "row",
