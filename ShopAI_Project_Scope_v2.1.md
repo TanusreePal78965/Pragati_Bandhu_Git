@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v3.5 | May 2026
+### Project Scope Document v3.7 | July 2026
 
 ---
 
@@ -791,6 +791,20 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.13 Play Store Release & Analytics (v3.7)
+
+> Prepares the application for Google Play Store deployment and integrates usage/performance metrics via EAS services.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 93 | Configure production build environment in `eas.json` | ✅ | Configured `production` build profile with correct Supabase environment variables. |
+| 94 | Install `expo-insights` for usage metrics | ✅ | Installed `expo-insights` package to track active users and app store version distributions. |
+| 95 | Install `expo-observe` for performance tracking | ✅ | Installed `expo-observe` package to track startup metrics and rendering issues. |
+| 96 | Generate release Android App Bundle (AAB) | ✅ | Successfully ran EAS production build. Keystore auto-generated; `versionCode` incremented to `2`. |
+| 97 | Exclude build artifacts in `.gitignore` | ✅ | Added `*.apk` rule to `.gitignore` and removed untracked APKs from version control. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -853,6 +867,18 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v3.7 — July 1, 2026
+
+**Play Store Build Configuration & Analytics Integration (v3.7)**
+
+- **EAS Production Configuration:** Added production env variables (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`) to `eas.json` to link the production build to the correct Supabase database.
+- **EAS Build Automation:** Built Android App Bundle (.aab) successfully using EAS CLI with `versionCode` incremented to `2`. Keystore generated and managed via EAS.
+- **Usage Metrics Integration:** Installed `expo-insights` to track application usage, versions, and launch trends on the EAS Dashboard.
+- **Performance Monitoring Integration:** Installed `expo-observe` to monitor launch times, render speed, and session performance.
+- **Git Ignore Fixes:** Added `*.apk` to `.gitignore` and removed local `.apk` files from tracking.
+
+---
 
 ### v3.5 — May 9, 2026
 
@@ -1129,5 +1155,5 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 
 ---
 
-*Document prepared: April 2026 | Last updated: May 2026*
-*Version: 3.3 — Reflects Device Conflict Race Fix, ai_consent Restoration, Per-User SQLite Isolation*
+*Document prepared: April 2026 | Last updated: July 2026*
+*Version: 3.7 — Reflects Play Store Release Build and EAS Insights/Observe Integration*
