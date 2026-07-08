@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -17,7 +17,8 @@ import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
-import { sendOtp } from "../../services/authService";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import { sendOtp, verifyGoogleLogin } from "../../services/authService";
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">;
 
@@ -25,7 +26,15 @@ export default function LoginScreen() {
     const navigation = useNavigation<LoginScreenNavigationProp>();
     const [phoneNumber, setPhoneNumber] = useState("");
     const [error, setError] = useState("");
+    const [googleError, setGoogleError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+    useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID,
+        });
+    }, []);
 
     const handleGetOtp = async () => {
         const clean = phoneNumber.replace(/\D/g, "");
@@ -40,6 +49,7 @@ export default function LoginScreen() {
 
         setIsLoading(true);
         setError("");
+        setGoogleError("");
 
         try {
             await sendOtp(clean);
@@ -54,13 +64,36 @@ export default function LoginScreen() {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setIsGoogleLoading(true);
+        setGoogleError("");
+        setError("");
+        try {
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+            const response = await GoogleSignin.signIn();
+            if (response.type !== "success" || !response.data) {
+                throw new Error("Google Sign-In was cancelled or failed");
+            }
+            const idToken = response.data.idToken;
+            if (!idToken) throw new Error("No ID Token found from Google Sign-In");
+
+            await verifyGoogleLogin(idToken, undefined);
+        } catch (e: any) {
+            console.error("Google Sign-In Error:", e);
+            setGoogleError(e?.message ?? "Google Sign-In failed.");
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    };
+
     const handlePhoneNumberChange = (text: string) => {
         const cleaned = text.replace(/\D/g, "").slice(0, 10);
         setPhoneNumber(cleaned);
         if (error) setError("");
+        if (googleError) setGoogleError("");
     };
 
-    const isButtonDisabled = isLoading || phoneNumber.length < 10;
+    const isButtonDisabled = isLoading || isGoogleLoading || phoneNumber.length < 10;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -132,6 +165,38 @@ export default function LoginScreen() {
                                 <Text style={styles.otpButtonText}>Get OTP</Text>
                             )}
                         </TouchableOpacity>
+
+                        {/* OR Divider */}
+                        <View style={styles.dividerContainer}>
+                            <View style={styles.dividerLine} />
+                            <Text style={styles.dividerText}>OR</Text>
+                            <View style={styles.dividerLine} />
+                        </View>
+
+                        {/* Google Sign In Button */}
+                        <TouchableOpacity
+                            style={[
+                                styles.googleButton,
+                                (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
+                            ]}
+                            onPress={handleGoogleSignIn}
+                            activeOpacity={0.8}
+                            disabled={isLoading || isGoogleLoading}
+                        >
+                            {isGoogleLoading ? (
+                                <ActivityIndicator color="#334155" size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
+                                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Google Error Message */}
+                        {googleError ? (
+                            <Text style={[styles.errorText, { marginTop: 8, textAlign: "center" }]}>{googleError}</Text>
+                        ) : null}
 
                         {/* Terms */}
                         <Text style={styles.termsText}>
@@ -354,5 +419,43 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "#64748B",
         textAlign: "center",
+    },
+    dividerContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginVertical: 16,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: "#E2E8F0",
+    },
+    dividerText: {
+        marginHorizontal: 12,
+        fontSize: 12,
+        color: "#94A3B8",
+        fontWeight: "500",
+    },
+    googleButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#FFFFFF",
+        borderWidth: 1,
+        borderColor: "#CBD5E1",
+        borderRadius: 14,
+        height: 56,
+        gap: 8,
+    },
+    googleButtonDisabled: {
+        opacity: 0.6,
+    },
+    googleIcon: {
+        marginRight: 4,
+    },
+    googleButtonText: {
+        color: "#334155",
+        fontSize: 16,
+        fontWeight: "600",
     }
 });

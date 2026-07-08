@@ -37,7 +37,9 @@ export default function ScreenHeader({
                             <Ionicons name="storefront" size={22} color="#fff" />
                         </View>
                         <View style={styles.brandTextContainer}>
-                            <Text style={styles.shopNameText}>{shopName}</Text>
+                            <Text style={styles.shopNameText}>
+                                {shopName}
+                            </Text>
                             <View style={styles.subtitleRow}>
                                 <Text style={styles.poweredByText}>Powered by Pragati Bandhu</Text>
                                 {syncPendingCount !== undefined && (
@@ -115,6 +117,8 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.sm,
+        flex: 1,
+        minWidth: 0,
     },
     shopIconContainer: {
         width: 38,
@@ -126,6 +130,8 @@ const styles = StyleSheet.create({
     },
     brandTextContainer: {
         justifyContent: "center",
+        flexShrink: 1,
+        minWidth: 0,
     },
     shopNameText: {
         fontSize: 18,
@@ -142,11 +148,13 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: colors.textSecondary,
         fontWeight: "400",
+        flexShrink: 1,
     },
     syncBadge: {
         flexDirection: "row",
         alignItems: "center",
         gap: 3,
+        flexShrink: 0,
     },
     syncText: {
         fontSize: 10,
@@ -166,6 +174,7 @@ const styles = StyleSheet.create({
     right: {
         flexDirection: "row",
         alignItems: "center",
+        flexShrink: 0,
     },
     notificationButton: {
         width: 40,

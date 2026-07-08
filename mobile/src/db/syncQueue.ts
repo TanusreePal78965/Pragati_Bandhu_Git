@@ -97,14 +97,12 @@ async function syncItem(
   }
 }
 
-// Derives the 10-digit shop_id from the live Supabase session.
-// Mirrors the RLS policy: right(auth.jwt() ->> 'phone', 10)
+// Derives the User UUID from the live Supabase session.
 async function getShopId(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
-  const rawPhone = session?.user?.phone ?? '';
-  const phone = rawPhone.slice(-10);
-  if (!phone) throw new Error('No authenticated session — cannot sync');
-  return phone;
+  const uuid = session?.user?.id;
+  if (!uuid) throw new Error('No authenticated session — cannot sync');
+  return uuid;
 }
 
 async function syncUpsert(tableName: string, operation: string, payload: any): Promise<void> {
@@ -115,7 +113,7 @@ async function syncUpsert(tableName: string, operation: string, payload: any): P
     case 'customers':
     case 'sales_log':
     case 'purchase_log': {
-      // RLS requires shop_id = phone on every row — inject it from the live session.
+      // RLS requires shop_id = UUID on every row — inject it from the live session.
       const shopId = await getShopId();
       const { error } = await supabase
         .from(tableName)
@@ -125,16 +123,16 @@ async function syncUpsert(tableName: string, operation: string, payload: any): P
     }
 
     case 'shop': {
-      const phone = await getShopId();
+      const uuid = await getShopId();
       const deviceId = await getOrCreateDeviceId();
-      const { shopName, ownerName, category, whatsappNumber, aiConsent } = payload;
+      const { shopName, ownerName, category, whatsappNumber, aiConsent, phone } = payload;
 
       if (operation === 'INSERT') {
         // First-time shop creation — include ai_consent and claim active device.
         const { error } = await supabase.from('shops').upsert(
           {
-            id: phone,
-            phone,
+            id: uuid,
+            phone: phone ?? '',
             shop_name: shopName,
             owner_name: ownerName,
             business_category: category ?? null,
@@ -149,12 +147,13 @@ async function syncUpsert(tableName: string, operation: string, payload: any): P
         // UPDATE — never overwrite ai_consent from local state; it may be stale.
         // Consent changes are pushed directly from EditShopScreen via a targeted update.
         const { error } = await supabase.from('shops').update({
+          phone: phone,
           shop_name: shopName,
           owner_name: ownerName,
           business_category: category ?? null,
           whatsapp_number: whatsappNumber ?? null,
           active_device_id: deviceId,
-        }).eq('id', phone);
+        }).eq('id', uuid);
         if (error) throw error;
       }
       break;

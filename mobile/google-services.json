@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "157068188674",
+    "project_id": "pragati-bandhu",
+    "storage_bucket": "pragati-bandhu.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:157068188674:android:db372465fcd92e66b45b1b",
+        "android_client_info": {
+          "package_name": "com.pragatibandhu.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "157068188674-dpolac5ajfati2mf6fjcl1i0qp2t667n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pragatibandhu.app",
+            "certificate_hash": "ee84b45c357ad2ac732bde8890dce5394ba399b6"
+          }
+        },
+        {
+          "client_id": "157068188674-hodoq4k97v37o6nh62mae9ciljgj9g86.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pragatibandhu.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "157068188674-qqmc5htrt7ja3kbp4l9emntdbou8tcpm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBpxj24_NEHwVv1hFuJuG1NO2tqyQ1oFKI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "157068188674-qqmc5htrt7ja3kbp4l9emntdbou8tcpm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

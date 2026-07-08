@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v3.7 | July 2026
+### Project Scope Document v3.8 | July 2026
 
 ---
 
@@ -805,6 +805,27 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.14 Google Sign-In — Audit, Hardening & Live Migration (v3.8)
+
+> Google Sign-In was already wired up (`exchange-token` Edge Function bridging Firebase ID tokens to a Supabase session) but had never been end-to-end verified. Audit surfaced one config bug, one live crash, one client-side deadlock, and a live-DB schema gap that made Google login unusable pre-fix.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 98 | `credentials.json` / `google-services.json` gitignore | ✅ | Were untracked but not ignored — one `git add -A` away from leaking Firebase/OAuth config into history. Added to root `.gitignore`. |
+| 99 | `exchange-token` — session lifetime | ✅ | Custom JWT `exp` cut from 1 year to 24h (`refresh_token` was never a real GoTrue token — same value as `access_token`, so nothing could actually refresh it). |
+| 100 | `authService.ts` — silent session re-mint | ✅ | `getStoredAuth()` now falls back to Firebase's own persisted session (auto-refreshing, survives app restarts) to silently re-mint a fresh Supabase session when the 24h token expires — avoids bouncing the user to the login screen. |
+| 101 | `exchange-token` — `listUsers()` pagination | ✅ | Email lookup only checked the first ~50 users (`admin.listUsers()` default page). Now paginates until match or exhausted — was silently missing existing accounts past page 1. |
+| 102 | `exchange-token` — `email_verified` gate | ✅ | Unverified email claims are no longer trusted for account lookup/creation. |
+| 103 | `exchange-token` — idempotent user creation | ✅ | Concurrent first-logins could race `createUser`; now re-resolves via lookup instead of throwing on a unique-constraint collision. |
+| 104 | `authService.ts` — dead `storeAuth` crash | ✅ | `verifyGoogleLogin` called `storeAuth()`, a function that doesn't exist in `utils/storage.ts` — threw an uncaught `TypeError` on **every** Google login (session was actually set fine; user just saw a false failure). Removed; shop-setup state is correctly re-derived by `AuthContext` regardless. |
+| 105 | `login_events` — shop_id consistency | ✅ | Google logins logged phone-or-uuid inconsistently (unused `phoneForEvent` param, dead fallback chain). Now logs `phone ?? email` consistently, matching the OTP path. |
+| 106 | `AuthContext.tsx` — auth-lock deadlock fix | ✅ | **Root cause of "Google Sign-In hangs forever, no picker, no error."** `onAuthStateChange` fires while supabase-js still holds its internal auth lock; the `SIGNED_IN` handler awaited `getStoredAuth()` → `getSession()` directly inside that callback, re-entering the same lock and deadlocking the `setSession()` call that triggered the event. Fixed per Supabase's documented pattern: deferred the handler body with `setTimeout(fn, 0)`. Diagnosed via live `adb logcat` + temporary instrumentation (since removed) — confirmed via log trace that execution stopped immediately after `res.json()` and never reached `setSession()`'s resolution. |
+| 107 | Stale native `google-services.json` | ✅ | `mobile/android/app/google-services.json` (baked into the native project at prebuild) was missing the OAuth client entry matching the actual debug-keystore SHA-1 — root-cause of an *earlier* silent picker failure, separate from #106. Re-synced from `mobile/google-services.json` and rebuilt. |
+| 108 | Live DB — `shops.id` phone→UUID migration applied | ✅ | `20260701115044_migrate_to_uuid.sql` existed locally but was **never applied to the live database** — confirmed via `supabase migration list --linked`. Live `shops.id` was still 10-digit-phone `TEXT` with RLS `id = right(auth.jwt()->>'phone', 10)`. Google-only Firebase tokens carry no `phone_number` claim, so every RLS check silently evaluated to `false` for Google users — **all shop data reads/writes were blocked, and `ShopSetupScreen` couldn't even create a row.** Fixed two bugs in the migration itself (missing `DROP POLICY` before `DROP COLUMN` on 9 tables; wrong `login_events` policy shape + no handling for orphaned rows) and applied it: `shops.id` is now `auth.users.id` UUID, all RLS policies rewritten to `auth.uid()`. Verified live afterward — 7 shops / 10 products / 6 customers / 15 bills intact, 2 stale orphaned `login_events` rows dropped. |
+| 109 | `exchange-token` deployed to production | ✅ | Deployed to the live `PragatiDB` project (`xjumfscbazjwhcgmhsyl`) after the above fixes. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -867,6 +888,19 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v3.8 — July 8, 2026
+
+**Google Sign-In Audit, Hardening & Live UUID Migration (§14.14)**
+
+- **Fixed the actual hang bug:** `AuthContext`'s `onAuthStateChange` listener was calling `getStoredAuth()` synchronously inside the callback, re-entering supabase-js's internal auth lock and deadlocking the `setSession()` call that fired the event — this is why tapping "Continue with Google" spun the loader forever with no picker and no error. Fixed by deferring the handler with `setTimeout(fn, 0)`, per Supabase's documented re-entrancy guidance.
+- **Applied the pending `shops` UUID migration to the live database** — it existed locally since July 1 but was never pushed. Live `shops.id`/RLS were still phone-keyed, which silently blocked *all* Supabase reads/writes for any Google-only login (no `phone` claim in their JWT). Patched two bugs in the migration file itself (policy-drop ordering, `login_events` policy shape) before applying. Verified: no data loss across 7 shops / 10 products / 6 customers / 15 bills.
+- **Fixed a live crash:** `verifyGoogleLogin` called a `storeAuth()` function that doesn't exist in `utils/storage.ts` — threw uncaught on every Google login (session was fine; user just saw a false error).
+- **Fixed a stale native config bug:** `mobile/android/app/google-services.json` was out of sync with the root config file, missing the OAuth client for the actual debug-keystore SHA-1 — separate root cause of an earlier "no picker appears" symptom.
+- **Hardened `exchange-token` Edge Function:** shortened session lifetime (1yr → 24h) with a client-side silent re-mint via Firebase's persisted session; paginated the `listUsers()` email lookup (was silently missing users past page 1); added an `email_verified` gate; made user creation idempotent under concurrent first-logins; gitignored `credentials.json`/`google-services.json` (were one `git add -A` from leaking into history). Redeployed to production.
+- Full list in §14.14.
+
+---
 
 ### v3.7 — July 1, 2026
 

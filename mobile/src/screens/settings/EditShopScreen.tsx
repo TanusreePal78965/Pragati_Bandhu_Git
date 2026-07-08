@@ -20,12 +20,14 @@ import TextInputField from "../../components/common/TextInputField";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getShopInfo, setShopInfo, setHasConsent } from "../../utils/storage";
+import { useAuth } from "../../context/AuthContext";
 import { updateShop } from "../../db/db";
 import { flushSyncQueue } from "../../db/syncQueue";
 import { supabase } from "../../lib/supabase";
 
 export default function EditShopScreen() {
     const navigation = useNavigation();
+    const { uuid } = useAuth();
 
     const [shopName, setShopName] = useState("");
     const [ownerName, setOwnerName] = useState("");
@@ -105,11 +107,13 @@ export default function EditShopScreen() {
 
             // 4. Push ai_consent directly — the sync queue UPDATE path omits it to prevent
             //    stale local values from overwriting Supabase on other devices.
-            if (phone) {
-                supabase.from('shops')
-                    .update({ ai_consent: aiConsent })
-                    .eq('id', phone)
-                    .then(() => {}).catch(() => {});
+            if (uuid) {
+                const updateConsent = async () => {
+                    try {
+                        await supabase.from('shops').update({ ai_consent: aiConsent }).eq('id', uuid);
+                    } catch (_) {}
+                };
+                updateConsent();
             }
 
             // 5. Flush queue immediately — don't wait for the next foreground/network event

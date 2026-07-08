@@ -41,6 +41,7 @@ export const insertShop = (data: ShopInfo): void => {
       category: data.category,
       whatsappNumber: data.whatsappNumber,
       aiConsent: data.aiConsent,
+      phone: data.phone,
     });
   } catch (e) {
     console.error('insertShop error:', e);

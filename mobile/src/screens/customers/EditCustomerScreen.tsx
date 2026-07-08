@@ -78,7 +78,7 @@ export default function EditCustomerScreen() {
         return (
             <SafeAreaView style={styles.container} edges={["top"]}>
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                    <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
                         <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Customer</Text>

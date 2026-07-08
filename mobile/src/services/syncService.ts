@@ -35,13 +35,13 @@ const checkShopStatus = async (
     if (!net.isConnected) return;
 
     const { data: { session } } = await supabase.auth.getSession();
-    const phone = session?.user?.phone?.slice(-10);
-    if (!phone) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
 
     const { data } = await supabase
       .from('shops')
       .select('is_active, active_device_id, ai_consent')
-      .eq('id', phone)
+      .eq('id', userId)
       .single();
 
     if (!data) return;
@@ -59,11 +59,12 @@ const checkShopStatus = async (
       const thisDeviceId = await getOrCreateDeviceId();
       if (!data.active_device_id) {
         // No device claimed yet (new shop or just cleared) — stamp this device.
-        // Fire-and-forget: non-critical, next check will confirm.
-        supabase.from('shops')
-          .update({ active_device_id: thisDeviceId })
-          .eq('id', phone)
-          .then(() => {}).catch(() => {});
+        const updateActiveDevice = async () => {
+          try {
+            await supabase.from('shops').update({ active_device_id: thisDeviceId }).eq('id', userId);
+          } catch (_) {}
+        };
+        updateActiveDevice();
       } else if (data.active_device_id !== thisDeviceId) {
         // Another device holds the session — block access.
         onDeviceConflict();

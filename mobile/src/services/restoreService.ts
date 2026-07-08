@@ -67,8 +67,8 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return { success: false, error: 'Not authenticated' };
 
-    const phone = session.user.phone?.slice(-10) ?? '';
-    if (!phone) return { success: false, error: 'Could not determine shop phone' };
+    const uuid = session.user.id;
+    const phone = (session.user.phone ?? '').slice(-10);
 
     // ── Fetch all tables individually — continue on per-table errors ──────────
     const tableErrors: Record<string, string> = {};
@@ -87,14 +87,14 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       }
     };
 
-    const shopData      = await safeQuery(supabase.from('shops').select('*').eq('id', phone).single() as any, 'shops');
-    const categoriesData = await safeQuery(supabase.from('categories').select('*').eq('shop_id', phone), 'categories');
-    const brandsData     = await safeQuery(supabase.from('brands').select('*').eq('shop_id', phone), 'brands');
-    const productsData   = await safeQuery(supabase.from('products').select('*').eq('shop_id', phone), 'products');
-    const customersData  = await safeQuery(supabase.from('customers').select('*').eq('shop_id', phone), 'customers');
-    const billsData      = await safeQuery(supabase.from('bills').select('*').eq('shop_id', phone), 'bills');
-    const salesLogData   = await safeQuery(supabase.from('sales_log').select('*').eq('shop_id', phone), 'sales_log');
-    const purchaseLogData = await safeQuery(supabase.from('purchase_log').select('*').eq('shop_id', phone), 'purchase_log');
+    const shopData      = await safeQuery(supabase.from('shops').select('*').eq('id', uuid).single() as any, 'shops');
+    const categoriesData = await safeQuery(supabase.from('categories').select('*').eq('shop_id', uuid) as any, 'categories');
+    const brandsData     = await safeQuery(supabase.from('brands').select('*').eq('shop_id', uuid) as any, 'brands');
+    const productsData   = await safeQuery(supabase.from('products').select('*').eq('shop_id', uuid) as any, 'products');
+    const customersData  = await safeQuery(supabase.from('customers').select('*').eq('shop_id', uuid) as any, 'customers');
+    const billsData      = await safeQuery(supabase.from('bills').select('*').eq('shop_id', uuid) as any, 'bills');
+    const salesLogData   = await safeQuery(supabase.from('sales_log').select('*').eq('shop_id', uuid) as any, 'sales_log');
+    const purchaseLogData = await safeQuery(supabase.from('purchase_log').select('*').eq('shop_id', uuid) as any, 'purchase_log');
 
     // Fetch bill_items separately, chunked to handle shops with many bills (C3)
     const billIds = ((billsData as any[] | null) ?? []).map((b: any) => b.id);
@@ -178,22 +178,21 @@ export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return { success: false, error: 'Not authenticated' };
 
-    const phone = session.user.phone?.slice(-10) ?? '';
-    if (!phone) return { success: false, error: 'Could not determine shop phone' };
+    const uuid = session.user.id;
 
     const tableErrors: Record<string, string> = {};
 
     // 1. sales_log
-    const { error: slErr } = await supabase.from('sales_log').delete().eq('shop_id', phone);
+    const { error: slErr } = await supabase.from('sales_log').delete().eq('shop_id', uuid);
     if (slErr) tableErrors['sales_log'] = slErr.message;
 
     // 1.5 purchase_log
-    const { error: plErr } = await supabase.from('purchase_log').delete().eq('shop_id', phone);
+    const { error: plErr } = await supabase.from('purchase_log').delete().eq('shop_id', uuid);
     if (plErr) tableErrors['purchase_log'] = plErr.message;
 
     // 2. bill_items — no shop_id; delete via parent bill IDs in chunks (C3)
     const { data: billRows, error: billFetchErr } = await supabase
-      .from('bills').select('id').eq('shop_id', phone);
+      .from('bills').select('id').eq('shop_id', uuid);
     if (billFetchErr) {
       tableErrors['bill_items'] = `Could not fetch bill IDs: ${billFetchErr.message}`;
     } else {
@@ -208,27 +207,27 @@ export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
     }
 
     // 3. bills
-    const { error: bErr } = await supabase.from('bills').delete().eq('shop_id', phone);
+    const { error: bErr } = await supabase.from('bills').delete().eq('shop_id', uuid);
     if (bErr) tableErrors['bills'] = bErr.message;
 
     // 4. customers
-    const { error: cErr } = await supabase.from('customers').delete().eq('shop_id', phone);
+    const { error: cErr } = await supabase.from('customers').delete().eq('shop_id', uuid);
     if (cErr) tableErrors['customers'] = cErr.message;
 
     // 5. products
-    const { error: pErr } = await supabase.from('products').delete().eq('shop_id', phone);
+    const { error: pErr } = await supabase.from('products').delete().eq('shop_id', uuid);
     if (pErr) tableErrors['products'] = pErr.message;
 
     // 6. brands
-    const { error: brErr } = await supabase.from('brands').delete().eq('shop_id', phone);
+    const { error: brErr } = await supabase.from('brands').delete().eq('shop_id', uuid);
     if (brErr) tableErrors['brands'] = brErr.message;
 
     // 7. categories
-    const { error: catErr } = await supabase.from('categories').delete().eq('shop_id', phone);
+    const { error: catErr } = await supabase.from('categories').delete().eq('shop_id', uuid);
     if (catErr) tableErrors['categories'] = catErr.message;
 
     // 8. shops row
-    const { error: shErr } = await supabase.from('shops').delete().eq('id', phone);
+    const { error: shErr } = await supabase.from('shops').delete().eq('id', uuid);
     if (shErr) tableErrors['shops'] = shErr.message;
 
     if (Object.keys(tableErrors).length > 0) {

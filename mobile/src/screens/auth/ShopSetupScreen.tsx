@@ -24,7 +24,7 @@ import { insertShop } from "../../db/db";
 import { flushSyncQueue } from "../../db/syncQueue";
 
 export default function ShopSetupScreen() {
-    const { completeSetup, phone, logout } = useAuth();
+    const { completeSetup, phone, uuid, logout } = useAuth();
     const navigation = useNavigation();
     const [shopName, setShopName] = useState("");
     const [ownerName, setOwnerName] = useState("");
@@ -45,8 +45,8 @@ export default function ShopSetupScreen() {
             // Persist shop info to AsyncStorage (fast reads across app)
             await setShopInfo({ shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
 
-            // Persist to SQLite + enqueue sync to Supabase
-            insertShop({ shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
+            // Persist to SQLite + enqueue sync to Supabase (use user UUID)
+            insertShop({ id: uuid ?? '', shopName, ownerName, phone: shopPhone, category, whatsappNumber, aiConsent });
 
             // Flip AuthContext — local save is enough to proceed; sync is best-effort
             completeSetup();
@@ -77,7 +77,7 @@ export default function ShopSetupScreen() {
                     <View style={styles.backButtonIcon}>
                         <Ionicons name="chevron-back" size={20} color={colors.primary} />
                     </View>
-                    <Text style={styles.backButtonText}>Change Number</Text>
+                    <Text style={styles.backButtonText}>Logout</Text>
                 </TouchableOpacity>
             </View>
 

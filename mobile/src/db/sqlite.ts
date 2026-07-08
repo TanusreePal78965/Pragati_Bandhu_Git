@@ -11,11 +11,11 @@ import * as SQLite from 'expo-sqlite';
 // at call time, so switching users just means swapping _db.
 
 let _db: SQLite.SQLiteDatabase | null = null;
-let _currentPhone: string | null = null;
+let _currentDbKey: string | null = null;
 
 const db = new Proxy({} as SQLite.SQLiteDatabase, {
   get(_, prop: string | symbol) {
-    if (!_db) throw new Error(`[SQLite] No database open — openUserDatabase(phone) must be called first`);
+    if (!_db) throw new Error(`[SQLite] No database open — openUserDatabase(dbKey) must be called first`);
     const val = (_db as any)[prop];
     return typeof val === 'function' ? val.bind(_db) : val;
   },
@@ -171,17 +171,17 @@ function initTables(database: SQLite.SQLiteDatabase): void {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Open the database file for the given phone number.
+ * Open the database file for the given unique key (user UUID or phone number).
  * Must be called once after authentication before any SQLite access.
- * Safe to call multiple times with the same phone — no-ops on repeated calls.
+ * Safe to call multiple times with the same key — no-ops on repeated calls.
  */
-export const openUserDatabase = (phone: string): void => {
-  if (_currentPhone === phone && _db) return;
+export const openUserDatabase = (dbKey: string): void => {
+  if (_currentDbKey === dbKey && _db) return;
   if (_db) {
     try { _db.closeSync(); } catch (_) {}
   }
-  _db = SQLite.openDatabaseSync(`shopai_${phone}.db`);
-  _currentPhone = phone;
+  _db = SQLite.openDatabaseSync(`shopai_${dbKey}.db`);
+  _currentDbKey = dbKey;
   initTables(_db);
 };
 
@@ -192,7 +192,7 @@ export const closeUserDatabase = (): void => {
   if (_db) {
     try { _db.closeSync(); } catch (_) {}
     _db = null;
-    _currentPhone = null;
+    _currentDbKey = null;
   }
 };
 

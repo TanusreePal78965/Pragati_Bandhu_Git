@@ -37,6 +37,9 @@ yarn-error.*
 .env*.local
 .env
 
+# Firebase/Google secrets
+mobile/credentials.json
+
 # typescript
 *.tsbuildinfo
 

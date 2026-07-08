@@ -194,7 +194,10 @@ export default function SettingsScreen() {
 
                             // 5. Start the sync service — it flushes the queue internally
                             //    when consent is detected (no separate flush needed). (C12)
-                            await startSyncService(() => setShopActive(false));
+                            await startSyncService(
+                                () => setShopActive(false),
+                                () => {}
+                            );
 
                             // 5. Refresh UI
                             const refreshed = await getShopInfo();
@@ -458,10 +461,6 @@ export default function SettingsScreen() {
                 syncPendingCount={shopInfo?.aiConsent ? syncPendingCount : undefined}
                 onNotificationPress={() => { }}
             />
-            <View style={styles.titleSection}>
-                <Text style={styles.titleText}>Settings</Text>
-            </View>
-
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Profile Section */}
                 <View style={styles.profileCard}>
@@ -470,7 +469,9 @@ export default function SettingsScreen() {
                             <Ionicons name="person" size={40} color="#fbbf24" />
                         </View>
                         <View style={styles.profileText}>
-                            <Text style={styles.profileName}>{shopInfo?.ownerName ?? "—"}</Text>
+                            <Text style={styles.profileName}>
+                                {shopInfo?.ownerName ?? "—"}
+                            </Text>
                             <Text style={styles.profilePhone}>
                                 {phone ? `+91 ${phone}` : "—"}
                             </Text>
@@ -481,7 +482,7 @@ export default function SettingsScreen() {
                         activeOpacity={0.7}
                         onPress={() => (navigation as any).navigate("EditShop")}
                     >
-                        <Ionicons name="create-outline" size={28} color={colors.primary} />
+                        <Ionicons name="create-outline" size={22} color={colors.primary} />
                     </TouchableOpacity>
                 </View>
 
@@ -699,16 +700,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.surface,
     },
-    titleSection: {
-        paddingHorizontal: spacing.md,
-        paddingTop: spacing.md,
-        paddingBottom: spacing.sm,
-    },
-    titleText: {
-        fontSize: 28,
-        fontWeight: "700",
-        color: colors.text,
-    },
     profileCard: {
         backgroundColor: colors.surface,
         margin: spacing.md,
@@ -728,6 +719,8 @@ const styles = StyleSheet.create({
     profileInfo: {
         flexDirection: "row",
         alignItems: "center",
+        flex: 1,
+        minWidth: 0,
     },
     avatarPlaceholder: {
         width: 60,
@@ -741,6 +734,8 @@ const styles = StyleSheet.create({
     },
     profileText: {
         marginLeft: spacing.md,
+        flex: 1,
+        minWidth: 0,
     },
     profileName: {
         fontSize: typography.sizes.lg,
@@ -755,12 +750,15 @@ const styles = StyleSheet.create({
     editProfileButton: {
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "center",
         backgroundColor: "#f0f7ff",
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        width: 40,
+        height: 40,
         borderRadius: 20,
         borderWidth: 1,
         borderColor: "#e0e7ff",
+        flexShrink: 0,
+        marginLeft: spacing.sm,
     },
     editProfileText: {
         color: colors.primary,

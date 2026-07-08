@@ -1,0 +1,4 @@
+# Project Rules
+
+- Always read [ShopAI_Project_Scope_v2.1.md](file:///Users/suvo/Developer/Pragati_Bandhu/ShopAI_Project_Scope_v2.1.md) at the start of every new session to understand project scope and goals.
+- **Update Session Progress**: At the start of a session, and again after any action, schedule a 5-minute inactivity check using the `ScheduleWakeup` tool (`delaySeconds=300`, `prompt="Update session progress in ShopAI_Project_Scope_v2.1.md"`, `reason="5-min inactivity check for session progress sync"`). When this wakeup fires, review the session's conversation and tool activity since the last update, and document progress, completed tasks, or phase/version changes in the Implementation Progress Tracker (§14) and Changelog (§19) of [ShopAI_Project_Scope_v2.1.md](file:///Users/suvo/Developer/Pragati_Bandhu/ShopAI_Project_Scope_v2.1.md), matching the existing table/changelog format. Skip the update if nothing of substance happened since the last sync.
