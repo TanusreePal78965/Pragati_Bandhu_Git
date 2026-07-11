@@ -1,5 +1,5 @@
 # ShopAI (Pragati Bandhu) — Shop Management with AI Reorder Suggestions
-### Project Scope Document v3.8 | July 2026
+### Project Scope Document v3.9 | July 2026
 
 ---
 
@@ -169,7 +169,7 @@ Presented during shop setup as two clear radio-card options:
 
 Privacy info box: *"Your privacy is important. We never share your shop's location or name with third parties."*
 
-Users who decline can still use the Basic plan (₹299/month) for local-only tracking. The consent screen maps naturally to the plan selection step.
+Users who decline can still use the Basic plan (₹99/month) for local-only tracking. The consent screen maps naturally to the plan selection step.
 
 #### Data sent to Claude API (anonymised)
 When consent is given, only statistical patterns are sent — never product names, shop names, or location:
@@ -473,8 +473,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | Plan | Monthly | What's included |
 |---|---|---|
-| Basic | ₹299/month | Stock tracking + billing + customer/udhar management + local low-stock detection + SMS alerts (no cloud sync, no AI) |
-| Standard | ₹499/month | Everything + cloud backup + WhatsApp alerts + AI suggestions + business reports |
+| Basic | ₹99/month | Stock tracking + billing + customer/udhar management + local low-stock detection + SMS alerts (no cloud sync, no AI) |
+| Standard | ₹159/month | Everything + cloud backup + WhatsApp alerts + AI suggestions + business reports |
 | Setup fee | ₹500–1,000 | One-time, on-site setup and onboarding |
 
 ### 10.3 Early adopter offer (first 10 shops)
@@ -573,6 +573,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 ---
 
 ### 14.4 Mobile — Auth Flow
+
+> **⚠️ Superseded by v3.9 (§14.15).** This entire OTP/Firebase/Supabase-session auth flow was replaced by phone+password login with no session. Kept below for history only — none of it reflects the current app.
 
 | # | Task | Status | Notes |
 |---|---|---|---|
@@ -807,6 +809,8 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ### 14.14 Google Sign-In — Audit, Hardening & Live Migration (v3.8)
 
+> **⚠️ Superseded by v3.9 (§14.15), same day.** All of this — Firebase Auth, Google Sign-In, `exchange-token`, the Supabase-session bridge — was torn out and replaced with phone+password login (no session) less than 24 hours after shipping. Kept below for history only.
+
 > Google Sign-In was already wired up (`exchange-token` Edge Function bridging Firebase ID tokens to a Supabase session) but had never been end-to-end verified. Audit surfaced one config bug, one live crash, one client-side deadlock, and a live-DB schema gap that made Google login unusable pre-fix.
 
 | # | Task | Status | Notes |
@@ -823,6 +827,35 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 107 | Stale native `google-services.json` | ✅ | `mobile/android/app/google-services.json` (baked into the native project at prebuild) was missing the OAuth client entry matching the actual debug-keystore SHA-1 — root-cause of an *earlier* silent picker failure, separate from #106. Re-synced from `mobile/google-services.json` and rebuilt. |
 | 108 | Live DB — `shops.id` phone→UUID migration applied | ✅ | `20260701115044_migrate_to_uuid.sql` existed locally but was **never applied to the live database** — confirmed via `supabase migration list --linked`. Live `shops.id` was still 10-digit-phone `TEXT` with RLS `id = right(auth.jwt()->>'phone', 10)`. Google-only Firebase tokens carry no `phone_number` claim, so every RLS check silently evaluated to `false` for Google users — **all shop data reads/writes were blocked, and `ShopSetupScreen` couldn't even create a row.** Fixed two bugs in the migration itself (missing `DROP POLICY` before `DROP COLUMN` on 9 tables; wrong `login_events` policy shape + no handling for orphaned rows) and applied it: `shops.id` is now `auth.users.id` UUID, all RLS policies rewritten to `auth.uid()`. Verified live afterward — 7 shops / 10 products / 6 customers / 15 bills intact, 2 stale orphaned `login_events` rows dropped. |
 | 109 | `exchange-token` deployed to production | ✅ | Deployed to the live `PragatiDB` project (`xjumfscbazjwhcgmhsyl`) after the above fixes. |
+
+---
+
+### 14.15 Auth Architecture Replacement — Phone+Password, No Session (v3.9)
+
+> Same day as v3.8. Decision: registration moves entirely off the app onto a new static web front end; the mobile app becomes **login-only** with phone + password, no OTP, no Google, no Supabase Auth session at all. Explicitly accepted tradeoff: without a session there's no `auth.uid()` to scope RLS against, so RLS became permissive for the anon key — the app's own `shop_id`-scoped queries are the only remaining isolation (fine for a handful of early shops; revisit before scaling). `password_hash` itself is carved out of that tradeoff — see #111.
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 110 | Live DB — `password_hash` + drop `auth.users` FK | ✅ | New `shops.password_hash TEXT` column. `shops.id` no longer references `auth.users(id)` (constraint `shops_new_id_fkey` dropped) — new shops get a plain `gen_random_uuid()` default, no Supabase Auth user involved at all. |
+| 111 | Live DB — permissive RLS + `password_hash` lockdown | ✅ | Every `owner_access`/`owner_insert`/`owner_read` policy rewritten from `auth.uid()` checks to `USING (true)`. **Bug caught and fixed:** the first attempt to hide `password_hash` via `REVOKE SELECT (password_hash) ... FROM anon, authenticated` was a silent no-op — `pg_attribute.attacl` was `NULL`, meaning access came from a broader *table-level* grant that a column-level `REVOKE` cannot narrow. Fixed by replacing the table-level `SELECT`/`UPDATE` grants with explicit column allowlists that omit `password_hash`, plus revoking `INSERT` on `shops` entirely from anon/authenticated (registration now goes exclusively through `register-shop`'s service-role insert — otherwise anyone with the public anon key could fabricate a shop row for a phone they don't control). Verified live via direct REST calls: anon `SELECT password_hash` → permission denied; anon `INSERT` → permission denied; `login` function still works (service role bypasses the column grant). |
+| 112 | `supabase/functions/register-shop/index.ts` | ✅ | **New.** Verifies a Firebase ID token (same JWKS pattern as the old `exchange-token`), confirms the verified phone matches the submitted one, hashes the password with PBKDF2-SHA256 via Deno's native `crypto.subtle` (no bcrypt dependency — avoids bcrypt-in-Deno-Deploy performance issues), inserts the shop row with `is_active = false` (pending activation — see below). |
+| 113 | `supabase/functions/login/index.ts` | ✅ | **New.** Phone+password check against `shops.password_hash` via the service-role client; constant-time comparison; generic "invalid phone or password" on failure (doesn't leak which part was wrong). No JWT/session issued — just returns the shop row. |
+| 114 | Legacy Edge Functions removed | ✅ | `exchange-token`, `send-otp`, `verify-otp`, `send-sms` deleted from the codebase (superseded — mobile no longer does OTP or Google login at all). Still deployed-but-unused on the live project; local deletion of the deployed functions was blocked by the agent's auto-mode safety classifier since it wasn't explicitly named in chat — harmless to leave, deletable from the Supabase dashboard whenever. |
+| 115 | Payment/activation design (deferred) | ✅ (design only) | "Register first, then pay to activate" reuses the existing `is_active` column/`ShopDeactivatedScreen` gate that was already there for admin deactivation — new registrations just land as `is_active = false` (pending) instead. Actual payment gateway integration is explicitly out of scope for now (gateway not yet chosen). |
+| 116 | `mobile/src/services/authService.ts` rewrite | ✅ | `sendOtp`/`verifyOtp`/`verifyGoogleLogin`/`exchangeFirebaseTokenForSupabaseSession` all deleted. New `login(phone, password)` posts to the `login` function and stores the result locally. `getStoredAuth()` is now a pure local-storage read (checks a stored shop id) with a Supabase-by-id recovery fallback for fresh installs — no session involved. |
+| 117 | `utils/storage.ts` — shop session helpers | ✅ | New `storeShopSession`/`getStoredShopId`/`getStoredPhone`, repurposing the previously-unused `SHOP_ID` storage key. |
+| 118 | 5× `supabase.auth.getSession()` call sites fixed | ✅ | `syncService.ts`, `syncQueue.ts`, `restoreService.ts` (×2) all derived the shop id from the live Supabase session — replaced with the locally stored shop id in all five spots. |
+| 119 | `AuthContext.tsx` rewrite | ✅ | Dropped the `onAuthStateChange` listener entirely (no more auth events — also removes the v3.8 deadlock workaround, since there's nothing left to deadlock) and the `isShopSetup` concept (registration guarantees a shop exists before login is even possible). `claimSession()` now reads the stored shop id instead of the session. |
+| 120 | Navigation simplified | ✅ | `RootNavigator.tsx` guard: 5-way → 4-way (`Auth → ShopDeactivated → DeviceConflict → MainTabs`, `ShopSetup` branch removed). `AuthNavigator.tsx` drops the `Otp`/`ShopSetup` routes. |
+| 121 | `LoginScreen.tsx` rewrite | ✅ | Phone + password fields, single Login button. Google button, `GoogleSignin.configure`, and all related JSX/styles removed. |
+| 122 | Dead code removed | ✅ | `OtpScreen.tsx`, `ShopSetupScreen.tsx` deleted. `insertShop()` (db.ts) and the now-unreachable `shops` `INSERT` branch in `syncQueue.ts` removed — shop creation only ever happens via `register-shop` now. `@react-native-firebase/app`, `@react-native-firebase/auth`, `@react-native-google-signin/google-signin` uninstalled; `app.json` plugin entries and `googleServicesFile` fields removed; `google-services.json` deleted from `mobile/`; `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID` removed from env files. `npx tsc --noEmit` clean across the whole app afterward. |
+| 123 | New `web/` registration site | ✅ | React + Vite app (`web/`), separate from `mobile/`. Two-step form: phone → Firebase phone-auth OTP → shop details + password → POSTs to `register-shop`. Firebase init made **lazy** (`getFirebaseAuth()`) after discovering `getAuth()` throws synchronously on an invalid/placeholder API key, which — since the original code called it at module-import time — crashed the entire page to a blank white screen before React could even mount. |
+| 124 | GitHub Pages deploy workflow | ✅ | `.github/workflows/deploy-web.yml` — builds `web/` and deploys to Pages on push to `main` (Actions-based deployment, not a `gh-pages` branch). Needs one-time manual setup: a **Firebase Web app** registered in the `pragati-bandhu` project (Android-only until now) for real `apiKey`/`appId` values, repo secrets for the 6 `VITE_*` vars, and Settings → Pages → Source set to "GitHub Actions". |
+| 125 | Local dev testing path | ✅ | Firebase's built-in **test phone numbers** (Authentication → Sign-in method → Phone → "Phone numbers for testing") documented as the way to test the OTP flow on `localhost` without fighting real reCAPTCHA/API-key domain restrictions (`auth/invalid-app-credential` otherwise). |
+| 126 | Firebase RecaptchaVerifier fix | ✅ | Fixed `reCAPTCHA has already been rendered in this element` bug in `web/src/App.tsx` by conditionally reusing `window.recaptchaVerifier` instead of creating multiple instances on hot-reload/re-renders. |
+| 127 | Web Registration UI Rework | ✅ | Transformed the web registration page into a modern, premium SaaS aesthetic. Introduced a split-screen layout with a branding hero section on the left and a glassmorphism form container on the right. Styled with a dynamic mesh gradient, Inter font, custom input styles, and smooth discrete step animations. |
+| 128 | Upselling Web Registration Flow | ✅ | Transformed the registration page into a full upselling landing page. Added interactive pricing cards highlighting the "Standard" plan as the recommended tier. The registration form is now presented conditionally after the user selects a plan, seamlessly continuing the premium feel. |
+| 129 | Web Routing & Legal/Info Pages | ✅ | Added `react-router-dom` to `web/` to support client-side routing. Extracted content from `PrivacyPolicyScreen`, `TermsOfServiceScreen`, `AppFeaturesScreen`, and `HelpCenterScreen` in the mobile app and created 4 new web pages for them. Refactored `App.tsx` to serve as a Router and added a Layout wrapper with footer navigation. |
 
 ---
 
@@ -879,7 +912,7 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 | Claude API costs spike | Batch suggestions once/day; gate behind consent; Basic plan users never hit Claude |
 | WATI cost too high early | Start with SMS (Fast2SMS) for first 5 shops |
 | Shop owner loses phone | Cloud sync (for consent users) — data restore instantly; local-only users accept the risk |
-| Shop owner refuses data sharing | Basic plan still generates ₹299/month revenue with zero Claude cost — better margin |
+| Shop owner refuses data sharing | Basic plan still generates ₹99/month revenue with zero Claude cost — better margin |
 | Competition from bigger apps | Price, offline support, full billing+CRM, and local presence are the moat |
 | Connectivity issues in small towns | Full offline-first architecture with automatic sync when online |
 
@@ -888,6 +921,40 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.0 — July 9, 2026
+
+**Web Registration UI Modernisation & Upsell Integration**
+- Completely redesigned the web registration page (`web/src/App.tsx` and `App.css`) from a basic card to a premium landing page layout.
+- Added interactive pricing cards upfront, designed to explicitly upsell the "Standard" plan before capturing registration details.
+- Integrated modern UI patterns: a vibrant mesh gradient background, a frosted glass form container (`backdrop-filter`), refined typography using the Inter font, and polished input elements.
+- Enhanced UX with smooth, discrete step-transition animations using modern CSS animation techniques.
+
+---
+
+### v3.9 — July 8, 2026
+
+**Auth Architecture Replacement — Phone+Password, No Session, Web Registration (§14.15)**
+
+Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack just shipped was more than needed and replaced it entirely.
+
+- **Registration moves off the app** onto a new static `web/` site (React + Vite, deployed to GitHub Pages via a new Actions workflow). It verifies the phone number via Firebase phone auth and collects a password.
+- **Mobile app becomes login-only:** phone + password against a stored hash, checked by a new `login` Edge Function. No OTP, no Google, no Supabase Auth session at all — `AuthContext`, both navigators, `LoginScreen`, and `authService` all rewritten; `OtpScreen`/`ShopSetupScreen` and the Firebase/Google packages deleted entirely. `npx tsc --noEmit` clean afterward.
+- **New `register-shop` Edge Function**: verifies the Firebase ID token, hashes the password with PBKDF2-SHA256 via Deno's native Web Crypto (no bcrypt dependency), creates the shop as `is_active = false` — pending activation, reusing the existing admin-deactivation gate as the future payment-activation gate (payment gateway itself deliberately deferred).
+- **Live DB migrated to permissive RLS** (`USING (true)`) since there's no more `auth.uid()` to scope against — an explicitly accepted isolation tradeoff for a small early-stage app. **Caught and fixed a real bug in the process:** the first attempt to hide the new `password_hash` column via a column-level `REVOKE` was a silent no-op (access was coming from a broader table-level grant that a column REVOKE can't narrow) — fixed with an explicit column-allowlist grant instead, verified live via direct REST calls that the anon key can no longer read `password_hash` or `INSERT` into `shops` at all.
+- **Fixed a dev-only crash:** the web app's Firebase init ran at module-import time; `getAuth()` throws synchronously on a placeholder API key, blanking the entire page before React could mount. Made lazy.
+- **Fixed reCAPTCHA re-render bug:** resolved `reCAPTCHA has already been rendered in this element` during hot-reloads by checking and reusing `window.recaptchaVerifier` in `web/src/App.tsx`.
+- Full list in §14.15.
+
+---
+
+### v3.9 — July 11, 2026
+
+**Shop Deactivation Handling & UX Integrity (`authService.ts`)**
+
+- **Fixed deactivation UX:** When an administrator deactivates a shop, the user is now immediately shown a clear error message directly on the Login screen if they attempt to log in. The previous logic saved the session first and then redirected, which was incorrect for deactivated shops. Modifying `login()` in `authService.ts` to throw an error on `shop.is_active === false` guarantees that users attempting to log into a deactivated shop are stopped at the gate and presented with the deactivation message.
+- **Icons bug fix:** Fixed an issue where `@expo/vector-icons` (specifically Ionicons) were not rendering blank spaces across the app in the local/prebuild setup. Installed `expo-font` and explicitly loaded `Ionicons.font` via `useFonts` hook in `App.tsx` during startup.
+
 
 ### v3.8 — July 8, 2026
 

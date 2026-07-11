@@ -237,7 +237,7 @@ export default function ReportsScreen() {
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
             <ScreenHeader title="Business Reports" isMainTab={false} onNotificationPress={() => { }} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
                 {/* Time Range Selector */}
                 <View style={styles.rangeSelector}>

@@ -9,7 +9,7 @@ export default function TermsOfServiceScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <ScreenHeader title="Terms of Service" showBack={true} />
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 <Text style={styles.lastUpdated}>Last Updated: April 14, 2026</Text>
                 
                 <Text style={styles.paragraph}>

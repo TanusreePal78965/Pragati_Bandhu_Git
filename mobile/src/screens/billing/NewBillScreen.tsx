@@ -510,7 +510,7 @@ export default function NewBillScreen() {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Customer Details */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionLabel}>CUSTOMER DETAILS</Text>
@@ -783,7 +783,7 @@ export default function NewBillScreen() {
                         <View style={{ width: 40 }} />
                     </View>
 
-                    <ScrollView contentContainerStyle={styles.estimateScroll}>
+                    <ScrollView contentContainerStyle={styles.estimateScroll} keyboardShouldPersistTaps="handled">
                         <View style={styles.estimateBadgeRow}>
                             <View style={styles.estimateBadge}>
                                 <Ionicons name="document-text-outline" size={14} color="#92400e" />

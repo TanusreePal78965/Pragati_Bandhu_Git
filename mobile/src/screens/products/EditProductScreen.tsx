@@ -94,7 +94,7 @@ export default function EditProductScreen() {
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.chipScroll}
+                    contentContainerStyle={styles.chipScroll} keyboardShouldPersistTaps="handled"
                 >
                     {allowNone && (
                         <TouchableOpacity
@@ -165,10 +165,10 @@ export default function EditProductScreen() {
             <StatusBar barStyle="dark-content" />
             <ScreenHeader title="Edit Product" showBack={true} />
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
             >
-                <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {/* Basic Information */}
                     <Text style={styles.sectionTitle}>BASIC INFORMATION</Text>
 

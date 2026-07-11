@@ -250,7 +250,7 @@ export default function ProductsScreen() {
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoryScroll}
+                    contentContainerStyle={styles.categoryScroll} keyboardShouldPersistTaps="handled"
                 >
                     {categoryChips.map((cat) => (
                         <TouchableOpacity

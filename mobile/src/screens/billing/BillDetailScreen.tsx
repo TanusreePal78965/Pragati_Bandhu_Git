@@ -381,7 +381,7 @@ export default function BillDetailScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
                 {/* Receipt Card */}
                 <View style={styles.receiptCard}>

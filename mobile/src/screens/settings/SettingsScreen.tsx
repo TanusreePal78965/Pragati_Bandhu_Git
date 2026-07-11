@@ -461,7 +461,7 @@ export default function SettingsScreen() {
                 syncPendingCount={shopInfo?.aiConsent ? syncPendingCount : undefined}
                 onNotificationPress={() => { }}
             />
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {/* Profile Section */}
                 <View style={styles.profileCard}>
                     <View style={styles.profileInfo}>

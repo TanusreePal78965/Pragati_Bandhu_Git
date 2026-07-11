@@ -179,8 +179,8 @@ export default function EditCustomerScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
                     {/* ── Udhar Balance Card ─────────────────────────────────── */}
                     <View style={[
@@ -253,10 +253,10 @@ export default function EditCustomerScreen() {
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Address</Text>
-                        <View style={[styles.inputRow, { alignItems: "flex-start", paddingTop: 14, paddingBottom: 14, minHeight: 80 }]}>
+                        <View style={[styles.inputRow, { alignItems: "flex-start", paddingTop: 8, paddingBottom: 8, minHeight: 60 }]}>
                             <Ionicons name="location-outline" size={20} color={colors.secondary} style={{ marginTop: 2 }} />
                             <TextInput
-                                style={[styles.input, { height: 64, textAlignVertical: "top" }]}
+                                style={[styles.input, { height: 44, textAlignVertical: "top" }]}
                                 value={address}
                                 onChangeText={setAddress}
                                 placeholder="Street, colony..."
@@ -430,13 +430,13 @@ const styles = StyleSheet.create({
         backgroundColor: "#FFF1F2",
         borderWidth: 1,
         borderColor: "#FECDD3",
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: spacing.lg,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: spacing.md,
     },
     balanceLeft: { flex: 1 },
-    balanceLabel: { fontSize: 11, fontWeight: "700", color: "#9CA3AF", letterSpacing: 0.6, marginBottom: 4 },
-    balanceValue: { fontSize: 28, fontWeight: "800", color: colors.error },
+    balanceLabel: { fontSize: 11, fontWeight: "700", color: "#9CA3AF", letterSpacing: 0.6, marginBottom: 2 },
+    balanceValue: { fontSize: 24, fontWeight: "800", color: colors.error },
     balanceSub: { fontSize: 12, color: "#9CA3AF", marginTop: 4 },
     clearedBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
     clearedText: { fontSize: 13, color: colors.success, fontWeight: "600" },
@@ -457,23 +457,23 @@ const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#94A3B8",
         letterSpacing: 0.8,
-        marginBottom: spacing.md,
+        marginBottom: spacing.sm,
         marginTop: spacing.sm,
     },
 
     // Contact form
-    inputGroup: { marginBottom: 16 },
-    label: { fontSize: 13, fontWeight: "600", color: colors.text, marginBottom: 6 },
+    inputGroup: { marginBottom: 12 },
+    label: { fontSize: 13, fontWeight: "600", color: colors.text, marginBottom: 4 },
     inputRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
+        gap: 8,
         backgroundColor: "#F8FAFC",
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        height: 52,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        height: 44,
     },
     input: { flex: 1, fontSize: 15, color: colors.text },
 
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: spacing.md,
-        paddingVertical: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },

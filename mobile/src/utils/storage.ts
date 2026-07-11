@@ -5,8 +5,26 @@ export const StorageKeys = {
   LAST_SYNC: 'last_sync',
   USER_ID: 'user_id',
   SHOP_ID: 'shop_id',
+  PHONE: 'phone',
   SHOP_INFO: 'shop_info',
   DEVICE_ID: 'device_id',
+};
+
+// ─── Shop session (phone+password login, no Supabase Auth session) ─────────
+
+export const storeShopSession = async (shopId: string, phone: string): Promise<void> => {
+  await AsyncStorage.multiSet([
+    [StorageKeys.SHOP_ID, shopId],
+    [StorageKeys.PHONE, phone],
+  ]);
+};
+
+export const getStoredShopId = async (): Promise<string | null> => {
+  return AsyncStorage.getItem(StorageKeys.SHOP_ID);
+};
+
+export const getStoredPhone = async (): Promise<string | null> => {
+  return AsyncStorage.getItem(StorageKeys.PHONE);
 };
 
 // ─── Consent ────────────────────────────────────────────────────────────────
@@ -64,6 +82,7 @@ export const clearAllUserData = async (): Promise<void> => {
     StorageKeys.LAST_SYNC,
     StorageKeys.USER_ID,
     StorageKeys.SHOP_ID,
+    StorageKeys.PHONE,
     StorageKeys.SHOP_INFO,
   ]);
 };

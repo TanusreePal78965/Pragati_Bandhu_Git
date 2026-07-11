@@ -65,7 +65,7 @@ export default function AddProductScreen() {
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.chipScroll}
+                    contentContainerStyle={styles.chipScroll} keyboardShouldPersistTaps="handled"
                 >
                     {items.map((item) => (
                         <TouchableOpacity
@@ -124,10 +124,10 @@ export default function AddProductScreen() {
             <StatusBar barStyle="dark-content" />
             <ScreenHeader title="Add New Product" showBack={true} />
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
             >
-                <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+                <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                     {/* Basic Information */}
                     <Text style={styles.sectionTitle}>BASIC INFORMATION</Text>
 

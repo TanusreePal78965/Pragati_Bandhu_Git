@@ -18,36 +18,6 @@ export interface ShopInfo {
   isActive?: boolean;
 }
 
-export const insertShop = (data: ShopInfo): void => {
-  try {
-    const id = genId();
-    db.runSync(
-      `INSERT OR REPLACE INTO shop
-         (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        data.shopName,
-        data.ownerName,
-        data.phone ?? '',
-        data.whatsappNumber ?? '',
-        data.category ?? '',
-        data.aiConsent ? 1 : 0,
-      ]
-    );
-    addToSyncQueue('shop', 'INSERT', id, {
-      shopName: data.shopName,
-      ownerName: data.ownerName,
-      category: data.category,
-      whatsappNumber: data.whatsappNumber,
-      aiConsent: data.aiConsent,
-      phone: data.phone,
-    });
-  } catch (e) {
-    console.error('insertShop error:', e);
-  }
-};
-
 export const getShop = (): ShopInfo | null => {
   try {
     const row = db.getFirstSync('SELECT * FROM shop LIMIT 1') as any;

@@ -109,30 +109,25 @@ export default function CustomersScreen() {
                             <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
                         </View>
                         <View style={styles.itemMain}>
-                            <Text style={styles.itemName}>{item.name}</Text>
-                            <View style={styles.itemSecondaryRow}>
-                                {item.phone ? (
-                                    <>
-                                        <Text style={styles.itemPhone}>{item.phone}</Text>
-                                        <Text style={styles.bullet}>•</Text>
-                                    </>
-                                ) : null}
+                            <View style={styles.itemRow}>
+                                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                                <Text
+                                    style={[
+                                        styles.itemBalance,
+                                        item.udhar_balance === 0 && styles.itemBalanceClear,
+                                    ]}
+                                >
+                                    {formatCurrency(item.udhar_balance)}
+                                </Text>
+                            </View>
+                            <View style={styles.itemRow}>
+                                <Text style={styles.itemPhone}>{item.phone || "No Phone"}</Text>
                                 <Text style={styles.itemLastTrans}>
-                                    Added {new Date(item.created_at.endsWith('Z') ? item.created_at : item.created_at.replace(' ', 'T') + 'Z').toLocaleDateString("en-IN")}
+                                    {new Date(item.created_at.endsWith('Z') ? item.created_at : item.created_at.replace(' ', 'T') + 'Z').toLocaleDateString("en-IN")}
                                 </Text>
                             </View>
                         </View>
-                        <View style={styles.itemRight}>
-                            <Text
-                                style={[
-                                    styles.itemBalance,
-                                    item.udhar_balance === 0 && styles.itemBalanceClear,
-                                ]}
-                            >
-                                {formatCurrency(item.udhar_balance)}
-                            </Text>
-                            <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#CBD5E1" style={styles.chevron} />
                     </TouchableOpacity>
                 )}
                 ListEmptyComponent={
@@ -158,11 +153,11 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         marginHorizontal: spacing.md,
-        marginTop: spacing.lg,
-        paddingHorizontal: spacing.md,
-        height: 52,
-        borderRadius: 12,
-        gap: 8,
+        marginTop: spacing.sm,
+        paddingHorizontal: spacing.sm,
+        height: 44,
+        borderRadius: 8,
+        gap: 6,
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
@@ -170,16 +165,17 @@ const styles = StyleSheet.create({
     searchInput: { flex: 1, fontSize: 15, color: colors.text },
     summaryCard: {
         backgroundColor: colors.primary,
-        margin: spacing.md,
-        borderRadius: 16,
-        padding: 24,
+        marginHorizontal: spacing.md,
+        marginVertical: spacing.sm,
+        borderRadius: 12,
+        padding: 16,
         flexDirection: "row",
         justifyContent: "space-between",
         shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-        elevation: 10,
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
         overflow: "hidden",
     },
     cardInfo: { flex: 1, zIndex: 1 },
@@ -190,7 +186,7 @@ const styles = StyleSheet.create({
         textTransform: "uppercase",
         letterSpacing: 0.5,
     },
-    cardValue: { color: "#fff", fontSize: 28, fontWeight: "800", marginVertical: 4 },
+    cardValue: { color: "#fff", fontSize: 24, fontWeight: "800", marginVertical: 2 },
     trendRow: { flexDirection: "row", alignItems: "center" },
     trendBadge: {
         flexDirection: "row",
@@ -210,7 +206,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         alignItems: "center",
         paddingHorizontal: spacing.md,
-        marginBottom: spacing.md,
+        marginBottom: spacing.sm,
     },
     listCount: { fontSize: 13, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase" },
     listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
@@ -218,30 +214,29 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: colors.surface,
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: spacing.sm,
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
         borderWidth: 1,
         borderColor: colors.border,
     },
     avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: "center",
         justifyContent: "center",
-        marginRight: 12,
+        marginRight: 10,
     },
-    avatarText: { fontSize: 16, fontWeight: "700", color: colors.primary },
-    itemMain: { flex: 1 },
-    itemName: { fontSize: 16, fontWeight: "700", color: colors.text },
-    itemSecondaryRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+    avatarText: { fontSize: 14, fontWeight: "700", color: colors.primary },
+    itemMain: { flex: 1, marginRight: 4, gap: 4 },
+    itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    itemName: { fontSize: 16, fontWeight: "700", color: colors.text, flex: 1, marginRight: 8 },
     itemPhone: { fontSize: 12, color: colors.secondary, fontWeight: "500" },
-    bullet: { fontSize: 12, color: colors.textSecondary, marginHorizontal: 4 },
     itemLastTrans: { fontSize: 12, color: colors.textSecondary },
-    itemRight: { flexDirection: "row", alignItems: "center", gap: 8 },
     itemBalance: { fontSize: 15, fontWeight: "700", color: colors.error },
     itemBalanceClear: { color: colors.success },
+    chevron: { marginLeft: 4 },
     emptyState: { alignItems: "center", paddingTop: 60 },
     emptyText: { fontSize: typography.sizes.lg, fontWeight: "700", color: colors.textSecondary, marginTop: spacing.md },
     emptySubText: { fontSize: typography.sizes.sm, color: colors.textSecondary, marginTop: spacing.xs },

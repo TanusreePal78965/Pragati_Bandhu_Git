@@ -154,7 +154,7 @@ export default function EditShopScreen() {
             >
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
                 >
                     {/* Form */}
                     <View style={styles.form}>

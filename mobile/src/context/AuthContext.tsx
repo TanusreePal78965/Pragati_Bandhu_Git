@@ -1,20 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { getStoredAuth, logout as logoutService } from '../services/authService';
-import { getShopInfo, getOrCreateDeviceId } from '../utils/storage';
+import { login as loginService, getStoredAuth, logout as logoutService } from '../services/authService';
+import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { startSyncService, stopSyncService } from '../services/syncService';
 import { onRestoreEvent } from '../utils/restoreEvents';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AuthState = {
-  /** false while session is being read on app launch — prevents flash of wrong screen */
+  /** false while stored session is being read on app launch — prevents flash of wrong screen */
   isReady: boolean;
-  /** true if a valid Supabase session exists */
+  /** true if a locally stored shop session exists */
   isAuthenticated: boolean;
-  /** true if shop setup has been completed and shop info is saved */
-  isShopSetup: boolean;
-  /** false when admin has deactivated this shop */
+  /** false when admin has deactivated this shop (or it's pending payment activation) */
   isShopActive: boolean;
   /** true when another device has claimed this shop's active session */
   isDeviceConflict: boolean;
@@ -22,13 +20,11 @@ type AuthState = {
   isAutoRestoring: boolean;
   /** 10-digit phone number — available after login */
   phone: string | null;
-  /** User UUID — available after login */
+  /** Shop UUID — available after login */
   uuid: string | null;
-  /** Call after successful OTP verification */
-  login: (phone: string) => Promise<void>;
-  /** Call after ShopSetup form is completed */
-  completeSetup: () => void;
-  /** Clears Supabase session + shop info and returns to login */
+  /** Call with phone + password to log in */
+  login: (phone: string, password: string) => Promise<void>;
+  /** Clears local session + shop info and returns to login */
   logout: () => Promise<void>;
   /** Called by syncService when it detects is_active = false */
   setShopActive: (active: boolean) => void;
@@ -43,7 +39,6 @@ const AuthContext = createContext<AuthState>({} as AuthState);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isShopSetup, setIsShopSetup] = useState(false);
   const [isShopActive, setIsShopActive] = useState(true);
   const [isDeviceConflict, setIsDeviceConflict] = useState(false);
   const [isAutoRestoring, setIsAutoRestoring] = useState(false);
@@ -60,16 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => onRestoreEvent(null);
   }, []);
 
-  // On mount: restore session from Supabase (persisted in AsyncStorage)
+  // On mount: restore session from local storage.
   useEffect(() => {
     getStoredAuth()
-      .then(async ({ isAuthenticated: authed, isShopSetup: shopReady, phone: p, uuid: u }) => {
+      .then(async ({ isAuthenticated: authed, phone: p, uuid: u }) => {
         setIsAuthenticated(authed);
-        setIsShopSetup(shopReady);
         setPhone(p);
         setUuid(u);
 
-        if (shopReady) {
+        if (authed) {
           const info = await getShopInfo();
           setIsShopActive(info?.isActive ?? true);
           await startSyncService(
@@ -80,71 +74,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         setIsAuthenticated(false);
-        setIsShopSetup(false);
         setPhone(null);
         setUuid(null);
       })
       .finally(() => setIsReady(true));
-
-    // Listen for Supabase auth state changes (token refresh, sign-out, etc.)
-    //
-    // IMPORTANT: this callback fires while supabase-js still holds its internal
-    // auth lock (the one setSession()/signOut() etc. are waiting to release).
-    // Calling any other supabase.auth.* method synchronously in here (even via
-    // getStoredAuth() -> getSession()) re-enters that lock and deadlocks the
-    // call that triggered the event. Defer to a new task so the lock is free
-    // by the time this body runs — see supabase-js auth-js docs on
-    // onAuthStateChange re-entrancy.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_OUT' || !session) {
-          setIsAuthenticated(false);
-          setIsShopSetup(false);
-          setIsShopActive(true);
-          setIsDeviceConflict(false);
-          setPhone(null);
-          setUuid(null);
-        } else if (event === 'SIGNED_IN') {
-          setTimeout(async () => {
-            const { isShopSetup: shopReady, phone: p, uuid: u } = await getStoredAuth();
-            const info = shopReady ? await getShopInfo() : null;
-            setPhone(p);
-            setUuid(u);
-            setIsAuthenticated(true);
-            setIsShopSetup(shopReady);
-            setIsShopActive(info?.isActive ?? true);
-            setIsDeviceConflict(false);
-          }, 0);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (p: string) => {
-    const { isShopSetup: shopReady, uuid: u } = await getStoredAuth();
-    const info = shopReady ? await getShopInfo() : null;
-
-    setPhone(p);
-    setUuid(u);
+  const login = async (phoneInput: string, password: string) => {
+    const shop = await loginService(phoneInput, password);
+    setPhone(shop.phone);
+    setUuid(shop.id);
     setIsAuthenticated(true);
-    setIsShopSetup(shopReady);
-    setIsShopActive(info?.isActive ?? true);
+    setIsShopActive(shop.is_active ?? true);
     setIsDeviceConflict(false);
-    if (shopReady) {
-      await startSyncService(
-        () => setShopActive(false),
-        () => setIsDeviceConflict(true),
-      );
-    }
-  };
-
-  const completeSetup = () => {
-    setIsShopSetup(true);
-    setIsShopActive(true);
-    setIsDeviceConflict(false);
-    startSyncService(
+    await startSyncService(
       () => setShopActive(false),
       () => setIsDeviceConflict(true),
     );
@@ -154,7 +97,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     stopSyncService();
     await logoutService();
     setIsAuthenticated(false);
-    setIsShopSetup(false);
     setIsShopActive(true);
     setIsDeviceConflict(false);
     setPhone(null);
@@ -173,12 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const claimSession = async (): Promise<void> => {
     try {
       const deviceId = await getOrCreateDeviceId();
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (userId) {
+      const shopId = await getStoredShopId();
+      if (shopId) {
         await supabase.from('shops')
           .update({ active_device_id: deviceId })
-          .eq('id', userId);
+          .eq('id', shopId);
       }
     } catch {
       // Non-critical — conflict screen will retry on next foreground
@@ -191,14 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         isReady,
         isAuthenticated,
-        isShopSetup,
         isShopActive,
         isDeviceConflict,
         isAutoRestoring,
         phone,
         uuid,
         login,
-        completeSetup,
         logout,
         setShopActive,
         claimSession,

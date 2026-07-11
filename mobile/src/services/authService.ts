@@ -1,13 +1,12 @@
 import { supabase } from '../lib/supabase';
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import * as FileSystem from 'expo-file-system/legacy';
 import {
   clearAllUserData,
   getShopInfo,
   setShopInfo,
   setHasConsent,
   getOrCreateDeviceId,
+  storeShopSession,
+  getStoredShopId,
 } from '../utils/storage';
 import db, { openUserDatabase, closeUserDatabase } from '../db/sqlite';
 import { restoreFromCloud } from './restoreService';
@@ -16,97 +15,68 @@ import { emitRestoreEvent } from '../utils/restoreEvents';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-// ─── Auth API ─────────────────────────────────────────────────────────────────
+type ShopRecord = {
+  id: string;
+  shop_name: string;
+  owner_name: string;
+  phone: string;
+  whatsapp_number: string | null;
+  business_category: string | null;
+  ai_consent: boolean;
+  is_active: boolean;
+};
 
-/**
- * Request OTP for the given 10-digit phone number.
- * Calls the custom send-otp Edge Function which stores an OTP hash
- * in the database and delivers the OTP via Fast2SMS.
- */
-let _confirmationResult: any = null;
-
-/**
- * Request OTP for the given 10-digit phone number using Firebase Auth.
- */
-export const sendOtp = async (phone: string): Promise<void> => {
-  const e164Phone = `+91${phone}`;
-  const confirmation = await auth().signInWithPhoneNumber(e164Phone);
-  _confirmationResult = confirmation;
+const storeShopRecordLocally = async (shop: ShopRecord): Promise<void> => {
+  await setShopInfo({
+    shopName: shop.shop_name,
+    ownerName: shop.owner_name,
+    phone: shop.phone,
+    category: shop.business_category ?? '',
+    whatsappNumber: shop.whatsapp_number ?? '',
+    aiConsent: shop.ai_consent ?? false,
+    isActive: shop.is_active ?? true,
+  });
+  await setHasConsent(shop.ai_consent ?? false);
 };
 
 /**
- * POST a Firebase ID Token to the exchange-token Edge Function and adopt the
- * returned custom JWT as the live Supabase session. Shared by OTP login,
- * Google login, and the silent re-mint path in getStoredAuth().
+ * Log in with a 10-digit phone number and password via the `login` Edge
+ * Function. There is no Supabase Auth session here — a successful login just
+ * returns the shop row, which is trusted and stored locally. Data access is
+ * scoped entirely by the app querying its own shop_id (see permissive RLS
+ * migration); there is no server-verified session backing this.
  */
-const exchangeFirebaseTokenForSupabaseSession = async (
-  firebaseIdToken: string
-): Promise<{ user: { id: string; email?: string; phone?: string } }> => {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/exchange-token`, {
+export const login = async (phone: string, password: string): Promise<ShopRecord> => {
+  const e164Phone = `+91${phone}`;
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ idToken: firebaseIdToken }),
+    body: JSON.stringify({ phone: e164Phone, password }),
   });
 
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? 'Failed to exchange token');
+  if (!res.ok) throw new Error(body.error ?? 'Login failed');
 
-  const { error } = await supabase.auth.setSession({
-    access_token: body.access_token,
-    refresh_token: body.refresh_token,
-  });
-  if (error) throw error;
+  const shop: ShopRecord = body.shop;
 
-  return body;
-};
+  if (shop.is_active === false) {
+    throw new Error('Your shop has been deactivated by the administrator. You cannot access the app until it is reactivated.');
+  }
 
-/** Record a login event for activity tracking. Best-effort — never blocks login. */
-const logLoginEvent = (shopId: string | undefined, deviceId: string) => {
-  if (!shopId) return;
-  supabase.from('login_events').insert({ shop_id: shopId, device_id: deviceId }).then(
+  await storeShopSession(shop.id, shop.phone);
+  await storeShopRecordLocally(shop);
+  openUserDatabase(shop.id);
+
+  const deviceId = await getOrCreateDeviceId();
+  supabase.from('login_events').insert({ shop_id: shop.id, device_id: deviceId }).then(
     () => {},
     () => {}
   );
-};
 
-/**
- * Verify OTP using Firebase Auth, then exchange the Firebase ID Token
- * for a native Supabase session via the exchange-token Edge Function.
- */
-export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
-  if (!_confirmationResult) {
-    throw new Error('No OTP request found. Please request OTP first.');
-  }
-  const userCredential = await _confirmationResult.confirm(otp);
-  if (!userCredential) {
-    throw new Error('Failed to verify OTP');
-  }
-
-  const idToken = await userCredential.user.getIdToken();
-  await exchangeFirebaseTokenForSupabaseSession(idToken);
-
-  const deviceId = await getOrCreateDeviceId();
-  logLoginEvent(phone, deviceId);
-};
-
-/**
- * Verify Google Login using Firebase Auth and exchange the ID Token for Supabase.
- */
-export const verifyGoogleLogin = async (idToken: string, accessToken?: string | null): Promise<void> => {
-  const credential = auth.GoogleAuthProvider.credential(idToken, accessToken || 'not_empty');
-  const userCredential = await auth().signInWithCredential(credential);
-  if (!userCredential) {
-    throw new Error('Failed to verify Google Sign-In with Firebase');
-  }
-
-  const firebaseIdToken = await userCredential.user.getIdToken();
-  const { user } = await exchangeFirebaseTokenForSupabaseSession(firebaseIdToken);
-
-  const deviceId = await getOrCreateDeviceId();
-  logLoginEvent(user?.phone ?? user?.email, deviceId);
+  return shop;
 };
 
 // ─── Session ──────────────────────────────────────────────────────────────────
@@ -114,92 +84,36 @@ export const verifyGoogleLogin = async (idToken: string, accessToken?: string | 
 /**
  * Check persisted auth state on app launch.
  *
- * Opens the user-specific SQLite database (shopai_<phone>.db) before any
- * local reads — each user's data is fully isolated at the file level, so
- * there is no cross-user bleed and no need to wipe on logout.
+ * Opens the user-specific SQLite database (shopai_<shopId>.db) before any
+ * local reads — each shop's data is fully isolated at the file level.
  *
- * If the session is valid but local shop info is missing (e.g. fresh install),
- * attempts to recover the shop from Supabase before deciding isShopSetup.
- *
- * The Supabase session is a short-lived (24h) custom JWT with no real GoTrue
- * refresh token, so once it expires supabase.auth.getSession() comes back
- * empty. Firebase's own session persists on-device and auto-refreshes its ID
- * tokens indefinitely, so if it's still present we silently re-mint a fresh
- * Supabase session from it instead of bouncing the user to the login screen.
+ * If a session exists but local shop info is missing (e.g. fresh install or
+ * reinstall after logging in elsewhere), attempts to recover the shop from
+ * Supabase directly by id.
  */
 export const getStoredAuth = async (): Promise<{
   isAuthenticated: boolean;
-  isShopSetup: boolean;
   phone: string | null;
   uuid: string | null;
 }> => {
-  const { data: { session: existingSession } } = await supabase.auth.getSession();
-  let session = existingSession;
-
-  if (!session) {
-    const firebaseUser = auth().currentUser;
-    if (firebaseUser) {
-      try {
-        const idToken = await firebaseUser.getIdToken();
-        await exchangeFirebaseTokenForSupabaseSession(idToken);
-        ({ data: { session } } = await supabase.auth.getSession());
-      } catch (_) {
-        // Firebase session invalid/revoked too — fall through to unauthenticated.
-      }
-    }
+  const shopId = await getStoredShopId();
+  if (!shopId) {
+    return { isAuthenticated: false, phone: null, uuid: null };
   }
 
-  if (!session) {
-    return { isAuthenticated: false, isShopSetup: false, phone: null, uuid: null };
-  }
-
-  const uuid = session.user.id;
-  const rawPhone = (session.user.phone ?? '') as string;
-  const phone = rawPhone ? rawPhone.slice(-10) : null;
-
-  // Migration: If shopai_<phone>.db exists and shopai_<uuid>.db doesn't, rename it!
-  if (phone) {
-    const oldDbUri = `${FileSystem.documentDirectory}SQLite/shopai_${phone}.db`;
-    const newDbUri = `${FileSystem.documentDirectory}SQLite/shopai_${uuid}.db`;
-    try {
-      const dbInfo = await FileSystem.getInfoAsync(oldDbUri);
-      if (dbInfo.exists) {
-        const moveFileIfExists = async (from: string, to: string) => {
-          const info = await FileSystem.getInfoAsync(from);
-          if (info.exists) {
-            await FileSystem.moveAsync({ from, to });
-          }
-        };
-        await moveFileIfExists(oldDbUri, newDbUri);
-        await moveFileIfExists(`${oldDbUri}-wal`, `${newDbUri}-wal`);
-        await moveFileIfExists(`${oldDbUri}-shm`, `${newDbUri}-shm`);
-        await moveFileIfExists(`${oldDbUri}-journal`, `${newDbUri}-journal`);
-        console.log(`[Migration] Database successfully renamed to shopai_${uuid}.db`);
-      }
-    } catch (err) {
-      console.warn('[Migration] Failed to migrate database filename:', err);
-    }
-  }
-
-  // Open this user's isolated DB before any SQLite access.
-  // shopai_<uuid>.db is created on first open and reused on subsequent logins.
-  openUserDatabase(uuid);
-
-  // If we migrated the database, update the local shop.id in SQLite.
-  if (phone) {
-    try {
-      db.runSync('UPDATE shop SET id = ? WHERE id = ?', [uuid, phone]);
-    } catch (_) {}
-  }
+  // Open this shop's isolated DB before any SQLite access.
+  // shopai_<shopId>.db is created on first open and reused on subsequent logins.
+  openUserDatabase(shopId);
 
   let shopInfo = await getShopInfo();
 
-  // Session is valid but no local shop info — try to recover from Supabase
+  // Local shop info missing — recover directly from Supabase by id.
   if (!shopInfo) {
     try {
       const { data } = await supabase
         .from('shops')
         .select('shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active')
+        .eq('id', shopId)
         .single();
 
       if (data?.shop_name) {
@@ -216,14 +130,12 @@ export const getStoredAuth = async (): Promise<{
         await setShopInfo(recovered);
         await setHasConsent(recovered.aiConsent);
 
-        // Insert directly preserving the real Supabase ID (UUID).
-        // Don't use insertShop() — it generates a random id and re-queues sync.
         db.runSync(
           `INSERT OR REPLACE INTO shop
              (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            uuid,
+            shopId,
             data.shop_name,
             data.owner_name,
             data.phone ?? null,
@@ -244,8 +156,6 @@ export const getStoredAuth = async (): Promise<{
             'SELECT COUNT(*) as count FROM products'
           ) as { count: number };
           if (count === 0) {
-            // C11: Emit events so AuthContext can show a "Restoring…" banner.
-            // Non-blocking — user lands on the home screen while data loads in.
             emitRestoreEvent('start');
             restoreFromCloud()
               .then(() => emitRestoreEvent('complete'))
@@ -254,31 +164,23 @@ export const getStoredAuth = async (): Promise<{
         }
       }
     } catch {
-      // Network unavailable or no shop found — fall through to setup screen
+      // Network unavailable or shop not found — fall through with local info only
     }
   }
 
   return {
     isAuthenticated: true,
-    isShopSetup: !!shopInfo,
-    phone,
-    uuid,
+    phone: shopInfo?.phone ?? null,
+    uuid: shopId,
   };
 };
 
 /**
- * Clear Supabase session and all user-specific AsyncStorage keys on logout.
- * SQLite is NOT wiped — each user's data lives in their own shopai_<phone>.db
- * file and is safe to keep for when they log back in.
+ * Clear local session + shop info on logout. SQLite is NOT wiped — each
+ * shop's data lives in its own shopai_<shopId>.db file and is safe to keep
+ * for when they log back in.
  */
 export const logout = async (): Promise<void> => {
-  try {
-    await auth().signOut();
-  } catch (_) {}
-  try {
-    await GoogleSignin.signOut();
-  } catch (_) {}
-  await supabase.auth.signOut();
   closeUserDatabase();
   await clearAllUserData();
 };

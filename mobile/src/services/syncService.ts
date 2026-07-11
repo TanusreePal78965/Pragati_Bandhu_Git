@@ -1,7 +1,7 @@
 import { AppState, AppStateStatus } from 'react-native';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { flushSyncQueue } from '../db/syncQueue';
-import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId } from '../utils/storage';
+import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { supabase } from '../lib/supabase';
 import { restoreFromCloud } from './restoreService';
 
@@ -34,8 +34,7 @@ const checkShopStatus = async (
     const net = await NetInfo.fetch();
     if (!net.isConnected) return;
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
+    const userId = await getStoredShopId();
     if (!userId) return;
 
     const { data } = await supabase

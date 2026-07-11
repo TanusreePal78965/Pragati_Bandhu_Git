@@ -13,12 +13,10 @@
       "backgroundColor": "#F0F4F8"
     },
     "ios": {
-      "supportsTablet": true,
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "supportsTablet": true
     },
     "android": {
       "package": "com.pragatibandhu.app",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F0F4F8"
@@ -36,9 +34,7 @@
     },
     "plugins": [
       "expo-web-browser",
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      "@react-native-google-signin/google-signin"
+      "expo-font"
     ]
   }
 }

@@ -6,7 +6,6 @@ import { useAuth } from "../context/AuthContext";
 
 import AuthNavigator from "./AuthNavigator";
 import BottomTabNavigator from "./BottomTabNavigator";
-import ShopSetupScreen from "../screens/auth/ShopSetupScreen";
 import NewBillScreen from "../screens/billing/NewBillScreen";
 import AddProductScreen from "../screens/products/AddProductScreen";
 import ManageCategoriesScreen from "../screens/settings/ManageCategoriesScreen";
@@ -30,7 +29,7 @@ import TermsOfServiceScreen from "../screens/settings/TermsOfServiceScreen";
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-    const { isReady, isAuthenticated, isShopSetup, isShopActive, isDeviceConflict, isAutoRestoring } = useAuth();
+    const { isReady, isAuthenticated, isShopActive, isDeviceConflict, isAutoRestoring } = useAuth();
 
     // Splash guard: don't render navigator until AsyncStorage check is done.
     // Prevents the login screen from flashing on a returning authenticated user.
@@ -57,9 +56,6 @@ export default function RootNavigator() {
                 {!isAuthenticated ? (
                     // ── Unauthenticated: only auth screens accessible ──────────
                     <Stack.Screen name="Auth" component={AuthNavigator} />
-                ) : !isShopSetup ? (
-                    // ── Authenticated but no shop yet: force shop setup ────────
-                    <Stack.Screen name="ShopSetup" component={ShopSetupScreen} />
                 ) : !isShopActive ? (
                     // ── Shop deactivated by admin ──────────────────────────────
                     <Stack.Screen name="ShopDeactivated" component={ShopDeactivatedScreen} />

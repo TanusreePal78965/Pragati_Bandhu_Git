@@ -70,7 +70,7 @@ export default function HomeScreen() {
             <ScreenHeader title="Dashboard" isMainTab={false} onNotificationPress={() => { }} />
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled"
             >
                 {/* Main Stats Section */}
                 <View style={styles.mainStatsContainer}>

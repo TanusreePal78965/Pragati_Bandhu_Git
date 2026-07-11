@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useFonts } from "expo-font";
+import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { AuthProvider } from "./src/context/AuthContext";
 import { stopSyncService } from "./src/services/syncService";
@@ -21,6 +23,14 @@ function AppContent() {
 }
 
 export default function App() {
+  const [loaded] = useFonts({
+    ...Ionicons.font,
+  });
+
+  if (!loaded) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

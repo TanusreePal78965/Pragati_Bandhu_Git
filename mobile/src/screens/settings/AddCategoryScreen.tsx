@@ -80,13 +80,13 @@ export default function AddCategoryScreen() {
             <ScreenHeader title="Add New Category" showBack={true} />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={styles.keyboardView}
             >
                 <ScrollView
                     style={styles.scroll}
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.scrollContent}
+                    contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled"
                 >
                     {/* Preview */}
                     <View style={styles.previewContainer}>

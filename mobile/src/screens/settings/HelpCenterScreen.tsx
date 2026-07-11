@@ -38,7 +38,7 @@ export default function HelpCenterScreen() {
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>
             <ScreenHeader title="Help Center" showBack={true} />
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.helpCard}>
                     <Text style={styles.helpTitle}>How can we help you?</Text>
                     <Text style={styles.helpSubtitle}>Our support team is available from 10 AM to 8 PM.</Text>

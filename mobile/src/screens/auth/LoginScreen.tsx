@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
     View,
     Text,
@@ -11,78 +11,45 @@ import {
     ActivityIndicator,
     Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { sendOtp, verifyGoogleLogin } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">;
 
 export default function LoginScreen() {
     const navigation = useNavigation<LoginScreenNavigationProp>();
+    const { login } = useAuth();
     const [phoneNumber, setPhoneNumber] = useState("");
+    const [password, setPassword] = useState("");
     const [error, setError] = useState("");
-    const [googleError, setGoogleError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    useEffect(() => {
-        GoogleSignin.configure({
-            webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID,
-        });
-    }, []);
-
-    const handleGetOtp = async () => {
+    const handleLogin = async () => {
         const clean = phoneNumber.replace(/\D/g, "");
-        if (!clean) {
-            setError("Please enter your mobile number");
-            return;
-        }
         if (clean.length !== 10) {
             setError("Please enter a valid 10-digit mobile number");
+            return;
+        }
+        if (!password) {
+            setError("Please enter your password");
             return;
         }
 
         setIsLoading(true);
         setError("");
-        setGoogleError("");
 
         try {
-            await sendOtp(clean);
-            navigation.navigate("Otp", { phoneNumber: clean });
+            await login(clean, password);
         } catch (e: any) {
-            const msg =
-                e?.message ??
-                "Could not send OTP. Please check your connection.";
+            const msg = e?.message ?? "Login failed. Please check your connection.";
             setError(msg);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleGoogleSignIn = async () => {
-        setIsGoogleLoading(true);
-        setGoogleError("");
-        setError("");
-        try {
-            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-            const response = await GoogleSignin.signIn();
-            if (response.type !== "success" || !response.data) {
-                throw new Error("Google Sign-In was cancelled or failed");
-            }
-            const idToken = response.data.idToken;
-            if (!idToken) throw new Error("No ID Token found from Google Sign-In");
-
-            await verifyGoogleLogin(idToken, undefined);
-        } catch (e: any) {
-            console.error("Google Sign-In Error:", e);
-            setGoogleError(e?.message ?? "Google Sign-In failed.");
-        } finally {
-            setIsGoogleLoading(false);
         }
     };
 
@@ -90,10 +57,9 @@ export default function LoginScreen() {
         const cleaned = text.replace(/\D/g, "").slice(0, 10);
         setPhoneNumber(cleaned);
         if (error) setError("");
-        if (googleError) setGoogleError("");
     };
 
-    const isButtonDisabled = isLoading || isGoogleLoading || phoneNumber.length < 10;
+    const isButtonDisabled = isLoading || phoneNumber.length < 10 || !password;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -124,7 +90,7 @@ export default function LoginScreen() {
                         <Text style={styles.welcomeText}>Welcome!</Text>
                         <Text style={styles.welcomeTextBengali}>স্বাগতম!</Text>
                         <Text style={styles.instructionText}>
-                            Enter your mobile number to continue
+                            Log in with your mobile number and password
                         </Text>
 
                         {/* Phone Input */}
@@ -144,59 +110,41 @@ export default function LoginScreen() {
                             />
                         </View>
 
+                        {/* Password Input */}
+                        <TextInput
+                            style={[styles.passwordInput, error ? styles.inputError : null]}
+                            placeholder="Password"
+                            placeholderTextColor="#94A3B8"
+                            secureTextEntry
+                            value={password}
+                            onChangeText={(text) => {
+                                setPassword(text);
+                                if (error) setError("");
+                            }}
+                            editable={!isLoading}
+                        />
+
                         {/* Error Message */}
                         {error ? (
                             <Text style={styles.errorText}>{error}</Text>
                         ) : null}
 
-                        {/* Get OTP Button */}
+                        {/* Login Button */}
                         <TouchableOpacity
                             style={[
                                 styles.otpButton,
                                 isButtonDisabled && styles.otpButtonDisabled,
                             ]}
-                            onPress={handleGetOtp}
+                            onPress={handleLogin}
                             activeOpacity={0.8}
                             disabled={isButtonDisabled}
                         >
                             {isLoading ? (
                                 <ActivityIndicator color="#fff" size="small" />
                             ) : (
-                                <Text style={styles.otpButtonText}>Get OTP</Text>
+                                <Text style={styles.otpButtonText}>Login</Text>
                             )}
                         </TouchableOpacity>
-
-                        {/* OR Divider */}
-                        <View style={styles.dividerContainer}>
-                            <View style={styles.dividerLine} />
-                            <Text style={styles.dividerText}>OR</Text>
-                            <View style={styles.dividerLine} />
-                        </View>
-
-                        {/* Google Sign In Button */}
-                        <TouchableOpacity
-                            style={[
-                                styles.googleButton,
-                                (isLoading || isGoogleLoading) && styles.googleButtonDisabled,
-                            ]}
-                            onPress={handleGoogleSignIn}
-                            activeOpacity={0.8}
-                            disabled={isLoading || isGoogleLoading}
-                        >
-                            {isGoogleLoading ? (
-                                <ActivityIndicator color="#334155" size="small" />
-                            ) : (
-                                <>
-                                    <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
-                                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-
-                        {/* Google Error Message */}
-                        {googleError ? (
-                            <Text style={[styles.errorText, { marginTop: 8, textAlign: "center" }]}>{googleError}</Text>
-                        ) : null}
 
                         {/* Terms */}
                         <Text style={styles.termsText}>
@@ -339,6 +287,16 @@ const styles = StyleSheet.create({
         color: "#0F172A",
         letterSpacing: 1,
     },
+    passwordInput: {
+        borderWidth: 2,
+        borderColor: "#E2E8F0",
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+        fontSize: 16,
+        color: "#0F172A",
+        marginBottom: 12,
+    },
     errorText: {
         color: "#DC2626",
         fontSize: 14,
@@ -420,42 +378,4 @@ const styles = StyleSheet.create({
         color: "#64748B",
         textAlign: "center",
     },
-    dividerContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginVertical: 16,
-    },
-    dividerLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: "#E2E8F0",
-    },
-    dividerText: {
-        marginHorizontal: 12,
-        fontSize: 12,
-        color: "#94A3B8",
-        fontWeight: "500",
-    },
-    googleButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#CBD5E1",
-        borderRadius: 14,
-        height: 56,
-        gap: 8,
-    },
-    googleButtonDisabled: {
-        opacity: 0.6,
-    },
-    googleIcon: {
-        marginRight: 4,
-    },
-    googleButtonText: {
-        color: "#334155",
-        fontSize: 16,
-        fontWeight: "600",
-    }
 });

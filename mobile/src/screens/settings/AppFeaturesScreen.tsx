@@ -468,7 +468,7 @@ export default function AppFeaturesScreen() {
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
             >
                 {/* Expand/Collapse all */}
                 <View style={styles.expandAllRow}>

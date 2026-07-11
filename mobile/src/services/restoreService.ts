@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { importFromJson, BackupData, ImportSummary } from '../db/backup';
+import { getStoredShopId } from '../utils/storage';
 
 export interface RestoreResult {
   success: boolean;
@@ -64,11 +65,8 @@ async function deleteByIds(
  */
 export const restoreFromCloud = async (): Promise<RestoreResult> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { success: false, error: 'Not authenticated' };
-
-    const uuid = session.user.id;
-    const phone = (session.user.phone ?? '').slice(-10);
+    const uuid = await getStoredShopId();
+    if (!uuid) return { success: false, error: 'Not authenticated' };
 
     // ── Fetch all tables individually — continue on per-table errors ──────────
     const tableErrors: Record<string, string> = {};
@@ -175,10 +173,8 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
  */
 export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { success: false, error: 'Not authenticated' };
-
-    const uuid = session.user.id;
+    const uuid = await getStoredShopId();
+    if (!uuid) return { success: false, error: 'Not authenticated' };
 
     const tableErrors: Record<string, string> = {};
 

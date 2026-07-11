@@ -1,7 +1,7 @@
 import db from './sqlite';
 import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
-import { getOrCreateDeviceId } from '../utils/storage';
+import { getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 
 const MAX_ATTEMPTS = 5;
 let isFlushing = false;
@@ -93,19 +93,18 @@ async function syncItem(
   if (operation === 'DELETE') {
     await syncDelete(tableName, dataId);
   } else {
-    await syncUpsert(tableName, operation, payload);
+    await syncUpsert(tableName, payload);
   }
 }
 
-// Derives the User UUID from the live Supabase session.
+// Derives the shop UUID from the locally stored login session.
 async function getShopId(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const uuid = session?.user?.id;
-  if (!uuid) throw new Error('No authenticated session — cannot sync');
+  const uuid = await getStoredShopId();
+  if (!uuid) throw new Error('Not logged in — cannot sync');
   return uuid;
 }
 
-async function syncUpsert(tableName: string, operation: string, payload: any): Promise<void> {
+async function syncUpsert(tableName: string, payload: any): Promise<void> {
   switch (tableName) {
     case 'products':
     case 'categories':
@@ -123,39 +122,24 @@ async function syncUpsert(tableName: string, operation: string, payload: any): P
     }
 
     case 'shop': {
+      // Shops are created exclusively by the register-shop Edge Function (web
+      // registration flow) — the app never inserts a shop row, only updates
+      // the one it already logged into.
       const uuid = await getShopId();
       const deviceId = await getOrCreateDeviceId();
-      const { shopName, ownerName, category, whatsappNumber, aiConsent, phone } = payload;
+      const { shopName, ownerName, category, whatsappNumber, phone } = payload;
 
-      if (operation === 'INSERT') {
-        // First-time shop creation — include ai_consent and claim active device.
-        const { error } = await supabase.from('shops').upsert(
-          {
-            id: uuid,
-            phone: phone ?? '',
-            shop_name: shopName,
-            owner_name: ownerName,
-            business_category: category ?? null,
-            whatsapp_number: whatsappNumber ?? null,
-            ai_consent: aiConsent ?? false,
-            active_device_id: deviceId,
-          },
-          { onConflict: 'id' }
-        );
-        if (error) throw error;
-      } else {
-        // UPDATE — never overwrite ai_consent from local state; it may be stale.
-        // Consent changes are pushed directly from EditShopScreen via a targeted update.
-        const { error } = await supabase.from('shops').update({
-          phone: phone,
-          shop_name: shopName,
-          owner_name: ownerName,
-          business_category: category ?? null,
-          whatsapp_number: whatsappNumber ?? null,
-          active_device_id: deviceId,
-        }).eq('id', uuid);
-        if (error) throw error;
-      }
+      // Never overwrite ai_consent from local state; it may be stale.
+      // Consent changes are pushed directly from EditShopScreen via a targeted update.
+      const { error } = await supabase.from('shops').update({
+        phone: phone,
+        shop_name: shopName,
+        owner_name: ownerName,
+        business_category: category ?? null,
+        whatsapp_number: whatsappNumber ?? null,
+        active_device_id: deviceId,
+      }).eq('id', uuid);
+      if (error) throw error;
       break;
     }
 
