@@ -383,7 +383,7 @@ function RegistrationPage() {
 
 export default function App() {
   return (
-    <BrowserRouter basename="/Pragati_Bandhu">
+    <BrowserRouter basename="/Pragati_Bandhu_Git">
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<RegistrationPage />} />
