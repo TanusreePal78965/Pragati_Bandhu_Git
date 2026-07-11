@@ -64,6 +64,21 @@ function RegistrationPage() {
     }
     setIsLoading(true);
     try {
+      // Check if phone number is already registered
+      const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?phone=eq.%2B91${clean}&select=id`, {
+        method: 'GET',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      const checkBody = await checkRes.json();
+      if (checkBody && checkBody.length > 0) {
+        setError('This phone number is already registered');
+        setIsLoading(false);
+        return;
+      }
+
       const auth = getFirebaseAuth();
       if (!(window as any).recaptchaVerifier) {
         (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
@@ -228,7 +243,9 @@ function RegistrationPage() {
             <div className="selected-plan-badge">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               {selectedPlan === 'standard' ? 'Standard Plan' : 'Basic Plan'} Selected
-              <button className="change-plan-btn" onClick={handleChangePlan}>Change</button>
+              {step !== 'done' && (
+                <button className="change-plan-btn" onClick={handleChangePlan}>Change</button>
+              )}
             </div>
 
             {step === 'phone' && (

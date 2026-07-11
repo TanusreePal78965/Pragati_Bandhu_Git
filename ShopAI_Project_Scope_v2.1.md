@@ -929,6 +929,7 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 - Added interactive pricing cards upfront, designed to explicitly upsell the "Standard" plan before capturing registration details.
 - Integrated modern UI patterns: a vibrant mesh gradient background, a frosted glass form container (`backdrop-filter`), refined typography using the Inter font, and polished input elements.
 - Enhanced UX with smooth, discrete step-transition animations using modern CSS animation techniques.
+- **Bug Fix:** Removed the "Change" plan button from the registration success screen to prevent users from accidentally resetting the flow after account creation.
 
 ---
 

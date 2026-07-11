@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
         whatsapp_number: whatsappNumber || null,
         business_category: businessCategory || null,
         password_hash: passwordHash,
-        is_active: false, // pending activation (payment step, added later)
+        is_active: true, // active by default, payment step deferred
       })
       .select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active')
       .single()
