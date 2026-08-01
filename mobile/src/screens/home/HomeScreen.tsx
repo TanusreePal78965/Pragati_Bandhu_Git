@@ -230,6 +230,17 @@ export default function HomeScreen() {
                                 </View>
                             </View>
                         ))
+                    ) : totalProducts === 0 ? (
+                        <View style={styles.aiCard}>
+                            <Text style={styles.aiMessage}>
+                                Add products to your inventory to start seeing {hasAiConsent ? "AI reorder insights" : "low stock alerts"} here.
+                            </Text>
+                            <View style={styles.aiFooter}>
+                                <View style={[styles.aiBadge, { backgroundColor: "#64748B" }]}>
+                                    <Text style={styles.aiBadgeText}>NO PRODUCTS</Text>
+                                </View>
+                            </View>
+                        </View>
                     ) : (
                         <View style={styles.aiCard}>
                             <Text style={styles.aiMessage}>
@@ -316,11 +327,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
     scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
-    mainStatsContainer: { gap: spacing.md, marginTop: spacing.md },
+    mainStatsContainer: { gap: spacing.sm, marginTop: spacing.sm },
     salesCard: {
         backgroundColor: colors.surface,
         borderRadius: spacing.roundness,
-        padding: spacing.lg,
+        padding: spacing.md,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.05,
@@ -332,24 +343,24 @@ const styles = StyleSheet.create({
     salesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
     salesLabel: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, letterSpacing: 1 },
     salesIconBg: { position: "absolute", right: 0, top: 0 },
-    salesValue: { fontSize: 32, fontWeight: "800", color: colors.primary, marginVertical: spacing.sm },
+    salesValue: { fontSize: 28, fontWeight: "800", color: colors.primary, marginVertical: spacing.sm },
     trendRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
     trendText: { fontSize: 12, color: colors.success, fontWeight: "600" },
     trendBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
     trendBadgeText: { fontSize: 11, fontWeight: "700" },
-    alertCard: { borderRadius: spacing.roundness, padding: spacing.lg, borderWidth: 1, borderStyle: "dashed" },
+    alertCard: { borderRadius: spacing.roundness, padding: spacing.md, borderWidth: 1, borderStyle: "dashed" },
     alertLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: spacing.sm },
     alertMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     alertValue: { fontSize: 20, fontWeight: "700", color: "#1E293B" },
     alertSub: { fontSize: 13, color: "#64748B", marginTop: 2 },
     alertAction: { backgroundColor: "#B45309", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
     alertActionText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.xl, marginBottom: spacing.md },
+    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.sm },
     sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.textSecondary, letterSpacing: 1 },
     primaryAction: {
         backgroundColor: colors.primary,
         borderRadius: spacing.roundness,
-        paddingVertical: 18,
+        paddingVertical: 14,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
@@ -361,28 +372,41 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     primaryActionText: { color: "#fff", fontSize: 18, fontWeight: "700" },
-    secondaryActionsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
-    secondaryActionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: spacing.roundness, padding: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.border },
-    secondaryActionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
+    secondaryActionsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
+    secondaryActionCard: { 
+        flex: 1, 
+        backgroundColor: colors.surface, 
+        borderRadius: spacing.roundness, 
+        padding: spacing.sm, 
+        alignItems: "center", 
+        borderWidth: 1, 
+        borderColor: colors.border,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    secondaryActionIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
     secondaryActionText: { fontSize: 14, fontWeight: "600", color: colors.text },
-    aiSection: { marginTop: spacing.xl },
-    aiHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
+    aiSection: { marginTop: spacing.lg },
+    aiHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
     aiTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     aiTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-    aiCard: { backgroundColor: "#EEF2FF", borderRadius: spacing.roundness, padding: spacing.lg, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: spacing.sm },
+    aiCard: { backgroundColor: "#EEF2FF", borderRadius: spacing.roundness, padding: spacing.md, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: spacing.sm },
     aiMessage: { fontSize: 15, color: "#1E293B", lineHeight: 22, fontWeight: "500" },
     aiFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md },
     aiBadge: { backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
     aiBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
     aiTime: { fontSize: 12, color: colors.textSecondary },
     activityList: { backgroundColor: colors.surface, borderRadius: spacing.roundness, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-    activityItem: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-    activityIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: spacing.md },
+    activityItem: { flexDirection: "row", alignItems: "center", padding: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+    activityIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", marginRight: spacing.sm },
     activityContent: { flex: 1 },
     activityTitle: { fontSize: 15, fontWeight: "600", color: colors.text },
     activitySubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     activityAmount: { fontSize: 15, fontWeight: "700", color: colors.text },
-    emptyActivity: { alignItems: "center", paddingVertical: spacing.xl },
+    emptyActivity: { alignItems: "center", paddingVertical: spacing.lg },
     emptyActivityText: { fontSize: 14, color: colors.textSecondary },
     upgradeNudge: {
         flexDirection: "row",

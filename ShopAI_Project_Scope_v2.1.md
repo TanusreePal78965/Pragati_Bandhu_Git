@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** May 9, 2026 — v3.5
+> **Last updated:** July 11, 2026 — v4.1
 
 ---
 
@@ -921,6 +921,22 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.1 — July 11, 2026
+
+**Android Build Fix**
+- Fixed EAS local build crashing due to OpenJDK 17 AArch64 C1 compiler bug (`Internal Error (assembler_aarch64.hpp:267)`).
+- Created a local Expo config plugin (`withJvmArgs.js`) and added it to `app.json` to automatically inject `-XX:-TieredCompilation` into `gradle.properties` when generating the `android` project.
+- Cleared the locked/corrupted `android` directory to allow clean prebuilds.
+
+### v4.1 — July 11, 2026
+
+**Mobile UI Polish & Bug Fixes**
+- **LoginScreen**: Reduced paddings, margins, and font sizes to make the layout more compact. Added explicit `paddingBottom: 40` to the main `ScrollView` container so the bottom sections are no longer hidden.
+- **HomeScreen**: Made the dashboard more compact by reducing card paddings, section margins, and font sizes. Added shadows and elevation to secondary action cards ("Inventory" and "Customers") to make them look clickable. Fixed a bug in the AI Section where the empty state message was incorrect when `totalProducts === 0`.
+- **SettingsScreen**: Made the screen compact by reducing profile card size, list item paddings, and button dimensions.
+
+---
 
 ### v4.0 — July 9, 2026
 

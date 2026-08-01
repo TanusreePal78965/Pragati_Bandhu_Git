@@ -10,6 +10,7 @@ import {
     ScrollView,
     ActivityIndicator,
     Image,
+    Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -146,6 +147,19 @@ export default function LoginScreen() {
                             )}
                         </TouchableOpacity>
 
+                        {/* Register Link */}
+                        <View style={styles.registerContainer}>
+                            <Text style={styles.registerText}>
+                                Don't have an account?{" "}
+                                <Text
+                                    style={styles.registerLink}
+                                    onPress={() => Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/")}
+                                >
+                                    Register here
+                                </Text>
+                            </Text>
+                        </View>
+
                         {/* Terms */}
                         <Text style={styles.termsText}>
                             By continuing, you agree to our{" "}
@@ -200,21 +214,22 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        padding: 24,
+        padding: 16,
+        paddingBottom: 40,
     },
     brandSection: {
         alignItems: "center",
-        marginTop: 40,
-        marginBottom: 40,
+        marginTop: 20,
+        marginBottom: 20,
     },
     logoImage: {
-        width: 110,
-        height: 110,
-        borderRadius: 24,
-        marginBottom: 16,
+        width: 80,
+        height: 80,
+        borderRadius: 20,
+        marginBottom: 8,
     },
     appName: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: "700",
         color: "#0F172A",
         marginBottom: 4,
@@ -231,7 +246,7 @@ const styles = StyleSheet.create({
     formSection: {
         backgroundColor: "#FFFFFF",
         borderRadius: 20,
-        padding: 24,
+        padding: 16,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -239,7 +254,7 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     welcomeText: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: "700",
         color: "#0F172A",
         textAlign: "center",
@@ -251,10 +266,10 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     instructionText: {
-        fontSize: 15,
+        fontSize: 14,
         color: "#64748B",
         textAlign: "center",
-        marginBottom: 24,
+        marginBottom: 16,
     },
     inputContainer: {
         flexDirection: "row",
@@ -275,15 +290,15 @@ const styles = StyleSheet.create({
         borderRightColor: "#E2E8F0",
     },
     countryCodeText: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: "600",
         color: "#475569",
     },
     phoneInput: {
         flex: 1,
         paddingHorizontal: 16,
-        paddingVertical: 16,
-        fontSize: 18,
+        paddingVertical: 12,
+        fontSize: 16,
         color: "#0F172A",
         letterSpacing: 1,
     },
@@ -292,10 +307,10 @@ const styles = StyleSheet.create({
         borderColor: "#E2E8F0",
         borderRadius: 12,
         paddingHorizontal: 16,
-        paddingVertical: 16,
+        paddingVertical: 12,
         fontSize: 16,
         color: "#0F172A",
-        marginBottom: 12,
+        marginBottom: 8,
     },
     errorText: {
         color: "#DC2626",
@@ -305,7 +320,7 @@ const styles = StyleSheet.create({
     },
     otpButton: {
         backgroundColor: "#2563EB",
-        paddingVertical: 18,
+        paddingVertical: 14,
         borderRadius: 12,
         alignItems: "center",
         marginTop: 8,
@@ -324,6 +339,19 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: "700",
     },
+    registerContainer: {
+        marginTop: 16,
+        alignItems: "center",
+    },
+    registerText: {
+        fontSize: 14,
+        color: "#475569",
+    },
+    registerLink: {
+        color: "#2563EB",
+        fontWeight: "600",
+        textDecorationLine: "underline",
+    },
     termsText: {
         fontSize: 12,
         color: "#94A3B8",
@@ -338,7 +366,7 @@ const styles = StyleSheet.create({
     featuresSection: {
         flexDirection: "row",
         justifyContent: "space-around",
-        marginTop: 40,
+        marginTop: 24,
         paddingHorizontal: 16,
     },
     featureItem: {
