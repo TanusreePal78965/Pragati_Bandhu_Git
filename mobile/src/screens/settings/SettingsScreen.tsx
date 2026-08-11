@@ -550,27 +550,27 @@ export default function SettingsScreen() {
                         isOptional={true}
                     />
                     <SettingsInfoRow
-                        label="SUBSCRIPTION PLAN"
+                        label="PLAN TYPE"
                         value={
                             shopInfo?.planType === 'yearly'
-                                ? 'Yearly Plan (₹999/yr)'
+                                ? 'Yearly'
                                 : shopInfo?.planType === 'monthly'
-                                ? 'Monthly Plan (₹99/mo)'
-                                : '30-Day Free Trial'
+                                ? 'Monthly'
+                                : 'Standard'
                         }
                     />
                     <SettingsInfoRow
-                        label="SUBSCRIPTION EXPIRY"
+                        label="ACCOUNT EXPIRY"
                         value={
                             shopInfo?.planExpiresAt
                                 ? new Date(shopInfo.planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                                : "Active 30-Day Trial"
+                                : "Active Trial"
                         }
                     />
                     {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
                         <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, marginTop: 4 }}>
-                            <Text style={{ color: colors.error, fontSize: 13, marginBottom: 8 }}>
-                                To renew your subscription and avoid service interruption, tap below or visit the web portal.
+                            <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>
+                                To manage your account status or update settings, visit the web portal.
                             </Text>
                             <TouchableOpacity
                                 onPress={() => Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew")}
@@ -583,7 +583,7 @@ export default function SettingsScreen() {
                                 }}
                             >
                                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                                    Renew Subscription Online ➔
+                                    Manage Account Online ➔
                                 </Text>
                             </TouchableOpacity>
                         </View>

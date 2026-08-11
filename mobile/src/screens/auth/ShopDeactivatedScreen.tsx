@@ -17,7 +17,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function ShopDeactivatedScreen() {
     const { logout, phone } = useAuth();
 
-    const handleRenewOnline = () => {
+    const handleOpenWebPortal = () => {
         Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew");
     };
 
@@ -45,15 +45,15 @@ export default function ShopDeactivatedScreen() {
                 </View>
 
                 {/* Heading */}
-                <Text style={styles.title}>Account Expired / Deactivated</Text>
+                <Text style={styles.title}>Account Status Notice</Text>
                 <Text style={styles.subtitle}>
-                    Your 30-day free trial or plan subscription has expired. Please renew your subscription online to continue managing your shop.
+                    Your shop account is currently inactive. Please visit our web portal to check your account status and manage your profile.
                 </Text>
 
                 <PrimaryButton
-                    title="Renew Subscription Online"
-                    onPress={handleRenewOnline}
-                    style={styles.renewButton}
+                    title="Manage Account Online"
+                    onPress={handleOpenWebPortal}
+                    style={styles.manageButton}
                 />
 
                 {/* Support card */}
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: 4,
     },
-    renewButton: {
+    manageButton: {
         width: "100%",
         backgroundColor: colors.primary,
         marginBottom: spacing.lg,
