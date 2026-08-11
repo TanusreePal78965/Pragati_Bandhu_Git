@@ -562,13 +562,15 @@ export default function SettingsScreen() {
                     <SettingsInfoRow
                         label="ACCOUNT EXPIRY"
                         value={
-                            shopInfo?.planExpiresAt
-                                ? `${new Date(shopInfo.planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} (${
-                                    new Date(shopInfo.planExpiresAt) < new Date()
-                                        ? 'Expired'
-                                        : `${Math.max(1, Math.ceil((new Date(shopInfo.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left`
-                                  })`
-                                : "Active 30-Day Trial"
+                            (() => {
+                                const expiryDate = shopInfo?.planExpiresAt 
+                                    ? new Date(shopInfo.planExpiresAt) 
+                                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                                const dateStr = expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                                const isPast = expiryDate < new Date();
+                                const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                                return `${dateStr} (${isPast ? 'Expired' : `${daysLeft} days left`})`;
+                            })()
                         }
                     />
                     {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
