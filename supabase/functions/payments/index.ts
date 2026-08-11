@@ -173,6 +173,13 @@ Deno.serve(async (req) => {
       
       await verifyAdminToken(token)
 
+      // Auto-populate 30-day trial for any existing shops missing plan_expires_at
+      const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      await supabase
+        .from('shops')
+        .update({ plan_expires_at: expiryDate, plan_type: 'monthly' })
+        .is('plan_expires_at', null)
+
       const { data: shops, error } = await supabase
         .from('shops')
         .select('*')
