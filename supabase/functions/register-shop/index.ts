@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { idToken, phone, password, shopName, ownerName, businessCategory, whatsappNumber } = await req.json()
+    const { idToken, phone, password, shopName, ownerName, businessCategory, whatsappNumber, plan } = await req.json()
 
     if (!idToken || !phone || !password || !shopName || !ownerName) {
       return new Response(JSON.stringify({ error: 'idToken, phone, password, shopName and ownerName are required' }), {
@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
     }
 
     const passwordHash = await hashPassword(password)
+    const planExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data: shop, error: insertError } = await supabase
       .from('shops')
@@ -92,9 +93,11 @@ Deno.serve(async (req) => {
         whatsapp_number: whatsappNumber || null,
         business_category: businessCategory || null,
         password_hash: passwordHash,
-        is_active: true, // active by default, payment step deferred
+        is_active: true, // active by default, 30 days trial
+        plan_expires_at: planExpiresAt,
+        plan_type: plan || 'monthly',
       })
-      .select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active')
+      .select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, plan_expires_at, plan_type')
       .single()
 
     if (insertError) throw insertError

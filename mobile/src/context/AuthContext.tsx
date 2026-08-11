@@ -65,7 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (authed) {
           const info = await getShopInfo();
-          setIsShopActive(info?.isActive ?? true);
+          const isExpired = info?.planExpiresAt ? new Date(info.planExpiresAt) < new Date() : false;
+          setIsShopActive((info?.isActive ?? true) && !isExpired);
           await startSyncService(
             () => setShopActive(false),
             () => setIsDeviceConflict(true),
@@ -85,7 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPhone(shop.phone);
     setUuid(shop.id);
     setIsAuthenticated(true);
-    setIsShopActive(shop.is_active ?? true);
+    const isExpired = shop.plan_expires_at ? new Date(shop.plan_expires_at) < new Date() : false;
+    setIsShopActive((shop.is_active ?? true) && !isExpired);
     setIsDeviceConflict(false);
     await startSyncService(
       () => setShopActive(false),

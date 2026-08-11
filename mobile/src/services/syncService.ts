@@ -56,8 +56,9 @@ const checkShopStatus = async (
       });
     }
 
-    // Admin deactivation — applies to all users
-    if (data.is_active === false) {
+    // Admin deactivation or plan expiry — applies to all users
+    const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
+    if (data.is_active === false || isExpired) {
       onDeactivated();
       return;
     }

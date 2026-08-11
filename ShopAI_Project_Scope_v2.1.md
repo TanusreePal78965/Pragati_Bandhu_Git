@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** August 11, 2026 — v4.4
+> **Last updated:** August 11, 2026 — v4.5
 
 ---
 
@@ -891,6 +891,17 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.19 1-Month Free Trial & Mobile Expiry Lockout (v4.5)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 141 | Registration 30-Day Trial | ✅ | Updated `register-shop` Edge Function to automatically compute and store `plan_expires_at` as 30 days from registration date for all new shops. |
+| 142 | Existing Shops Migration | ✅ | Created migration script `007_set_existing_shops_expiry.sql` to grant a 30-day trial period to all existing shops in the database missing an expiry date. |
+| 143 | Mobile Expiry Lockout | ✅ | Updated `syncService.ts` and `AuthContext.tsx` to compare `plan_expires_at` with current time and automatically block app access when expired. |
+| 144 | Lockout UI & Web Renewal Action | ✅ | Redesigned `ShopDeactivatedScreen.tsx` with a primary "Renew Subscription Online" button that opens `https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew` in the phone browser. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -953,6 +964,16 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.5 — August 11, 2026
+
+**1-Month Free Trial & Mobile Expiry Lockout**
+- **Default 30-Day Free Trial**: All newly registered shops now automatically receive a 30-day free trial on creation via the `register-shop` Edge Function.
+- **Existing Shops Migration**: Created SQL migration script `007_set_existing_shops_expiry.sql` setting `plan_expires_at = NOW() + INTERVAL '30 days'` for all pre-existing shops.
+- **Mobile Access Control**: Enforced `plan_expires_at` checks in mobile `syncService.ts` and `AuthContext.tsx`. Expired sessions trigger the lockout screen.
+- **Renewal Button**: Updated `ShopDeactivatedScreen.tsx` with a prominent "Renew Subscription Online" button launching the web renewal page (`/renew`) in the device browser.
+
+---
 
 ### v4.4 — August 11, 2026
 

@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     Alert,
+    Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,10 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function ShopDeactivatedScreen() {
     const { logout, phone } = useAuth();
+
+    const handleRenewOnline = () => {
+        Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew");
+    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -36,14 +41,20 @@ export default function ShopDeactivatedScreen() {
             <View style={styles.content}>
                 {/* Icon */}
                 <View style={styles.iconContainer}>
-                    <Ionicons name="ban-outline" size={48} color={colors.error} />
+                    <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
                 </View>
 
                 {/* Heading */}
-                <Text style={styles.title}>Shop Deactivated</Text>
+                <Text style={styles.title}>Account Expired / Deactivated</Text>
                 <Text style={styles.subtitle}>
-                    Your shop has been deactivated by the administrator. You cannot access the app until it is reactivated.
+                    Your 30-day free trial or plan subscription has expired. Please renew your subscription online to continue managing your shop.
                 </Text>
+
+                <PrimaryButton
+                    title="Renew Subscription Online"
+                    onPress={handleRenewOnline}
+                    style={styles.renewButton}
+                />
 
                 {/* Support card */}
                 <View style={styles.supportCard}>
@@ -131,6 +142,11 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: colors.textSecondary,
         marginTop: 4,
+    },
+    renewButton: {
+        width: "100%",
+        backgroundColor: colors.primary,
+        marginBottom: spacing.lg,
     },
     logoutButton: {
         width: "100%",

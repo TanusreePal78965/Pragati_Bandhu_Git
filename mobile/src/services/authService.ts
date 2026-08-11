@@ -24,6 +24,8 @@ type ShopRecord = {
   business_category: string | null;
   ai_consent: boolean;
   is_active: boolean;
+  plan_expires_at?: string | null;
+  plan_type?: string | null;
 };
 
 const storeShopRecordLocally = async (shop: ShopRecord): Promise<void> => {
@@ -35,6 +37,8 @@ const storeShopRecordLocally = async (shop: ShopRecord): Promise<void> => {
     whatsappNumber: shop.whatsapp_number ?? '',
     aiConsent: shop.ai_consent ?? false,
     isActive: shop.is_active ?? true,
+    planExpiresAt: shop.plan_expires_at ?? undefined,
+    planType: shop.plan_type ?? undefined,
   });
   await setHasConsent(shop.ai_consent ?? false);
 };
