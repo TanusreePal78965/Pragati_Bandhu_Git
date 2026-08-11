@@ -267,6 +267,24 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, newExpiry: currentExpiry.toISOString() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // === ADMIN: SET CUSTOM EXPIRY (TESTING OVERRIDE) ===
+    if (path.startsWith('/admin/shops/') && path.endsWith('/set-expiry') && req.method === 'POST') {
+      const shopId = path.split('/admin/shops/')[1].split('/set-expiry')[0]
+      const authHeader = req.headers.get('authorization')
+      if (!authHeader) throw new Error('Missing authorization')
+      const token = authHeader.replace('Bearer ', '')
+      await verifyAdminToken(token)
+
+      const { plan_expires_at } = await req.json()
+      if (!plan_expires_at) throw new Error('plan_expires_at is required')
+
+      await supabase.from('shops').update({ 
+        plan_expires_at
+      }).eq('id', shopId)
+
+      return new Response(JSON.stringify({ success: true, plan_expires_at }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     // === ADMIN: APPROVE PAYMENT ===
     if (path.startsWith('/admin/approve/') && req.method === 'POST') {
       const paymentId = path.split('/admin/approve/')[1]

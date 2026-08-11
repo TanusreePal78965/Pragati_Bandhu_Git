@@ -965,6 +965,15 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 
 ## 19. Changelog
 
+### v4.6 — August 11, 2026
+
+**Expiry Date Visibility & SPA Routing Fixes**
+- **Mobile Lockout Expiry Badge**: Added red Expiry Date badge displaying exact `planExpiresAt` date on `ShopDeactivatedScreen.tsx`.
+- **Settings Screen Expiry Counter**: Added formatted date and remaining days counter under `ACCOUNT EXPIRY` in `SettingsScreen.tsx`. Added `setShopActive(false)` trigger on focus when plan is expired.
+- **Web Renewal Page Shop Info**: Added shop name & current expiry date display to `RenewPlan.tsx` header upon phone verification.
+- **GitHub Pages SPA 404 Routing**: Added `404.html` fallback in `web/public/` and updated build script (`cp dist/index.html dist/404.html`) to prevent 404 errors on direct web navigation to `/renew`.
+- **Admin Custom Expiry API**: Added `POST /admin/shops/:id/set-expiry` route in `payments` Edge Function for setting custom testing or admin override expiry dates.
+
 ### v4.5 — August 11, 2026
 
 **1-Month Free Trial & Mobile Expiry Lockout**
