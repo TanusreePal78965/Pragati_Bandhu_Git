@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** August 11, 2026 — v4.5
+> **Last updated:** August 11, 2026 — v4.6
 
 ---
 
