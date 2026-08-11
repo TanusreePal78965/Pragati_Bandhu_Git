@@ -625,6 +625,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | UOM selector — expanded + grouped UI | ✅ | **v3.4.** 7 hardcoded chips replaced with `UomSelector` component. 20 UOMs across 5 groups (Weight, Volume, Count, Packaging, Length) rendered as flexWrap grid with category labels. "Custom" chip reveals free-text input for any unlisted unit (Vial, Tablet, Ampule, etc.). Selected-unit badge always visible. Used in both `AddProductScreen` and `EditProductScreen`. |
 | Edit Customer screen + Udhar payment recording | ✅ | **v2.9.** `EditCustomerScreen`: reached by tapping any customer row in `CustomersScreen`. Displays udhar balance card (red when owed, green when cleared). "Record Payment" modal with ₹ input, quick chips (₹100/200/500/1000 + "Full ₹X"), validates amount > 0 and ≤ outstanding balance, calls `recordUdharPayment()` which clamps at ₹0 via `MAX(0, udhar_balance − ?)` in SQL. Contact form lets owner edit name, phone, address via `updateCustomer()`. Both DB functions re-read the full row before queuing sync to prevent partial-payload corruption. Registered as `"EditCustomer"` in `RootNavigator`. |
 | Customer transaction history | ✅ | **v2.9.** `EditCustomerScreen` Bill History section shows the last 10 bills for that customer via `getBillsByCustomer(customerId, 10)`. Each row shows date, total, payment mode, chevron; taps through to `BillDetailScreen` for the full receipt. Empty state shown when customer has no bills. |
+| Add Product screen redesign | ✅ | **v4.0.** `AddProductScreen` redesigned into 2 clean fast modes: Single Add ("Save & Add Next" continuous entry) and Dynamic Express Table (type 5-20 products from paper bills with auto-add next row on Enter, paste text list parser, live profit margin % badges, toggleable chip deselect, inline row category chips, and row cloning). Supported by transactional `insertProductsBatch()` in `db.ts`. |
 
 ---
 
@@ -1260,6 +1261,13 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Header Branding:** Receipts automatically pull Shop Name, Owner Name, and Phone from settings to appear at the header.
 - **Native Sharing:** Integrated with `expo-sharing` to allow one-tap sharing to WhatsApp, Email, or Files via the OS share sheet.
 - **UI Update:** Share icon added to the top-right header of `BillDetailScreen`.
+
+### v4.0 — August 11, 2026
+
+**Add Product Screen Redesign (Fast Multi-Mode Product Onboarding)**
+- **Continuous Single Add ("Save & Add Next")**: Primary outlined action button saves product, retains category/brand context, clears input fields, and focuses product name for rapid single-item entry.
+- **Dynamic Express Table Mode**: Multi-row batch table for typing 5–20 products from paper bills. Features Auto-Add Next Row on keyboard Enter, Quick Paste Text List parser (`[📋 Paste Text List]`), live profit margin % badges (`+₹40 (20%)`), clean inline row-level category chips, row cloning, and toggleable chip deselect behavior.
+- **`insertProductsBatch` API added to `db.ts`**: Enables transactional batch insertion of multiple products into SQLite (`withTransactionSync`) and queue sync items in a single operation.
 
 ---
 

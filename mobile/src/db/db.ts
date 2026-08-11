@@ -333,6 +333,53 @@ export const insertProduct = (product: {
   }
 };
 
+export const insertProductsBatch = (
+  products: Array<{
+    name: string;
+    category_id: string | null;
+    brand_id: string | null;
+    purchase_price: number;
+    selling_price: number;
+    stock_quantity: number;
+    min_stock_threshold: number;
+    uom: string;
+    purchase_uom?: string | null;
+    units_per_pack?: number | null;
+  }>
+): string[] => {
+  const insertedIds: string[] = [];
+  try {
+    db.withTransactionSync(() => {
+      for (const p of products) {
+        const id = genId();
+        db.runSync(
+          `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            p.name,
+            p.category_id,
+            p.brand_id,
+            p.purchase_price,
+            p.selling_price,
+            p.stock_quantity,
+            p.min_stock_threshold,
+            p.uom,
+            p.purchase_uom ?? null,
+            p.units_per_pack ?? null,
+          ]
+        );
+        addToSyncQueue('products', 'INSERT', id, { id, ...p });
+        insertedIds.push(id);
+      }
+    });
+    return insertedIds;
+  } catch (e) {
+    console.error('insertProductsBatch error:', e);
+    throw e;
+  }
+};
+
 export const updateProduct = (
   id: string,
   fields: Partial<Omit<Product, 'id' | 'updated_at' | 'category_name' | 'brand_name'>>

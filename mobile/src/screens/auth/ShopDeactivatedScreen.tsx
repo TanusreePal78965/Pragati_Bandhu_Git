@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
     View,
     Text,
     StyleSheet,
     Alert,
     Linking,
+    ScrollView,
+    RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,19 +15,65 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import { useAuth } from "../../context/AuthContext";
-import { getShopInfo } from "../../utils/storage";
+import { getShopInfo, setShopInfo, getStoredShopId } from "../../utils/storage";
+import { supabase } from "../../lib/supabase";
 
 export default function ShopDeactivatedScreen() {
-    const { logout, phone } = useAuth();
+    const { logout, phone, setShopActive } = useAuth();
     const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadInfo = useCallback(async () => {
+        const info = await getShopInfo();
+        if (info?.planExpiresAt) {
+            setPlanExpiresAt(info.planExpiresAt);
+        }
+    }, []);
 
     useEffect(() => {
-        getShopInfo().then(info => {
-            if (info?.planExpiresAt) {
-                setPlanExpiresAt(info.planExpiresAt);
+        loadInfo();
+    }, [loadInfo]);
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            const shopId = await getStoredShopId();
+            if (shopId) {
+                const { data } = await supabase
+                    .from("shops")
+                    .select("is_active, plan_expires_at, plan_type")
+                    .eq("id", shopId)
+                    .maybeSingle();
+
+                if (data) {
+                    const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
+                    const isActive = data.is_active !== false && !isExpired;
+
+                    if (data.plan_expires_at) {
+                        setPlanExpiresAt(data.plan_expires_at);
+                    }
+
+                    const info = await getShopInfo();
+                    if (info) {
+                        await setShopInfo({
+                            ...info,
+                            isActive,
+                            planExpiresAt: data.plan_expires_at,
+                            planType: data.plan_type,
+                        });
+                    }
+
+                    if (isActive) {
+                        setShopActive(true);
+                        return;
+                    }
+                }
             }
-        });
-    }, []);
+        } catch (_) {
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     const handleOpenWebPortal = () => {
         Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew");
@@ -48,51 +96,58 @@ export default function ShopDeactivatedScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.content}>
-                {/* Icon */}
-                <View style={styles.iconContainer}>
-                    <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
-                </View>
-
-                {/* Heading */}
-                <Text style={styles.title}>Account Status Notice</Text>
-                <Text style={styles.subtitle}>
-                    Your shop account is currently inactive. Please visit our web portal to check your account status and manage your profile.
-                </Text>
-
-                {planExpiresAt && (
-                    <View style={styles.expiryCard}>
-                        <Ionicons name="calendar-outline" size={18} color={colors.error} />
-                        <Text style={styles.expiryText}>
-                            Expiry Date: {new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </Text>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[colors.primary]} />
+                }
+            >
+                <View style={styles.content}>
+                    {/* Icon */}
+                    <View style={styles.iconContainer}>
+                        <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
                     </View>
-                )}
 
-                <PrimaryButton
-                    title="Manage Account Online"
-                    onPress={handleOpenWebPortal}
-                    style={styles.manageButton}
-                />
+                    {/* Heading */}
+                    <Text style={styles.title}>Account Status Notice</Text>
+                    <Text style={styles.subtitle}>
+                        Your shop account is currently inactive. Please visit our web portal to check your account status and manage your profile.
+                    </Text>
 
-                {/* Support card */}
-                <View style={styles.supportCard}>
-                    <Ionicons name="headset-outline" size={20} color={colors.primary} />
-                    <View style={styles.supportText}>
-                        <Text style={styles.supportLabel}>Need help?</Text>
-                        <Text style={styles.supportValue}>Contact support at +91 7003354703</Text>
-                        {phone && (
-                            <Text style={styles.supportMeta}>Your registered number: +91 {phone}</Text>
-                        )}
+                    {planExpiresAt && (
+                        <View style={styles.expiryCard}>
+                            <Ionicons name="calendar-outline" size={18} color={colors.error} />
+                            <Text style={styles.expiryText}>
+                                Expiry Date: {new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </Text>
+                        </View>
+                    )}
+
+                    <PrimaryButton
+                        title="Manage Account Online"
+                        onPress={handleOpenWebPortal}
+                        style={styles.manageButton}
+                    />
+
+                    {/* Support card */}
+                    <View style={styles.supportCard}>
+                        <Ionicons name="headset-outline" size={20} color={colors.primary} />
+                        <View style={styles.supportText}>
+                            <Text style={styles.supportLabel}>Need help?</Text>
+                            <Text style={styles.supportValue}>Contact support at +91 7003354703</Text>
+                            {phone && (
+                                <Text style={styles.supportMeta}>Your registered number: +91 {phone}</Text>
+                            )}
+                        </View>
                     </View>
-                </View>
 
-                <PrimaryButton
-                    title="Logout"
-                    onPress={handleLogout}
-                    style={styles.logoutButton}
-                />
-            </View>
+                    <PrimaryButton
+                        title="Logout"
+                        onPress={handleLogout}
+                        style={styles.logoutButton}
+                    />
+                </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -101,6 +156,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     content: {
         flex: 1,
