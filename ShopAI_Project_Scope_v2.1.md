@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** July 11, 2026 — v4.1
+> **Last updated:** August 11, 2026 — v4.4
 
 ---
 
@@ -859,6 +859,38 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.16 Payment System & Subscriptions (v4.2)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 130 | Database Migration | ✅ | Added `plan_expires_at`, `plan_type`, and `is_superadmin` columns to the `shops` table. Created `payments` table for UPI Transaction ID (UTR) tracking. |
+| 131 | Backend Payments API | ✅ | Built `/api/payments/initiate`, `/admin/pending`, `/admin/approve/:id`, and `/admin/reject/:id` routes to manage payment flow. Added `requireAdmin` middleware. Returned subscription info in `/me` route. |
+| 132 | Web Frontend Flow | ✅ | Added `/renew` page for users to see a static UPI QR code and enter a 12-digit UTR. Added `/admin/payments` Super Admin dashboard for verifying and approving UTRs. |
+| 133 | Mobile App Setting Status | ✅ | Updated `syncService.ts` to sync `plan_expires_at` and `plan_type` to local storage. Updated `SettingsScreen` to display subscription expiry and a warning message asking users to visit the web app to renew, avoiding Google/Apple IAP policy rules. |
+
+---
+
+### 14.17 Web Admin Panel Shop Actions & Analytics (v4.3)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 134 | Shop Management Backend | ✅ | Built `POST /admin/shops/:id/toggle-status` and `POST /admin/shops/:id/extend-plan` in Edge Function to allow admins to instantly suspend accounts and add 30 days to subscriptions. |
+| 135 | Admin UI Actions | ✅ | Added an Action Menu to `AdminShops.tsx` in the web panel. Real-time updates to shop status badges. |
+| 136 | Shop Analytics API | ✅ | Built `GET /admin/shops/:id` endpoint. Queries `products`, `customers`, and `bills` tables for exact counts, plus fetches full `payments` history for a specific shop. |
+| 137 | Deep Analytics Modal | ✅ | Built a sleek popup modal in `AdminShops.tsx` that displays a shop's metrics (total products, customers, sales) and their payment history in a table. |
+
+---
+
+### 14.18 Web Panel Enhancements & Frictionless Renewals (v4.4)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 138 | Global Navigation | ✅ | Added a persistent "Renew Subscription" button to `Layout.tsx` so shop owners can find it directly from the home screen. |
+| 139 | UI Alignment Fix | ✅ | Refactored `App.css` pricing grid to use a flexible centered layout to correctly handle a single active plan card. |
+| 140 | Frictionless Renewal Flow | ✅ | Removed OTP dependency entirely from `/renew` and Edge Functions. Shop owners simply input a valid registered phone number to proceed directly to the payment step. Protects against unregistered numbers while maximizing conversion. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -921,6 +953,36 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.4 — August 11, 2026
+
+**Web Panel Enhancements & Frictionless Renewals**
+- **Frictionless Renewal UX**: Removed the cumbersome OTP requirement for renewals—shop owners now just enter their registered phone number to proceed directly to UTR submission. Added database checks to block unregistered numbers.
+- **Global Navigation**: Added a persistent "Renew Subscription" link to the Web App header.
+- **UI Alignments**: The pricing grid alignment on the home screen was fixed to cleanly center the active subscription plans.
+- **Backend Updates**: Edge Functions updated to authorize payments without requiring a Firebase `idToken`.
+
+---
+
+### v4.3 — August 4, 2026
+
+**Web Admin Panel Shop Actions & Analytics**
+- **Action Menu**: Admins can now click a three-dot menu in the `AdminShops` table to take direct action on any registered shop.
+- **Suspend/Activate**: Instantly toggle a shop's active status. Deactivated shops are blocked from logging into the mobile app.
+- **Extend Plan**: Manually add 30 days to a shop's subscription (useful for offline cash collections).
+- **Deep Analytics Modal**: A new "View Details" action opens a popup modal with real-time metrics for the shop, including Total Products, Total Customers, Total Sales (from the `bills` table), and a full history of their subscription payments.
+- **Backend Edge Functions**: All actions are secured by the `verifyAdminToken` middleware and deployed via Supabase Edge Functions.
+
+---
+
+### v4.2 — August 1, 2026
+
+**Payment System & Subscriptions**
+- **Trust-and-verify UPI Payments**: Implemented a manual payment tracking system where shop owners scan a static UPI QR code on the web app and submit the 12-digit UTR. Super Admins verify this via a new `/admin/payments` dashboard.
+- **Mobile Compliance**: Kept payments off the mobile app to avoid Google/Apple IAP policy violations. Mobile `SettingsScreen` now displays subscription expiry date and nudges users to the web application to renew their plans.
+- **Backend APIs**: Added `/api/payments` endpoints and `requireAdmin` middleware.
+
+---
 
 ### v4.1 — July 11, 2026
 

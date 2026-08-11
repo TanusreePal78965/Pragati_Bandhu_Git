@@ -529,6 +529,21 @@ export default function SettingsScreen() {
                         value={shopInfo?.whatsappNumber || "Not Provided"}
                         isOptional={true}
                     />
+                    <SettingsInfoRow
+                        label="SUBSCRIPTION EXPIRY"
+                        value={
+                            shopInfo?.planExpiresAt
+                                ? new Date(shopInfo.planExpiresAt).toLocaleDateString()
+                                : "No Active Plan"
+                        }
+                    />
+                    {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
+                        <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm }}>
+                            <Text style={{ color: colors.error, fontSize: 13 }}>
+                                To renew your subscription and avoid service interruption, please visit <Text style={{ fontWeight: 'bold' }}>pragatibandhu.com/renew</Text> from your browser.
+                            </Text>
+                        </View>
+                    )}
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>CLOUD BACKUP & AI CONSENT</Text>
                         <View style={styles.badgeRow}>

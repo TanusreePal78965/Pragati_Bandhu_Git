@@ -39,16 +39,25 @@ const checkShopStatus = async (
 
     const { data } = await supabase
       .from('shops')
-      .select('is_active, active_device_id, ai_consent')
+      .select('is_active, active_device_id, ai_consent, plan_expires_at, plan_type')
       .eq('id', userId)
       .single();
 
     if (!data) return;
+    
+    // Always sync latest shop info (plan info, etc.) to local storage
+    const info = await getShopInfo();
+    if (info) {
+      await setShopInfo({ 
+        ...info, 
+        isActive: data.is_active,
+        planExpiresAt: data.plan_expires_at,
+        planType: data.plan_type
+      });
+    }
 
     // Admin deactivation — applies to all users
     if (data.is_active === false) {
-      const info = await getShopInfo();
-      if (info) await setShopInfo({ ...info, isActive: false });
       onDeactivated();
       return;
     }

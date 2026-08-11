@@ -10,12 +10,18 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import AppFeatures from './pages/AppFeatures';
 import HelpCenter from './pages/HelpCenter';
+import RenewPlan from './pages/RenewPlan';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminPayments from './pages/admin/AdminPayments';
+import AdminShops from './pages/admin/AdminShops';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 type Step = 'plans' | 'phone' | 'otp' | 'details' | 'done';
-type PlanType = 'basic' | 'standard' | null;
+type PlanType = 'monthly' | 'yearly' | null;
 
 const BUSINESS_CATEGORIES = [
   'Kirana / Grocery',
@@ -170,9 +176,9 @@ function RegistrationPage() {
 
       {step === 'plans' && (
         <div className="pricing-grid step-enter">
-          {/* Basic Plan */}
-          <div className="pricing-card" onClick={() => handleSelectPlan('basic')}>
-            <h3 className="plan-name">Basic</h3>
+          {/* Monthly Plan */}
+          <div className="pricing-card" onClick={() => handleSelectPlan('monthly')}>
+            <h3 className="plan-name">Monthly Plan</h3>
             <div className="plan-price">₹99<span>/mo</span></div>
             <p className="plan-desc">For shops starting to digitise their billing.</p>
 
@@ -187,44 +193,7 @@ function RegistrationPage() {
               </li>
               <li>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Customer Udhar management
-              </li>
-              <li>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Offline-first (No internet needed)
-              </li>
-              <li className="missing">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                Cloud backup & sync
-              </li>
-            </ul>
-
-            <button className="btn-outline">Select Basic</button>
-          </div>
-
-          {/* Standard Plan (Upsell) */}
-          <div className="pricing-card standard" onClick={() => handleSelectPlan('standard')}>
-            <div className="popular-badge">Most Popular</div>
-            <h3 className="plan-name">Standard</h3>
-            <div className="plan-price">₹159<span>/mo</span></div>
-            <p className="plan-desc">Everything you need to grow your shop with AI.</p>
-
-            <ul className="feature-list">
-              <li>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Everything in Basic
-              </li>
-              <li>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Cloud backup & multi-device restore
-              </li>
-              <li>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                PDF Receipt Generation
-              </li>
-              <li>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Reports & Analytics (Profit, Sales)
+                Cloud backup & multi-device sync
               </li>
               <li>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -232,7 +201,36 @@ function RegistrationPage() {
               </li>
             </ul>
 
-            <button className="btn-primary">Start 30-Day Free Trial</button>
+            <button className="btn-outline">Select Monthly</button>
+          </div>
+
+          {/* Yearly Plan (Upsell) */}
+          <div className="pricing-card standard" onClick={() => handleSelectPlan('yearly')}>
+            <div className="popular-badge">Best Value (Save ₹189)</div>
+            <h3 className="plan-name">Yearly Plan</h3>
+            <div className="plan-price">₹999<span>/yr</span></div>
+            <p className="plan-desc">Everything you need to grow your shop for a full year.</p>
+
+            <ul className="feature-list">
+              <li>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Everything in Monthly
+              </li>
+              <li>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Uninterrupted service
+              </li>
+              <li>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Priority WhatsApp Support
+              </li>
+              <li>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Reports & Analytics
+              </li>
+            </ul>
+
+            <button className="btn-primary">Select Yearly</button>
           </div>
         </div>
       )}
@@ -242,7 +240,7 @@ function RegistrationPage() {
           <div className="glass-card">
             <div className="selected-plan-badge">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              {selectedPlan === 'standard' ? 'Standard Plan' : 'Basic Plan'} Selected
+              {selectedPlan === 'yearly' ? 'Yearly Plan (₹999)' : 'Monthly Plan (₹99)'} Selected
               {step !== 'done' && (
                 <button className="change-plan-btn" onClick={handleChangePlan}>Change</button>
               )}
@@ -373,7 +371,7 @@ function RegistrationPage() {
                 </div>
                 <h2>Registration Complete!</h2>
                 <p>
-                  Your shop account has been created on the {selectedPlan === 'standard' ? 'Standard' : 'Basic'} plan. Open the PragatiBandhu app on your Android device and log in with your phone number and password.
+                  Your shop account has been created on the {selectedPlan === 'yearly' ? 'Yearly' : 'Monthly'} plan. Open the PragatiBandhu app on your Android device and log in with your phone number and password.
                 </p>
               </div>
             )}
@@ -408,6 +406,15 @@ export default function App() {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/features" element={<AppFeatures />} />
           <Route path="/help" element={<HelpCenter />} />
+          <Route path="/renew" element={<RenewPlan />} />
+        </Route>
+        
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="shops" element={<AdminShops />} />
         </Route>
       </Routes>
     </BrowserRouter>

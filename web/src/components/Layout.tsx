@@ -19,6 +19,22 @@ export default function Layout() {
         </div>
       )}
 
+      {/* Top right navigation links */}
+      <div style={{ zIndex: 50, position: 'absolute', top: 20, right: 20, display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <Link to="/renew" style={{ 
+          padding: '0.5rem 1rem', 
+          background: 'rgba(79, 70, 229, 0.1)', 
+          color: 'var(--primary-color)', 
+          borderRadius: '8px', 
+          textDecoration: 'none', 
+          fontWeight: 600, 
+          fontSize: '0.875rem',
+          border: '1px solid rgba(79, 70, 229, 0.2)'
+        }}>
+          Renew Subscription
+        </Link>
+      </div>
+
       <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1 }}>
         <Outlet />
       </div>

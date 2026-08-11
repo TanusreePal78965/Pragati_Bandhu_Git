@@ -59,6 +59,8 @@ export type StoredShopInfo = {
   whatsappNumber?: string;
   aiConsent?: boolean;
   isActive?: boolean;
+  planExpiresAt?: string;
+  planType?: string;
 };
 
 export const setShopInfo = async (info: StoredShopInfo): Promise<void> => {
