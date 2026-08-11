@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -13,9 +13,19 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import { useAuth } from "../../context/AuthContext";
+import { getShopInfo } from "../../utils/storage";
 
 export default function ShopDeactivatedScreen() {
     const { logout, phone } = useAuth();
+    const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
+
+    useEffect(() => {
+        getShopInfo().then(info => {
+            if (info?.planExpiresAt) {
+                setPlanExpiresAt(info.planExpiresAt);
+            }
+        });
+    }, []);
 
     const handleOpenWebPortal = () => {
         Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew");
@@ -49,6 +59,15 @@ export default function ShopDeactivatedScreen() {
                 <Text style={styles.subtitle}>
                     Your shop account is currently inactive. Please visit our web portal to check your account status and manage your profile.
                 </Text>
+
+                {planExpiresAt && (
+                    <View style={styles.expiryCard}>
+                        <Ionicons name="calendar-outline" size={18} color={colors.error} />
+                        <Text style={styles.expiryText}>
+                            Expiry Date: {new Date(planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </Text>
+                    </View>
+                )}
 
                 <PrimaryButton
                     title="Manage Account Online"
@@ -142,6 +161,23 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: colors.textSecondary,
         marginTop: 4,
+    },
+    expiryCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: colors.error + "10",
+        borderWidth: 1,
+        borderColor: colors.error + "30",
+        borderRadius: 10,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        gap: spacing.xs,
+        marginBottom: spacing.lg,
+    },
+    expiryText: {
+        fontSize: typography.sizes.sm,
+        fontWeight: "700",
+        color: colors.error,
     },
     manageButton: {
         width: "100%",

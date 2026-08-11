@@ -12,6 +12,8 @@ export default function RenewPlan() {
   
   const [planType, setPlanType] = useState('monthly');
   const [utr, setUtr] = useState('');
+  const [shopName, setShopName] = useState('');
+  const [currentExpiry, setCurrentExpiry] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -25,7 +27,7 @@ export default function RenewPlan() {
     setIsLoading(true);
     try {
       // Check if phone number is actually registered
-      const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?phone=eq.%2B91${clean}&select=id`, {
+      const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?phone=eq.%2B91${clean}&select=id,shop_name,plan_expires_at`, {
         method: 'GET',
         headers: {
           'apikey': SUPABASE_ANON_KEY,
@@ -39,6 +41,8 @@ export default function RenewPlan() {
         return;
       }
 
+      setShopName(checkBody[0].shop_name || '');
+      setCurrentExpiry(checkBody[0].plan_expires_at || null);
       setStep('pay');
     } catch (e: any) {
       setError(e?.message ?? 'Could not verify phone number. Please try again.');
@@ -122,7 +126,13 @@ export default function RenewPlan() {
             <div className="step-container step-enter">
               <div className="step-header">
                 <h2>Complete Payment</h2>
-                <p>Scan the QR code to pay via any UPI App</p>
+                {shopName && <p style={{ fontWeight: 600, color: 'var(--primary-color)', margin: '0.25rem 0 0' }}>{shopName}</p>}
+                {currentExpiry && (
+                  <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.25rem 0 0.5rem' }}>
+                    Current Expiry: <strong style={{ color: '#0f172a' }}>{new Date(currentExpiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                  </p>
+                )}
+                <p style={{ marginTop: '0.25rem' }}>Scan the QR code to pay via any UPI App</p>
               </div>
               
               <div className="input-group" style={{ marginBottom: '1.5rem' }}>
