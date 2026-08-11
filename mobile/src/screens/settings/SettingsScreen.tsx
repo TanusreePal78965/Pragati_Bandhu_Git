@@ -116,16 +116,22 @@ export default function SettingsScreen() {
                 if (shopId) {
                     try {
                         const { data } = await supabase.from('shops').select('is_active, plan_expires_at, plan_type').eq('id', shopId).maybeSingle();
-                        if (data && info) {
-                            info = {
-                                ...info,
-                                isActive: data.is_active,
-                                planExpiresAt: data.plan_expires_at,
-                                planType: data.plan_type,
-                            };
-                            await persistShopInfo(info);
+                        if (data) {
+                            const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
+                            if (data.is_active === false || isExpired) {
+                                setShopActive(false);
+                            }
+                            if (info) {
+                                info = {
+                                    ...info,
+                                    isActive: data.is_active,
+                                    planExpiresAt: data.plan_expires_at,
+                                    planType: data.plan_type,
+                                };
+                                await persistShopInfo(info);
+                            }
                         }
-                    } catch (_) {}
+                    } catch (_) { }
                 }
                 if (!cancelled) {
                     setShopInfoState(info);
@@ -216,7 +222,7 @@ export default function SettingsScreen() {
                             //    when consent is detected (no separate flush needed). (C12)
                             await startSyncService(
                                 () => setShopActive(false),
-                                () => {}
+                                () => { }
                             );
 
                             // 5. Refresh UI
@@ -493,7 +499,7 @@ export default function SettingsScreen() {
                                 {shopInfo?.ownerName ?? "—"}
                             </Text>
                             <Text style={styles.profilePhone}>
-                                {phone ? `+91 ${phone}` : "—"}
+                                {phone ? `${phone}` : "—"}
                             </Text>
                         </View>
                     </View>
@@ -555,16 +561,16 @@ export default function SettingsScreen() {
                             shopInfo?.planType === 'yearly'
                                 ? 'Yearly'
                                 : shopInfo?.planType === 'monthly'
-                                ? 'Monthly'
-                                : 'Standard'
+                                    ? 'Monthly'
+                                    : 'Standard'
                         }
                     />
                     <SettingsInfoRow
                         label="ACCOUNT EXPIRY"
                         value={
                             (() => {
-                                const expiryDate = shopInfo?.planExpiresAt 
-                                    ? new Date(shopInfo.planExpiresAt) 
+                                const expiryDate = shopInfo?.planExpiresAt
+                                    ? new Date(shopInfo.planExpiresAt)
                                     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                                 const dateStr = expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
                                 const isPast = expiryDate < new Date();
