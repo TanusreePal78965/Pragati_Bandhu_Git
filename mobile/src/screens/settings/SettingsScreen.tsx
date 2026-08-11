@@ -11,6 +11,7 @@ import {
     Alert,
     ActivityIndicator,
     Share,
+    Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,7 +24,8 @@ import { typography } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { useAuth } from "../../context/AuthContext";
-import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent } from "../../utils/storage";
+import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent, getStoredShopId } from "../../utils/storage";
+import { supabase } from "../../lib/supabase";
 import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
 import { exportAsSql, queueAllLocalData, updateShop, getShop } from "../../db/db";
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
@@ -108,11 +110,29 @@ export default function SettingsScreen() {
     useFocusEffect(
         useCallback(() => {
             let cancelled = false;
-            getShopInfo().then(info => {
-                if (cancelled) return;
-                setShopInfoState(info);
-                setSyncPendingCount(getPendingSyncCount());
-            });
+            const loadLatestInfo = async () => {
+                let info = await getShopInfo();
+                const shopId = await getStoredShopId();
+                if (shopId) {
+                    try {
+                        const { data } = await supabase.from('shops').select('is_active, plan_expires_at, plan_type').eq('id', shopId).maybeSingle();
+                        if (data && info) {
+                            info = {
+                                ...info,
+                                isActive: data.is_active,
+                                planExpiresAt: data.plan_expires_at,
+                                planType: data.plan_type,
+                            };
+                            await persistShopInfo(info);
+                        }
+                    } catch (_) {}
+                }
+                if (!cancelled) {
+                    setShopInfoState(info);
+                    setSyncPendingCount(getPendingSyncCount());
+                }
+            };
+            loadLatestInfo();
             return () => { cancelled = true; };
         }, [])
     );
@@ -530,18 +550,42 @@ export default function SettingsScreen() {
                         isOptional={true}
                     />
                     <SettingsInfoRow
+                        label="SUBSCRIPTION PLAN"
+                        value={
+                            shopInfo?.planType === 'yearly'
+                                ? 'Yearly Plan (₹999/yr)'
+                                : shopInfo?.planType === 'monthly'
+                                ? 'Monthly Plan (₹99/mo)'
+                                : '30-Day Free Trial'
+                        }
+                    />
+                    <SettingsInfoRow
                         label="SUBSCRIPTION EXPIRY"
                         value={
                             shopInfo?.planExpiresAt
-                                ? new Date(shopInfo.planExpiresAt).toLocaleDateString()
-                                : "No Active Plan"
+                                ? new Date(shopInfo.planExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                                : "Active 30-Day Trial"
                         }
                     />
                     {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
-                        <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm }}>
-                            <Text style={{ color: colors.error, fontSize: 13 }}>
-                                To renew your subscription and avoid service interruption, please visit <Text style={{ fontWeight: 'bold' }}>pragatibandhu.com/renew</Text> from your browser.
+                        <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, marginTop: 4 }}>
+                            <Text style={{ color: colors.error, fontSize: 13, marginBottom: 8 }}>
+                                To renew your subscription and avoid service interruption, tap below or visit the web portal.
                             </Text>
+                            <TouchableOpacity
+                                onPress={() => Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew")}
+                                style={{
+                                    backgroundColor: colors.primary,
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 8,
+                                    alignSelf: 'flex-start'
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                                    Renew Subscription Online ➔
+                                </Text>
+                            </TouchableOpacity>
                         </View>
                     )}
                     <View style={styles.infoRow}>
