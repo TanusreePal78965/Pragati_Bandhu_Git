@@ -528,17 +528,29 @@ input::placeholder {
 }
 
 /* Mobile Responsiveness Overrides */
+@media (max-width: 1024px) {
+  .pricing-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+  .pricing-card, .glass-card {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 1rem;
+    padding-top: 5rem; /* Space for the header */
   }
   
   .hero-title {
-    font-size: 2rem;
+    font-size: 2.2rem;
   }
   
   .hero-subtitle {
     font-size: 1rem;
+    padding: 0 1rem;
   }
   
   .hero-logo {
@@ -566,5 +578,46 @@ input::placeholder {
   
   .plan-price {
     font-size: 2rem;
+  }
+
+  .step-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .registration-container .glass-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.8rem;
+  }
+  
+  .btn-primary, .btn-outline {
+    padding: 0.875rem 1.25rem;
+    font-size: 1rem;
+  }
+
+  .feature-list li {
+    font-size: 0.85rem;
+  }
+
+  .input-wrapper select,
+  .input-group input,
+  .phone-input {
+    font-size: 0.95rem;
+  }
+
+  .success-state h2 {
+    font-size: 1.4rem;
+  }
+
+  .pricing-card.standard {
+    transform: scale(1);
+  }
+
+  .pricing-card.standard:hover {
+    transform: translateY(-5px);
   }
 }

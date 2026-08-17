@@ -137,7 +137,7 @@ export default function RenewPlan() {
               
               <div className="input-group" style={{ marginBottom: '1.5rem' }}>
                 <label>Select Plan to Renew</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginTop: '0.25rem' }}>
                   <div
                     onClick={() => setPlanType('monthly')}
                     style={{

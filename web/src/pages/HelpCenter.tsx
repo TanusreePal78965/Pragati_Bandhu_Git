@@ -25,7 +25,7 @@ export default function HelpCenter() {
       <div className="glass-card" style={{ maxWidth: '800px', margin: '2rem auto', width: '100%' }}>
         <h1 style={{ color: 'var(--text-main)', marginBottom: '1.5rem', fontSize: '2rem', textAlign: 'center' }}>Help Center</h1>
         
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
           <a href="tel:7003354703" style={{ padding: '0.75rem 1.5rem', backgroundColor: 'var(--primary-color)', color: 'white', textDecoration: 'none', borderRadius: '8px', fontWeight: '600' }}>Call Support</a>
           <a href="whatsapp://send?phone=917003354703&text=Hi%20Pragati%20Bandhu%20Support,%20I%20need%20help%20with..." style={{ padding: '0.75rem 1.5rem', backgroundColor: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '8px', fontWeight: '600' }}>WhatsApp Support</a>
         </div>

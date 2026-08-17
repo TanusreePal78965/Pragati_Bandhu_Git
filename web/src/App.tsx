@@ -345,7 +345,7 @@ function RegistrationPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <div className="input-group">
                     <label>Password</label>
                     <input type="password" placeholder="Min 6 chars" value={password} onChange={(e) => setPassword(e.target.value)} />

@@ -135,7 +135,7 @@ export default function AdminShops() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div className="admin-page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 className="admin-page-title" style={{ margin: 0 }}>Registered Shops</h1>
         
         <div style={{ position: 'relative', width: '300px' }}>
@@ -285,7 +285,7 @@ export default function AdminShops() {
 
                 <div style={{ padding: '1.5rem' }}>
                   <h3 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '1rem' }}>Shop Analytics</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                     <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                       <div style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>Products</div>
                       <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a' }}>{shopDetails.metrics.products}</div>

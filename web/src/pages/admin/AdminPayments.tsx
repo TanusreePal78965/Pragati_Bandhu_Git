@@ -99,7 +99,7 @@ export default function AdminPayments() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div className="admin-page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 className="admin-page-title" style={{ margin: 0 }}>Pending Approvals</h1>
         
         <div style={{ position: 'relative', width: '300px' }}>

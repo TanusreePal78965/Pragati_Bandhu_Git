@@ -182,7 +182,7 @@ function FeatureCard({ section }: { section: typeof FEATURES[0] }) {
                 </div>
                 
                 <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                         <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)' }}>{section.title}</h3>
                         {section.badge && (
                             <span style={{ backgroundColor: section.accentColor, color: 'white', fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '6px', fontWeight: 'bold' }}>

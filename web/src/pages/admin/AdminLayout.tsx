@@ -8,6 +8,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isLogged, setIsLogged] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Check if we have a token
@@ -26,9 +27,17 @@ export default function AdminLayout() {
 
   if (!isLogged) return null;
 
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   return (
     <div className="admin-layout">
-      <aside className="admin-sidebar">
+      {/* Mobile Sidebar Overlay */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} 
+        onClick={() => setIsSidebarOpen(false)}
+      ></div>
+
+      <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="admin-sidebar-header">
           <img src={logoUrl} alt="Logo" className="admin-sidebar-logo" />
           PragatiBandhu
@@ -57,10 +66,19 @@ export default function AdminLayout() {
 
       <main className="admin-main">
         <header className="admin-header">
-          <div className="admin-header-title">
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <button className="mobile-menu-btn" onClick={toggleSidebar}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <div className="admin-header-title">
             {location.pathname === '/admin' && 'Overview'}
             {location.pathname.includes('/admin/payments') && 'Payments Management'}
             {location.pathname.includes('/admin/shops') && 'Shop Management'}
+            </div>
           </div>
           <div className="admin-header-actions">
             <div className="admin-user-profile">

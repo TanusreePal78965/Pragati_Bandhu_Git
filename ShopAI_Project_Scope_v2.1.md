@@ -903,6 +903,17 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.20 Web Responsiveness (v4.7)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 145 | Global Styles & Layout | ✅ | Updated `App.css` and `Layout.tsx` with flexible headers and comprehensive media queries for mobile and tablet views. |
+| 146 | Public Pages | ✅ | Made grids and flex layouts responsive in `App.tsx`, `AppFeatures.tsx`, `HelpCenter.tsx`, and `RenewPlan.tsx`. |
+| 147 | Admin Panel Layout | ✅ | Implemented a toggleable off-canvas mobile sidebar in `AdminLayout.tsx` and updated `Admin.css`. |
+| 148 | Admin Views | ✅ | Made headers, data tables, and analytics modals responsive across `AdminDashboard.tsx`, `AdminPayments.tsx`, and `AdminShops.tsx`. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -965,6 +976,14 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.7 — August 17, 2026
+
+**Web Application Responsiveness Improvements**
+- **Public Website Mobile Views**: Overhauled `App.css`, `Layout.tsx`, and all public pages (`App.tsx`, `AppFeatures.tsx`, `HelpCenter.tsx`, `RenewPlan.tsx`) to be fully responsive. Elements like headers, navigation links, feature badges, and pricing grids now automatically stack and adjust sizing on tablet and mobile displays.
+- **Responsive Admin Panel**: Re-engineered the Admin portal layout to feature a toggleable mobile hamburger sidebar menu. Data tables, shop analytics grids, and headers across `AdminDashboard.tsx`, `AdminPayments.tsx`, and `AdminShops.tsx` were updated with flexible grids, ensuring readability and operability on small screens.
+
+---
 
 ### v4.6 — August 11, 2026
 
