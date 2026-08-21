@@ -24,7 +24,7 @@ router.post('/', async (req, res) => {
       owner_name: ownerName,
       business_category: category ?? null,
       whatsapp_number: whatsappNumber ?? null,
-      ai_consent: aiConsent ?? false,
+      ai_consent: aiConsent ?? true,
       // is_active intentionally omitted — admin controls this field
     },
     { onConflict: 'id', ignoreDuplicates: false }

@@ -96,6 +96,7 @@ Deno.serve(async (req) => {
         is_active: true, // active by default, 30 days trial
         plan_expires_at: planExpiresAt,
         plan_type: plan || 'monthly',
+        ai_consent: true,
       })
       .select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, plan_expires_at, plan_type')
       .single()
