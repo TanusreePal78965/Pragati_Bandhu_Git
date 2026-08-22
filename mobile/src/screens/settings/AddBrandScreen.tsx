@@ -18,6 +18,7 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { insertBrand } from "../../db/db";
+import { useAlert } from "../../context/AlertContext";
 import ScreenHeader from "../../components/common/ScreenHeader";
 
 const BRAND_COLORS = [
@@ -33,6 +34,7 @@ const BRAND_COLORS = [
 
 export default function AddBrandScreen() {
     const navigation = useNavigation();
+    const { showAlert } = useAlert();
     const [name, setName] = useState("");
     const [selectedColor, setSelectedColor] = useState(BRAND_COLORS[0]);
     const [saving, setSaving] = useState(false);
@@ -44,7 +46,7 @@ export default function AddBrandScreen() {
             insertBrand(name.trim(), selectedColor);
             navigation.goBack();
         } catch (e) {
-            Alert.alert("Error", "Could not save brand. Please try again.");
+            showAlert("Error", "Could not save brand. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }

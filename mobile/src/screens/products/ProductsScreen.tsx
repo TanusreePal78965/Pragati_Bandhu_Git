@@ -18,9 +18,11 @@ import { typography } from "../../theme/typography";
 import ProductCard from "../../components/products/ProductCard";
 import UpdateStockModal from "../../components/products/UpdateStockModal";
 import UpdateCategoryModal from "../../components/products/UpdateCategoryModal";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import FAB from "../../components/common/FAB";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useAlert } from "../../context/AlertContext";
+import { haptics } from "../../utils/haptics";
 import {
     getAllProducts,
     getAllCategories,
@@ -35,11 +37,13 @@ import {
 
 export default function ProductsScreen() {
     const navigation = useNavigation<any>();
+    const { showAlert } = useAlert();
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [singleStockProduct, setSingleStockProduct] = useState<Product | null>(null);
     const [isUpdateStockVisible, setIsUpdateStockVisible] = useState(false);
     const [isUpdateCategoryVisible, setIsUpdateCategoryVisible] = useState(false);
 
@@ -74,10 +78,13 @@ export default function ProductsScreen() {
         strategy?: "average" | "batch" | "replace",
         batchName?: string
     ) => {
-        if (selectedItems.length === 1 && mode === "add") {
-            const id = selectedItems[0];
-            const product = products.find((p) => p.id === id);
-            if (!product) return;
+        const targetProducts = singleStockProduct
+            ? [singleStockProduct]
+            : products.filter((p) => selectedItems.includes(p.id));
+
+        if (targetProducts.length === 1 && mode === "add") {
+            const product = targetProducts[0];
+            const id = product.id;
 
             const baseQty = isPackMode && product.units_per_pack
                 ? qty * product.units_per_pack
@@ -101,7 +108,7 @@ export default function ProductsScreen() {
                     units_per_pack: product.units_per_pack,
                 });
                 insertPurchaseLog(newProductId, batchName, baseQty, newCost, newSelling);
-                Alert.alert("Success", `Created new batch "${batchName}" with ${qty} ${isPackMode && product.purchase_uom ? product.purchase_uom : product.uom} stock.`);
+                showAlert("Success", `Created new batch "${batchName}" with ${qty} ${isPackMode && product.purchase_uom ? product.purchase_uom : product.uom} stock.`, undefined, "success");
             } else if (strategy === "average") {
                 // Option A: Mix & Average costing
                 const oldStock = product.stock_quantity;
@@ -118,7 +125,7 @@ export default function ProductsScreen() {
                     selling_price: newSelling,
                 });
                 insertPurchaseLog(id, product.name, baseQty, newCost, newSelling);
-                Alert.alert("Success", `Stock updated to ${totalStock} ${product.uom}. Cost averaged to ₹${weightedAvgCost.toFixed(2)}.`);
+                showAlert("Success", `Stock updated to ${totalStock} ${product.uom}. Cost averaged to ₹${weightedAvgCost.toFixed(2)}.`, undefined, "success");
             } else {
                 // Option C: Replacement Cost (or fallback default)
                 const totalStock = product.stock_quantity + baseQty;
@@ -128,13 +135,12 @@ export default function ProductsScreen() {
                     selling_price: newSelling,
                 });
                 insertPurchaseLog(id, product.name, baseQty, newCost, newSelling);
-                Alert.alert("Success", `Stock updated to ${totalStock} ${product.uom}. Price snapped to new cost of ₹${newCost.toFixed(2)}.`);
+                showAlert("Success", `Stock updated to ${totalStock} ${product.uom}. Price snapped to new cost of ₹${newCost.toFixed(2)}.`, undefined, "success");
             }
         } else {
             // Bulk updates (Multi-product or reduce stock mode)
-            selectedItems.forEach((id) => {
-                const product = products.find((p) => p.id === id);
-                if (!product) return;
+            targetProducts.forEach((product) => {
+                const id = product.id;
                 const baseQty = isPackMode && product.units_per_pack
                     ? qty * product.units_per_pack
                     : qty;
@@ -144,10 +150,11 @@ export default function ProductsScreen() {
                         : Math.max(0, product.stock_quantity - baseQty);
                 updateProductStock(id, newQty);
             });
-            Alert.alert("Success", `Stock updated for ${selectedItems.length} item(s).`);
+            showAlert("Success", `Stock updated for ${targetProducts.length} item(s).`, undefined, "success");
         }
 
         setIsUpdateStockVisible(false);
+        setSingleStockProduct(null);
         setSelectedItems([]);
         setProducts(getAllProducts());
     };
@@ -161,14 +168,15 @@ export default function ProductsScreen() {
         setIsUpdateCategoryVisible(false);
         setSelectedItems([]);
         setProducts(getAllProducts());
-        Alert.alert("Success", `Category updated to "${categoryName}" for ${selectedItems.length} item(s).`);
+        showAlert("Success", `Category updated to "${categoryName}" for ${selectedItems.length} item(s).`, undefined, "success");
     };
 
     const handleDelete = () => {
-        Alert.alert(
-            "Delete Products",
-            `Delete ${selectedItems.length} selected product(s)?`,
-            [
+        showAlert({
+            title: "Delete Products",
+            message: `Delete ${selectedItems.length} selected product(s)?`,
+            type: "error",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete",
@@ -179,15 +187,16 @@ export default function ProductsScreen() {
                         setProducts(getAllProducts());
                     },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     const handleDirectDelete = (product: Product) => {
-        Alert.alert(
-            "Delete Product",
-            `Delete "${product.name}"? This cannot be undone.`,
-            [
+        showAlert({
+            title: "Delete Product",
+            message: `Delete "${product.name}"? This cannot be undone.`,
+            type: "error",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete",
@@ -197,8 +206,8 @@ export default function ProductsScreen() {
                         setProducts(getAllProducts());
                     },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     const categoryChips = ["All", ...categories.map((c) => c.name)];
@@ -296,7 +305,11 @@ export default function ProductsScreen() {
                         selected={selectedItems.includes(item.id)}
                         onPress={() => toggleSelection(item.id)}
                         onEdit={() => navigation.navigate("EditProduct", { product: item })}
-                        onDelete={() => handleDirectDelete(item)}
+                        onUpdateStock={() => {
+                            haptics.selection();
+                            setSingleStockProduct(item);
+                            setIsUpdateStockVisible(true);
+                        }}
                     />
                 )}
                 ListEmptyComponent={
@@ -349,15 +362,21 @@ export default function ProductsScreen() {
             {/* FAB */}
             {!selectedItems.length && (
                 <FAB
-                    onPress={() => navigation.navigate("AddProduct")}
+                    onPress={() => {
+                        haptics.medium();
+                        navigation.navigate("AddProduct");
+                    }}
                     offsetTabBar={true}
                 />
             )}
 
             <UpdateStockModal
                 isVisible={isUpdateStockVisible}
-                onClose={() => setIsUpdateStockVisible(false)}
-                selectedProducts={products.filter((p) => selectedItems.includes(p.id))}
+                onClose={() => {
+                    setIsUpdateStockVisible(false);
+                    setSingleStockProduct(null);
+                }}
+                selectedProducts={singleStockProduct ? [singleStockProduct] : products.filter((p) => selectedItems.includes(p.id))}
                 onUpdate={handleBulkStockUpdate}
             />
 

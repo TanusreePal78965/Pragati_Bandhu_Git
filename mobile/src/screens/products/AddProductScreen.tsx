@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
+import { haptics } from "../../utils/haptics";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import {
@@ -28,6 +29,7 @@ import {
     Brand,
 } from "../../db/db";
 import UomSelector from "../../components/products/UomSelector";
+import { useAlert } from "../../context/AlertContext";
 
 export type Mode = "single" | "batch";
 
@@ -43,7 +45,8 @@ interface BatchRow {
 }
 
 export default function AddProductScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
+    const { showAlert } = useAlert();
     const [mode, setMode] = useState<Mode>("single");
     const [categories, setCategories] = useState<Category[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
@@ -106,14 +109,15 @@ export default function AddProductScreen() {
     // ─── Single Mode Logic ────────────────────────────────────────────────────
     const handleSaveSingle = (addAnother = false) => {
         if (!name.trim()) {
-            Alert.alert("Validation", "Product name is required.");
+            showAlert("Validation", "Product name is required.", undefined, "warning");
             return;
         }
         if (!sellingPrice || isNaN(Number(sellingPrice))) {
-            Alert.alert("Validation", "Please enter a valid selling price.");
+            showAlert("Validation", "Please enter a valid selling price.", undefined, "warning");
             return;
         }
         setSaving(true);
+        haptics.success();
         try {
             const savedName = name.trim();
             insertProduct({
@@ -141,7 +145,7 @@ export default function AddProductScreen() {
                 navigation.goBack();
             }
         } catch (e) {
-            Alert.alert("Error", "Could not save product. Please try again.");
+            showAlert("Error", "Could not save product. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }
@@ -187,7 +191,7 @@ export default function AddProductScreen() {
 
     const removeBatchRow = (id: string) => {
         if (batchRows.length <= 1) {
-            Alert.alert("Notice", "You need at least one row.");
+            showAlert("Notice", "You need at least one row.", undefined, "warning");
             return;
         }
         setBatchRows((prev) => prev.filter((r) => r.id !== id));
@@ -201,7 +205,7 @@ export default function AddProductScreen() {
 
     const handleImportPastedText = () => {
         if (!pasteText.trim()) {
-            Alert.alert("Validation", "Paste or type product lines first.");
+            showAlert("Validation", "Paste or type product lines first.", undefined, "warning");
             return;
         }
 
@@ -228,9 +232,9 @@ export default function AddProductScreen() {
             setBatchRows((prev) => [...prev.filter((r) => r.name.trim().length > 0), ...newRows]);
             setPasteText("");
             setShowPasteModal(false);
-            Alert.alert("Success", `Imported ${newRows.length} rows into express table!`);
+            showAlert("Success", `Imported ${newRows.length} rows into express table!`, undefined, "success");
         } else {
-            Alert.alert("Error", "Could not parse lines. Use format: Name, BuyPrice, SellPrice, Stock");
+            showAlert("Error", "Could not parse lines. Use format: Name, BuyPrice, SellPrice, Stock", undefined, "error");
         }
     };
 
@@ -240,9 +244,11 @@ export default function AddProductScreen() {
         );
 
         if (validRows.length === 0) {
-            Alert.alert(
+            showAlert(
                 "Validation",
-                "Please enter at least one product with a Name and Selling Price."
+                "Please enter at least one product with a Name and Selling Price.",
+                undefined,
+                "warning"
             );
             return;
         }
@@ -261,11 +267,16 @@ export default function AddProductScreen() {
             }));
 
             insertProductsBatch(productsToInsert);
-            Alert.alert("Success", `Saved ${validRows.length} products to inventory!`, [
-                { text: "OK", onPress: () => navigation.goBack() },
-            ]);
+            showAlert({
+                title: "Success",
+                message: `Saved ${validRows.length} products to inventory!`,
+                type: "success",
+                buttons: [
+                    { text: "OK", onPress: () => navigation.goBack() },
+                ],
+            });
         } catch (e) {
-            Alert.alert("Error", "Could not save batch products.");
+            showAlert("Error", "Could not save batch products.", undefined, "error");
         } finally {
             setSaving(false);
         }

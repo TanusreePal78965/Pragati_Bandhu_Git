@@ -1,9 +1,9 @@
-import React from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import React, { useEffect, useRef, useState } from "react";
+import { createBottomTabNavigator, BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { View, StyleSheet, Platform, Text } from "react-native";
+import { View, StyleSheet, Platform, Text, TouchableOpacity, Animated, LayoutChangeEvent, Vibration } from "react-native";
+import * as Haptics from "expo-haptics";
 import { colors } from "../theme/colors";
-import { spacing } from "../theme/spacing";
 
 import HomeScreen from "../screens/home/HomeScreen";
 import ProductsScreen from "../screens/products/ProductsScreen";
@@ -21,78 +21,192 @@ export type BottomTabParamList = {
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
+const triggerHaptic = () => {
+    try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+        // Fallback
+    }
+    Vibration.vibrate(25);
+};
+
+interface TabButtonProps {
+    route: any;
+    isFocused: boolean;
+    options: any;
+    onPress: () => void;
+    onLongPress: () => void;
+}
+
+function TabButton({ route, isFocused, options, onPress, onLongPress }: TabButtonProps) {
+    const iconScale = useRef(new Animated.Value(isFocused ? 1.1 : 0.9)).current;
+
+    useEffect(() => {
+        Animated.spring(iconScale, {
+            toValue: isFocused ? 1.15 : 0.9,
+            friction: 5,
+            tension: 140,
+            useNativeDriver: true,
+        }).start();
+    }, [isFocused]);
+
+    let iconName: keyof typeof Ionicons.glyphMap;
+
+    switch (route.name) {
+        case "Home":
+            iconName = isFocused ? "home" : "home-outline";
+            break;
+        case "Inventory":
+            iconName = isFocused ? "grid" : "grid-outline";
+            break;
+        case "Customers":
+            iconName = isFocused ? "people" : "people-outline";
+            break;
+        case "Reports":
+            iconName = isFocused ? "stats-chart" : "stats-chart-outline";
+            break;
+        case "Settings":
+            iconName = isFocused ? "options" : "options-outline";
+            break;
+        default:
+            iconName = "ellipse-outline";
+    }
+
+    const label =
+        options.tabBarLabel !== undefined
+            ? String(options.tabBarLabel)
+            : options.title !== undefined
+            ? options.title
+            : route.name;
+
+    const activeColor = colors.primary; // App primary blue (#1a57db)
+    const inactiveColor = "#64748b";
+
+    return (
+        <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={options.tabBarAccessibilityLabel}
+            testID={options.tabBarTestID}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            activeOpacity={0.7}
+            style={styles.tabItem}
+        >
+            <Animated.View
+                style={{
+                    transform: [{ scale: iconScale }],
+                    alignItems: "center",
+                }}
+            >
+                <Ionicons
+                    name={iconName}
+                    size={20}
+                    color={isFocused ? activeColor : inactiveColor}
+                />
+            </Animated.View>
+            <Text
+                style={[
+                    styles.tabLabel,
+                    isFocused ? styles.activeTabLabel : styles.inactiveTabLabel,
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+            >
+                {label}
+            </Text>
+        </TouchableOpacity>
+    );
+}
+
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    const [barWidth, setBarWidth] = useState(0);
+    const slideAnim = useRef(new Animated.Value(state.index)).current;
+
+    useEffect(() => {
+        Animated.spring(slideAnim, {
+            toValue: state.index,
+            friction: 7,
+            tension: 130,
+            useNativeDriver: true,
+        }).start();
+    }, [state.index]);
+
+    const handleLayout = (e: LayoutChangeEvent) => {
+        setBarWidth(e.nativeEvent.layout.width);
+    };
+
+    const numTabs = state.routes.length;
+    const tabWidth = barWidth > 0 ? (barWidth - 8) / numTabs : 0;
+
+    const translateX = slideAnim.interpolate({
+        inputRange: state.routes.map((_, i) => i),
+        outputRange: state.routes.map((_, i) => i * tabWidth),
+    });
+
+    return (
+        <View style={styles.tabBarContainer}>
+            <View style={styles.pillBar} onLayout={handleLayout}>
+                {barWidth > 0 && tabWidth > 0 && (
+                    <Animated.View
+                        style={[
+                            styles.slidingPill,
+                            {
+                                width: tabWidth,
+                                transform: [{ translateX }],
+                            },
+                        ]}
+                    />
+                )}
+                {state.routes.map((route, index) => {
+                    const { options } = descriptors[route.key];
+                    const isFocused = state.index === index;
+
+                    const onPress = () => {
+                        triggerHaptic();
+                        const event = navigation.emit({
+                            type: "tabPress",
+                            target: route.key,
+                            canPreventDefault: true,
+                        });
+
+                        if (!isFocused && !event.defaultPrevented) {
+                            navigation.navigate(route.name);
+                        }
+                    };
+
+                    const onLongPress = () => {
+                        triggerHaptic();
+                        navigation.emit({
+                            type: "tabLongPress",
+                            target: route.key,
+                        });
+                    };
+
+                    return (
+                        <TabButton
+                            key={route.key}
+                            route={route}
+                            isFocused={isFocused}
+                            options={options}
+                            onPress={onPress}
+                            onLongPress={onLongPress}
+                        />
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
+
 export default function BottomTabNavigator() {
     return (
         <Tab.Navigator
-            screenOptions={({ route }) => ({
+            tabBar={(props) => <CustomTabBar {...props} />}
+            screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: colors.primary,
-                tabBarInactiveTintColor: colors.tabInactive,
-                tabBarLabelStyle: {
-                    fontSize: 11,
-                    fontWeight: "600",
-                    marginBottom: Platform.OS === 'ios' ? 0 : 4,
-                },
-                tabBarStyle: {
-                    position: 'absolute',
-                    bottom: Platform.OS === 'ios' ? 34 : 20,
-                    left: 20,
-                    right: 20,
-                    height: 64,
-                    backgroundColor: colors.surface,
-                    borderRadius: 20,
-                    borderTopWidth: 0,
-                    paddingTop: 8,
-                    paddingBottom: 8,
-                    // Shadow for iOS
-                    shadowColor: "#000",
-                    shadowOffset: {
-                        width: 0,
-                        height: 5,
-                    },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 10,
-                    // Elevation for Android
-                    elevation: 8,
-                    // Ensure transparency for the floating effect
-                    borderTopColor: 'transparent',
-                },
-                tabBarItemStyle: {
-                    height: 56,
-                },
-                tabBarIcon: ({ focused, color }) => {
-                    let iconName: keyof typeof Ionicons.glyphMap;
-
-                    switch (route.name) {
-                        case "Home":
-                            iconName = focused ? "grid" : "grid-outline";
-                            break;
-                        case "Inventory":
-                            iconName = focused ? "cube" : "cube-outline";
-                            break;
-                        case "Customers":
-                            iconName = focused ? "people-circle" : "people-circle-outline";
-                            break;
-                        case "Reports":
-                            iconName = focused ? "stats-chart" : "stats-chart-outline";
-                            break;
-                        case "Settings":
-                            iconName = focused ? "options" : "options-outline";
-                            break;
-                        default:
-                            iconName = "ellipse";
-                    }
-
-                    return (
-                        <View style={[
-                            styles.iconContainer,
-                            focused && styles.activeIconContainer
-                        ]}>
-                            <Ionicons name={iconName} size={focused ? 24 : 22} color={color} />
-                        </View>
-                    );
-                },
-            })}
+            }}
         >
             <Tab.Screen
                 name="Home"
@@ -124,16 +238,80 @@ export default function BottomTabNavigator() {
 }
 
 const styles = StyleSheet.create({
-    iconContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+    tabBarContainer: {
+        position: "absolute",
+        bottom: Platform.OS === "ios" ? 24 : 12,
+        left: 10,
+        right: 10,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "transparent",
     },
-    activeIconContainer: {
-        // Option to add a background pill or something for the focused icon
-        // Currently just making it pop a bit more via icon size and weight
+    pillBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#f8fafc",
+        borderRadius: 36,
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: "#e2e8f0",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 6,
+        width: "100%",
+        position: "relative",
+    },
+    slidingPill: {
+        position: "absolute",
+        top: 4,
+        bottom: 4,
+        left: 4,
+        backgroundColor: "#ffffff",
+        borderRadius: 28,
+        borderWidth: 1,
+        borderColor: "#cbd5e1",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    tabItem: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 6,
+        paddingHorizontal: 1,
+        borderRadius: 28,
+        minHeight: 50,
+        zIndex: 1,
+    },
+    tabLabel: {
+        fontSize: 10,
+        letterSpacing: -0.2,
+        marginTop: 2,
+        textAlign: "center",
+    },
+    activeTabLabel: {
+        color: colors.primary,
+        fontWeight: "700",
+    },
+    inactiveTabLabel: {
+        color: "#64748b",
+        fontWeight: "500",
     },
 });
+
+
+
 

@@ -11,6 +11,7 @@ import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getSalesByRange, getTopProducts, getRecentBills, ReportData, TopProduct, Bill } from "../../db/db";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
+import { useAlert } from "../../context/AlertContext";
 
 type RangeKey = "today" | "week" | "month";
 
@@ -44,6 +45,7 @@ const formatDateTime = (dateStr: string) => {
 };
 
 export default function ReportsScreen() {
+    const { showAlert } = useAlert();
     const navigation = useNavigation<any>();
     const [range, setRange] = useState<RangeKey>("today");
     const [report, setReport] = useState<ReportData>({
@@ -195,7 +197,7 @@ export default function ReportsScreen() {
 
     const handleExportPdf = async () => {
         if (report.bill_count === 0) {
-            Alert.alert("No Data", "There are no transactions in this period to export.");
+            showAlert("No Data", "There are no transactions in this period to export.", undefined, "warning");
             return;
         }
         setExporting(true);
@@ -211,7 +213,7 @@ export default function ReportsScreen() {
                 UTI: "com.adobe.pdf",
             });
         } catch (e) {
-            Alert.alert("Export Failed", "Could not generate the PDF. Please try again.");
+            showAlert("Export Failed", "Could not generate the PDF. Please try again.", undefined, "error");
             console.error("PDF export error:", e);
         } finally {
             setExporting(false);

@@ -18,6 +18,7 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { insertCategory } from "../../db/db";
+import { useAlert } from "../../context/AlertContext";
 import ScreenHeader from "../../components/common/ScreenHeader";
 
 const AVAILABLE_ICONS = [
@@ -55,6 +56,7 @@ const renderIcon = (type: string, name: string, color: string, size = 24) => {
 
 export default function AddCategoryScreen() {
     const navigation = useNavigation();
+    const { showAlert } = useAlert();
     const [name, setName] = useState("");
     const [selectedIcon, setSelectedIcon] = useState(AVAILABLE_ICONS[0]);
     const [selectedColor, setSelectedColor] = useState(AVAILABLE_COLORS[0]);
@@ -68,7 +70,7 @@ export default function AddCategoryScreen() {
             insertCategory(name.trim(), `${selectedIcon.type}:${selectedIcon.name}`, selectedColor);
             navigation.goBack();
         } catch (e) {
-            Alert.alert("Error", "Could not save category. Please try again.");
+            showAlert("Error", "Could not save category. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }

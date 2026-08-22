@@ -8,7 +8,6 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
-    Alert,
     StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,10 +19,13 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllCategories, getAllBrands, updateProduct, getPurchaseLogsByProduct, Product, Category, Brand, PurchaseLog } from "../../db/db";
 import UomSelector from "../../components/products/UomSelector";
 import { toUtcDate } from "../../utils/dateUtils";
+import { useAlert } from "../../context/AlertContext";
+import { haptics } from "../../utils/haptics";
 
 export default function EditProductScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { showAlert } = useAlert();
     const product: Product = route.params?.product;
 
     const [name, setName] = useState(product?.name ?? "");
@@ -81,36 +83,26 @@ export default function EditProductScreen() {
         title: string,
         items: { id: string; label: string }[],
         selectedId: string | null,
-        onSelect: (id: string) => void,
-        allowNone?: boolean
+        onSelect: (id: string | null) => void
     ) => (
         <View style={styles.section}>
             <Text style={styles.label}>{title}</Text>
             {items.length === 0 ? (
                 <Text style={styles.noItemsText}>
-                    No {title.toLowerCase()} found. Add one in Settings first.
+                    No {title.toLowerCase()} found.
                 </Text>
             ) : (
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.chipScroll} keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={styles.chipScroll}
+                    keyboardShouldPersistTaps="handled"
                 >
-                    {allowNone && (
-                        <TouchableOpacity
-                            style={[styles.chip, selectedId === null && styles.activeChip]}
-                            onPress={() => onSelect("")}
-                        >
-                            <Text style={[styles.chipText, selectedId === null && styles.activeChipText]}>
-                                None
-                            </Text>
-                        </TouchableOpacity>
-                    )}
                     {items.map((item) => (
                         <TouchableOpacity
                             key={item.id}
                             style={[styles.chip, selectedId === item.id && styles.activeChip]}
-                            onPress={() => onSelect(item.id)}
+                            onPress={() => onSelect(selectedId === item.id ? null : item.id)}
                         >
                             <Text
                                 style={[
@@ -129,14 +121,15 @@ export default function EditProductScreen() {
 
     const handleSave = () => {
         if (!name.trim()) {
-            Alert.alert("Validation", "Product name is required.");
+            showAlert("Validation", "Product name is required.", undefined, "warning");
             return;
         }
         if (!sellingPrice || isNaN(Number(sellingPrice))) {
-            Alert.alert("Validation", "Please enter a valid selling price.");
+            showAlert("Validation", "Please enter a valid selling price.", undefined, "warning");
             return;
         }
         setSaving(true);
+        haptics.success();
         try {
             updateProduct(product.id, {
                 name: name.trim(),
@@ -150,11 +143,16 @@ export default function EditProductScreen() {
                 purchase_uom: hasPackSize && purchaseUom.trim() ? purchaseUom.trim() : null,
                 units_per_pack: hasPackSize && unitsPerPack ? parseInt(unitsPerPack) || null : null,
             });
-            Alert.alert("Updated!", `"${name.trim()}" has been updated.`, [
-                { text: "OK", onPress: () => navigation.goBack() },
-            ]);
+            showAlert({
+                title: "Updated!",
+                message: `"${name.trim()}" has been updated.`,
+                type: "success",
+                buttons: [
+                    { text: "OK", onPress: () => navigation.goBack() },
+                ],
+            });
         } catch (e) {
-            Alert.alert("Error", "Could not update product. Please try again.");
+            showAlert("Error", "Could not update product. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }
@@ -164,239 +162,245 @@ export default function EditProductScreen() {
         <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
             <StatusBar barStyle="dark-content" />
             <ScreenHeader title="Edit Product" showBack={true} />
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 style={{ flex: 1 }}
             >
-                <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    {/* Basic Information */}
-                    <Text style={styles.sectionTitle}>BASIC INFORMATION</Text>
+                <ScrollView
+                    style={styles.scroll}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Card 1: Basic Information */}
+                    <View style={styles.card}>
+                        <Text style={styles.cardHeaderTitle}>BASIC INFORMATION</Text>
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Product Name *</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="e.g. Basmati Rice"
-                            value={name}
-                            onChangeText={setName}
-                            placeholderTextColor="#9ca3af"
-                        />
-                    </View>
-
-                    {renderChipSelector(
-                        "Category",
-                        categories.map((c) => ({ id: c.id, label: c.name })),
-                        selectedCategoryId,
-                        (id) => setSelectedCategoryId(id || null),
-                        true
-                    )}
-
-                    {renderChipSelector(
-                        "Brand",
-                        brands.map((b) => ({ id: b.id, label: b.name })),
-                        selectedBrandId,
-                        (id) => setSelectedBrandId(id || null),
-                        true
-                    )}
-
-                    <View style={styles.separator} />
-
-                    {/* Pricing & Inventory */}
-                    <Text style={styles.sectionTitle}>PRICING & INVENTORY</Text>
-
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Purchase Price</Text>
-                        <View style={styles.inputWithIcon}>
-                            <Ionicons name="card-outline" size={20} color="#6b7280" />
+                        <View style={styles.section}>
+                            <Text style={styles.label}>Product Name *</Text>
                             <TextInput
-                                style={styles.flexInput}
-                                placeholder="₹ 0.00"
-                                value={purchasePrice}
-                                onChangeText={setPurchasePrice}
-                                keyboardType="numeric"
+                                style={styles.input}
+                                placeholder="Enter product name"
+                                value={name}
+                                onChangeText={setName}
                                 placeholderTextColor="#9ca3af"
                             />
                         </View>
-                        <Text style={styles.helperText}>Used to calculate your actual profit margin in reports</Text>
-                    </View>
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Selling Price *</Text>
-                        <View style={[styles.inputWithIcon, styles.inputActive]}>
-                            <Ionicons name="pricetag" size={20} color={colors.primary} />
-                            <TextInput
-                                style={styles.flexInput}
-                                placeholder="₹ 0.00"
-                                value={sellingPrice}
-                                onChangeText={setSellingPrice}
-                                keyboardType="numeric"
-                                placeholderTextColor="#9ca3af"
-                            />
-                        </View>
-                    </View>
-
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Current Stock Quantity</Text>
-                        <View style={styles.inputWithIcon}>
-                            <Ionicons name="archive-outline" size={20} color="#6b7280" />
-                            <TextInput
-                                style={styles.flexInput}
-                                placeholder="0"
-                                value={stockQuantity}
-                                onChangeText={setStockQuantity}
-                                keyboardType="numeric"
-                                placeholderTextColor="#9ca3af"
-                            />
-                        </View>
-                        <Text style={styles.helperText}>Correct this if the opening stock was entered incorrectly</Text>
-                    </View>
-
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Low Stock Alert Threshold</Text>
-                        <View style={styles.inputWithIcon}>
-                            <Ionicons name="warning-outline" size={20} color="#f59e0b" />
-                            <TextInput
-                                style={styles.flexInput}
-                                placeholder="5"
-                                value={minThreshold}
-                                onChangeText={setMinThreshold}
-                                keyboardType="numeric"
-                                placeholderTextColor="#9ca3af"
-                            />
-                        </View>
-                        <Text style={styles.helperText}>Alert when stock falls below this number</Text>
-                    </View>
-
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Unit of Measurement (UOM) *</Text>
-                        <UomSelector selectedUom={selectedUom} onSelect={setSelectedUom} />
-                    </View>
-
-                    <View style={styles.separator} />
-
-                    {/* Pack Size (Optional) */}
-                    <Text style={styles.sectionTitle}>BULK / PACK SIZE (OPTIONAL)</Text>
-
-                    <TouchableOpacity
-                        style={styles.packToggleRow}
-                        onPress={() => setHasPackSize((v) => !v)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.packToggleLeft}>
-                            <Ionicons name="cube-outline" size={20} color={colors.primary} />
-                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text style={styles.packToggleTitle}>Sells in packs / boxes / bags?</Text>
-                                <Text style={styles.packToggleSubtitle}>
-                                    Enable if you buy in bulk (e.g. 1 Box = 12 Pcs)
-                                </Text>
-                            </View>
-                        </View>
-                        <View style={[styles.toggleTrack, hasPackSize && styles.toggleTrackActive]}>
-                            <View style={[styles.toggleThumb, hasPackSize && styles.toggleThumbActive]} />
-                        </View>
-                    </TouchableOpacity>
-
-                    {hasPackSize && (
-                        <>
-                            <View style={styles.section}>
-                                <Text style={styles.label}>Pack / Bulk Unit Name</Text>
-                                <View style={styles.inputWithIcon}>
-                                    <Ionicons name="pricetag-outline" size={20} color="#6b7280" />
-                                    <TextInput
-                                        style={styles.flexInput}
-                                        placeholder="e.g. Box, Bag, Dozen, Crate"
-                                        value={purchaseUom}
-                                        onChangeText={setPurchaseUom}
-                                        placeholderTextColor="#9ca3af"
-                                    />
-                                </View>
-                                <Text style={styles.helperText}>What do you call the big unit? (shown on receipts)</Text>
+                        <View style={styles.twoColumnRow}>
+                            <View style={styles.columnFlex}>
+                                {renderChipSelector(
+                                    "Category",
+                                    categories.map((c) => ({ id: c.id, label: c.name })),
+                                    selectedCategoryId,
+                                    setSelectedCategoryId
+                                )}
                             </View>
 
-                            <View style={styles.section}>
-                                <Text style={styles.label}>
-                                    {purchaseUom.trim() ? `${selectedUom}s per ${purchaseUom.trim()}` : `${selectedUom}s per pack`}
-                                </Text>
+                            <View style={styles.columnFlex}>
+                                {renderChipSelector(
+                                    "Brand",
+                                    brands.map((b) => ({ id: b.id, label: b.name })),
+                                    selectedBrandId,
+                                    setSelectedBrandId
+                                )}
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Card 2: Pricing & Inventory */}
+                    <View style={styles.card}>
+                        <Text style={styles.cardHeaderTitle}>PRICING & INVENTORY</Text>
+
+                        <View style={styles.twoColumnRow}>
+                            <View style={styles.columnFlex}>
+                                <Text style={styles.label}>Purchase Price</Text>
                                 <View style={styles.inputWithIcon}>
-                                    <Ionicons name="layers-outline" size={20} color="#6b7280" />
+                                    <Ionicons name="card-outline" size={16} color="#64748b" />
                                     <TextInput
                                         style={styles.flexInput}
-                                        placeholder="e.g. 12"
-                                        value={unitsPerPack}
-                                        onChangeText={setUnitsPerPack}
+                                        placeholder="₹ 0.00"
+                                        value={purchasePrice}
+                                        onChangeText={setPurchasePrice}
                                         keyboardType="numeric"
                                         placeholderTextColor="#9ca3af"
                                     />
                                 </View>
-                                <Text style={styles.helperText}>
-                                    {purchaseUom.trim() && unitsPerPack
-                                        ? `1 ${purchaseUom.trim()} = ${unitsPerPack} ${selectedUom}`
-                                        : "How many base units fit in one pack?"}
-                                </Text>
                             </View>
-                        </>
-                    )}
 
-                    {/* ── Purchase / Restock History ───────────────────────────────────────── */}
-                    <Text style={styles.sectionTitle}>PURCHASE / RESTOCK HISTORY</Text>
-
-                    {purchaseLogs.length === 0 ? (
-                        <View style={styles.emptyHistory}>
-                            <Ionicons name="receipt-outline" size={36} color="#CBD5E1" />
-                            <Text style={styles.emptyHistoryText}>No restocking history recorded yet</Text>
+                            <View style={styles.columnFlex}>
+                                <Text style={styles.label}>Selling Price *</Text>
+                                <View style={[styles.inputWithIcon, styles.inputActive]}>
+                                    <Ionicons name="pricetag" size={16} color={colors.primary} />
+                                    <TextInput
+                                        style={styles.flexInput}
+                                        placeholder="₹ 0.00"
+                                        value={sellingPrice}
+                                        onChangeText={setSellingPrice}
+                                        keyboardType="numeric"
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                            </View>
                         </View>
-                    ) : (
-                        <View style={styles.historyList}>
-                            {purchaseLogs.map((log, index) => {
-                                const formatDateTime = (dateStr: string) => {
-                                    try {
-                                        const d = toUtcDate(dateStr);
-                                        const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-                                        const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-                                        return `${date} · ${time}`;
-                                    } catch (_) {
-                                        return dateStr;
-                                    }
-                                };
-                                return (
-                                    <View
-                                        key={log.id}
-                                        style={[
-                                            styles.historyRow,
-                                            index === purchaseLogs.length - 1 && { borderBottomWidth: 0 },
-                                        ]}
-                                    >
-                                        <View style={styles.historyIcon}>
-                                            <Ionicons name="add" size={18} color={colors.primary} />
-                                        </View>
-                                        <View style={styles.historyInfo}>
-                                            <Text style={styles.historyDate}>{formatDateTime(log.created_at)}</Text>
-                                            <Text style={styles.historyMeta}>
-                                                Cost: ₹{log.purchase_price.toFixed(2)} · Selling: ₹{log.selling_price.toFixed(2)}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.historyRight}>
-                                            <Text style={styles.historyQty}>+{log.qty} {selectedUom}</Text>
-                                        </View>
+
+                        <View style={styles.twoColumnRow}>
+                            <View style={styles.columnFlex}>
+                                <Text style={styles.label}>Current Stock</Text>
+                                <View style={styles.inputWithIcon}>
+                                    <Ionicons name="archive-outline" size={16} color="#64748b" />
+                                    <TextInput
+                                        style={styles.flexInput}
+                                        placeholder="0"
+                                        value={stockQuantity}
+                                        onChangeText={setStockQuantity}
+                                        keyboardType="numeric"
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.columnFlex}>
+                                <Text style={styles.label}>Low Alert Min</Text>
+                                <View style={styles.inputWithIcon}>
+                                    <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+                                    <TextInput
+                                        style={styles.flexInput}
+                                        placeholder="5"
+                                        value={minThreshold}
+                                        onChangeText={setMinThreshold}
+                                        keyboardType="numeric"
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
+                            </View>
+                        </View>
+
+                        <View style={{ marginTop: 2 }}>
+                            <Text style={styles.label}>Unit of Measurement (UOM) *</Text>
+                            <UomSelector selectedUom={selectedUom} onSelect={setSelectedUom} />
+                        </View>
+                    </View>
+
+                    {/* Card 3: Bulk Packaging */}
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={styles.packToggleRow}
+                            onPress={() => setHasPackSize((v) => !v)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.packToggleLeft}>
+                                <Ionicons name="cube-outline" size={16} color={colors.primary} />
+                                <View style={{ flex: 1, marginLeft: 8 }}>
+                                    <Text style={styles.packToggleTitle}>Sells in packs / boxes / bags?</Text>
+                                    <Text style={styles.packToggleSubtitle}>
+                                        Enable if you buy in bulk (e.g. 1 Box = 12 Pcs)
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={[styles.toggleTrack, hasPackSize && styles.toggleTrackActive]}>
+                                <View style={[styles.toggleThumb, hasPackSize && styles.toggleThumbActive]} />
+                            </View>
+                        </TouchableOpacity>
+
+                        {hasPackSize && (
+                            <View style={styles.twoColumnRow}>
+                                <View style={styles.columnFlex}>
+                                    <Text style={styles.label}>Pack Unit Name</Text>
+                                    <View style={styles.inputWithIcon}>
+                                        <Ionicons name="pricetag-outline" size={16} color="#64748b" />
+                                        <TextInput
+                                            style={styles.flexInput}
+                                            placeholder="Box, Bag, Dozen"
+                                            value={purchaseUom}
+                                            onChangeText={setPurchaseUom}
+                                            placeholderTextColor="#9ca3af"
+                                        />
                                     </View>
-                                );
-                            })}
-                        </View>
-                    )}
+                                </View>
 
-                    <View style={{ height: 24 }} />
+                                <View style={styles.columnFlex}>
+                                    <Text style={styles.label}>Units Per Pack</Text>
+                                    <View style={styles.inputWithIcon}>
+                                        <Ionicons name="layers-outline" size={16} color="#64748b" />
+                                        <TextInput
+                                            style={styles.flexInput}
+                                            placeholder="12"
+                                            value={unitsPerPack}
+                                            onChangeText={setUnitsPerPack}
+                                            keyboardType="numeric"
+                                            placeholderTextColor="#9ca3af"
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Card 4: Purchase / Restock History */}
+                    <View style={styles.card}>
+                        <Text style={styles.cardHeaderTitle}>PURCHASE / RESTOCK HISTORY</Text>
+
+                        {purchaseLogs.length === 0 ? (
+                            <View style={styles.emptyHistory}>
+                                <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
+                                <Text style={styles.emptyHistoryText}>No restocking history recorded yet</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.historyList}>
+                                {purchaseLogs.map((log, index) => {
+                                    const formatDateTime = (dateStr: string) => {
+                                        try {
+                                            const d = toUtcDate(dateStr);
+                                            const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                                            const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                                            return `${date} · ${time}`;
+                                        } catch (_) {
+                                            return dateStr;
+                                        }
+                                    };
+                                    return (
+                                        <View
+                                            key={log.id}
+                                            style={[
+                                                styles.historyRow,
+                                                index === purchaseLogs.length - 1 && { borderBottomWidth: 0 },
+                                            ]}
+                                        >
+                                            <View style={styles.historyIcon}>
+                                                <Ionicons name="add" size={16} color={colors.primary} />
+                                            </View>
+                                            <View style={styles.historyInfo}>
+                                                <Text style={styles.historyDate}>{formatDateTime(log.created_at)}</Text>
+                                                <Text style={styles.historyMeta}>
+                                                    Cost: ₹{log.purchase_price.toFixed(2)} · Selling: ₹{log.selling_price.toFixed(2)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.historyRight}>
+                                                <Text style={styles.historyQty}>+{log.qty} {selectedUom}</Text>
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Save Button */}
+                    <View style={styles.footer}>
+                        <TouchableOpacity
+                            style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
+                            onPress={handleSave}
+                            disabled={!name.trim() || saving}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                            <Text style={styles.saveButtonText}>{saving ? "Updating..." : "Update Product"}</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={{ height: 16 }} />
                 </ScrollView>
-
-                <View style={styles.footer}>
-                    <TouchableOpacity
-                        style={[styles.saveButton, (!name.trim() || saving) && styles.saveButtonDisabled]}
-                        onPress={handleSave}
-                        disabled={!name.trim() || saving}
-                    >
-                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                        <Text style={styles.saveButtonText}>{saving ? "Updating..." : "Update Product"}</Text>
-                    </TouchableOpacity>
-                </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -404,127 +408,132 @@ export default function EditProductScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
-    scroll: { padding: spacing.md },
+    scroll: { paddingHorizontal: spacing.xs, paddingTop: 2, paddingBottom: 12 },
     errorContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
     errorText: { fontSize: 16, color: colors.textSecondary },
-    sectionTitle: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: "#6b7280",
-        letterSpacing: 0.5,
-        marginBottom: 16,
-        marginTop: 8,
-    },
-    section: { marginBottom: 20 },
-    label: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 8 },
-    noItemsText: { fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
-    input: {
-        backgroundColor: colors.surface,
+    card: {
+        backgroundColor: "#ffffff",
+        borderRadius: 10,
+        padding: 10,
+        marginBottom: 8,
         borderWidth: 1,
-        borderColor: "#e5e7eb",
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        height: 48,
-        fontSize: 16,
+        borderColor: "#cbd5e1",
+    },
+    cardHeaderTitle: {
+        fontSize: 10,
+        fontWeight: "800",
+        color: "#64748b",
+        letterSpacing: 0.6,
+        marginBottom: 8,
+        textTransform: "uppercase",
+    },
+    section: { marginBottom: 8 },
+    twoColumnRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+    columnFlex: { flex: 1 },
+    label: { fontSize: 11, fontWeight: "700", color: "#334155", marginBottom: 3 },
+    noItemsText: { fontSize: 11, color: colors.textSecondary, fontStyle: "italic" },
+    input: {
+        backgroundColor: "#f8fafc",
+        borderWidth: 1,
+        borderColor: "#cbd5e1",
+        borderRadius: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 0,
+        height: 40,
+        fontSize: 14,
         color: colors.text,
     },
     inputWithIcon: {
-        backgroundColor: colors.surface,
+        backgroundColor: "#f8fafc",
         borderWidth: 1,
-        borderColor: "#e5e7eb",
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        height: 48,
+        borderColor: "#cbd5e1",
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 0,
+        height: 40,
         flexDirection: "row",
         alignItems: "center",
     },
     inputActive: { borderColor: colors.primary, backgroundColor: "#eff6ff" },
-    flexInput: { flex: 1, marginLeft: 12, fontSize: 16, color: colors.text },
-    helperText: { fontSize: 12, color: "#6b7280", marginTop: 4 },
-    chipScroll: { gap: 8 },
-    chip: { backgroundColor: "#e5e7eb", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+    flexInput: { flex: 1, marginLeft: 6, fontSize: 14, color: colors.text, paddingVertical: 0 },
+    chipScroll: { gap: 4 },
+    chip: { backgroundColor: "#e2e8f0", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
     activeChip: { backgroundColor: colors.primary },
-    chipText: { fontSize: 14, fontWeight: "500", color: colors.text },
+    chipText: { fontSize: 11, fontWeight: "600", color: "#334155" },
     activeChipText: { color: "#fff" },
-    separator: { height: 1, backgroundColor: "#f3f4f6", marginVertical: 12 },
-    footer: {
-        padding: spacing.md,
-        backgroundColor: colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: "#f3f4f6",
-    },
-    saveButton: {
-        backgroundColor: colors.primary,
-        height: 56,
-        borderRadius: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-    },
-    saveButtonDisabled: { backgroundColor: colors.tabInactive },
-    saveButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
     packToggleRow: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        backgroundColor: "#f8fafc",
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: "#e5e7eb",
+        marginBottom: 8,
     },
     packToggleLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
-    packToggleTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
-    packToggleSubtitle: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+    packToggleTitle: { fontSize: 12, fontWeight: "700", color: colors.text },
+    packToggleSubtitle: { fontSize: 10, color: "#64748b", marginTop: 1 },
     toggleTrack: {
-        width: 44,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: "#d1d5db",
+        width: 36,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: "#cbd5e1",
         padding: 2,
         justifyContent: "center",
     },
     toggleTrackActive: { backgroundColor: colors.primary },
     toggleThumb: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
         backgroundColor: "#fff",
         alignSelf: "flex-start",
     },
     toggleThumbActive: { alignSelf: "flex-end" },
-    emptyHistory: { alignItems: "center", paddingVertical: spacing.lg, gap: spacing.xs },
-    emptyHistoryText: { fontSize: 13, color: colors.textSecondary, textAlign: "center" },
+    emptyHistory: { alignItems: "center", paddingVertical: spacing.md, gap: 4 },
+    emptyHistoryText: { fontSize: 12, color: colors.textSecondary, textAlign: "center" },
     historyList: {
-        backgroundColor: colors.surface,
-        borderRadius: 12,
+        backgroundColor: "#f8fafc",
+        borderRadius: 8,
         borderWidth: 1,
-        borderColor: "#e5e7eb",
+        borderColor: "#e2e8f0",
         overflow: "hidden",
-        marginBottom: spacing.md,
     },
     historyRow: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: spacing.md,
-        paddingVertical: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: "#e5e7eb",
+        borderBottomColor: "#e2e8f0",
     },
     historyIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
         backgroundColor: "#e0f2fe",
         alignItems: "center",
         justifyContent: "center",
-        marginRight: 12,
+        marginRight: 8,
     },
     historyInfo: { flex: 1 },
-    historyDate: { fontSize: 13, fontWeight: "600", color: colors.text },
-    historyMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    historyDate: { fontSize: 12, fontWeight: "600", color: colors.text },
+    historyMeta: { fontSize: 10, color: colors.textSecondary, marginTop: 1 },
     historyRight: { flexDirection: "row", alignItems: "center" },
-    historyQty: { fontSize: 14, fontWeight: "700", color: colors.primary },
+    historyQty: { fontSize: 13, fontWeight: "700", color: colors.primary },
+    footer: {
+        marginTop: 4,
+        marginBottom: 8,
+    },
+    saveButton: {
+        backgroundColor: colors.primary,
+        height: 42,
+        borderRadius: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+    },
+    saveButtonDisabled: {
+        backgroundColor: "#e2e8f0",
+        borderColor: "transparent",
+    },
+    saveButtonText: { color: "#ffffff", fontSize: 13, fontWeight: "700" },
 });

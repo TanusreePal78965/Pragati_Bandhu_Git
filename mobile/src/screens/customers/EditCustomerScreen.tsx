@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
+import { haptics } from "../../utils/haptics";
 import {
     getCustomerById,
     updateCustomer,
@@ -30,6 +31,8 @@ import {
 const formatCurrency = (amount: number) =>
     `₹ ${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
+import { getShopInfo, StoredShopInfo } from "../../utils/storage";
+import { useAlert } from "../../context/AlertContext";
 import { toUtcDate } from "../../utils/dateUtils";
 
 const formatDateTime = (dateStr: string) => {
@@ -43,6 +46,7 @@ const formatDateTime = (dateStr: string) => {
 export default function EditCustomerScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { showAlert } = useAlert();
     const customerId: string = route.params?.customerId;
 
     // ─── Customer state ───────────────────────────────────────────────────────
@@ -109,7 +113,7 @@ export default function EditCustomerScreen() {
     // ─── Save contact info ────────────────────────────────────────────────────
     const handleSave = () => {
         if (!name.trim()) {
-            Alert.alert("Validation", "Customer name is required.");
+            showAlert("Validation", "Customer name is required.", undefined, "warning");
             return;
         }
         setSaving(true);
@@ -119,11 +123,16 @@ export default function EditCustomerScreen() {
                 phone: phone.trim() || undefined,
                 address: address.trim() || undefined,
             });
-            Alert.alert("Saved", "Customer details updated.", [
-                { text: "OK", onPress: () => navigation.goBack() },
-            ]);
+            showAlert({
+                title: "Saved",
+                message: "Customer details updated.",
+                type: "success",
+                buttons: [
+                    { text: "OK", onPress: () => navigation.goBack() },
+                ],
+            });
         } catch {
-            Alert.alert("Error", "Could not save. Please try again.");
+            showAlert("Error", "Could not save. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }
@@ -135,17 +144,20 @@ export default function EditCustomerScreen() {
     const handleRecordPayment = () => {
         const amount = parseFloat(paymentInput);
         if (!paymentInput || isNaN(amount) || amount <= 0) {
-            Alert.alert("Invalid Amount", "Please enter a valid payment amount.");
+            showAlert("Invalid Amount", "Please enter a valid payment amount.", undefined, "warning");
             return;
         }
         if (amount > currentBalance) {
-            Alert.alert(
+            showAlert(
                 "Amount Exceeds Balance",
-                `${customer?.name ?? "This customer"} only owes ${formatCurrency(currentBalance)}. Enter a lower amount.`
+                `${customer?.name ?? "This customer"} only owes ${formatCurrency(currentBalance)}. Enter a lower amount.`,
+                undefined,
+                "warning"
             );
             return;
         }
         setRecording(true);
+        haptics.success();
         try {
             recordUdharPayment(customerId, amount);
             // Refresh balance in state immediately
@@ -153,12 +165,14 @@ export default function EditCustomerScreen() {
             if (updated) setCustomer(updated);
             setShowPaymentModal(false);
             setPaymentInput("");
-            Alert.alert(
+            showAlert(
                 "Payment Recorded ✓",
-                `${formatCurrency(amount)} marked as received from ${customer?.name ?? "customer"}.\n\nRemaining balance: ${formatCurrency(Math.max(0, currentBalance - amount))}`
+                `${formatCurrency(amount)} marked as received from ${customer?.name ?? "customer"}.\n\nRemaining balance: ${formatCurrency(Math.max(0, currentBalance - amount))}`,
+                undefined,
+                "success"
             );
         } catch {
-            Alert.alert("Error", "Could not record payment. Please try again.");
+            showAlert("Error", "Could not record payment. Please try again.", undefined, "error");
         } finally {
             setRecording(false);
         }
@@ -364,14 +378,20 @@ export default function EditCustomerScreen() {
                                     <TouchableOpacity
                                         key={a}
                                         style={styles.quickChip}
-                                        onPress={() => setPaymentInput(String(a))}
+                                        onPress={() => {
+                                            haptics.light();
+                                            setPaymentInput(String(a));
+                                        }}
                                     >
                                         <Text style={styles.quickChipText}>₹{a}</Text>
                                     </TouchableOpacity>
                                 ))}
                                 <TouchableOpacity
                                     style={[styles.quickChip, styles.quickChipFull]}
-                                    onPress={() => setPaymentInput(String(currentBalance))}
+                                    onPress={() => {
+                                        haptics.light();
+                                        setPaymentInput(String(currentBalance));
+                                    }}
                                 >
                                     <Text style={[styles.quickChipText, { color: colors.success }]}>
                                         Full ₹{currentBalance % 1 === 0 ? currentBalance : currentBalance.toFixed(2)}

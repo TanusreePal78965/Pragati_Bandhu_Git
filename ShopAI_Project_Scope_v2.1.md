@@ -1467,7 +1467,27 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 ### v2.1 — April 2026
 - Initial scope document with full feature spec, DB schema, pricing model, and build timeline
 
+### v5.3 — August 22, 2026
+
+- **Single Product Quick Restock Action**: Added a dedicated restock button (`restock-icon.png`) directly on each product row in `ProductCard.tsx` and `ProductsScreen.tsx`, allowing shopkeepers to restock individual products directly without triggering checkbox selection or bulk bar mode.
+- **Compact & Keyboard-Aware Update Stock Modal**: Upgraded `UpdateStockModal.tsx` with `KeyboardAvoidingView` and `ScrollView` to prevent input masking when the soft keyboard opens. Compacted padding, input heights, and header elements.
+- **Product Name Display in Stock Modal Header**: Updated `UpdateStockModal.tsx` selection badge to display the specific product name and current stock quantity (`📦 [Product Name] · Current: [Qty] [Unit]`).
+- **Edit Product Screen Visual Alignment**: Redesigned `EditProductScreen.tsx` with card-based section layout (`BASIC INFORMATION`, `PRICING & INVENTORY`, `BULK / PACK SIZE`, `PURCHASE HISTORY`) matching `AddProductScreen.tsx`.
+
 ---
+
+### v5.2 — August 22, 2026
+
+- **Custom Alert Modal Component (`CustomAlertModal.tsx`, `AlertContext.tsx`)**: Replaced default system OS native `Alert.alert` dialogs across the mobile application with a modern, high-aesthetic `CustomAlertModal` component. Features a glassmorphic overlay backdrop (`rgba(15, 23, 42, 0.65)`), color-coded vibrant icon badges (Success green, Error red, Warning amber, Info blue, Confirm indigo), clear typography, styled buttons (Primary, Destructive, Cancel), and tactile haptic feedback.
+- **Global Alert Context (`AlertProvider`, `useAlert`)**: Added React Context wrapper in `App.tsx` exposing `showAlert` for seamless, unified modal alert invocations across billing, inventory, customer management, reports, settings, and auth screens.
+
+---
+
+### v5.1 — August 22, 2026
+
+- **Floating Pill Bottom Navigation & Spring Animation**: Built custom bottom tab bar (`BottomTabNavigator.tsx`) featuring a floating dock container (`#f8fafc`), an animated sliding white card indicator (`translateX` spring animation), active icon spring scaling, and auto-scaling tab labels (`adjustsFontSizeToFit`) preventing text truncation ("Customers...").
+- **Cross-Platform Haptics Engine**: Created centralized helper `src/utils/haptics.ts` combining `expo-haptics` and native hardware vibration (`Vibration.vibrate(ms)`). Integrated tactile haptic feedback across bottom tab switching, FAB buttons, `+`/`-` quantity steppers, payment mode toggles, discount buttons, checkout completion, and payment recording.
+- **Root Workspace Cleanup**: Removed 4 unused legacy/scratch files (`task_list.md`, `test_edge.mjs`, `test_m3.py`, `TEST_PROGRESS.md`).
 
 ### v5.0 — August 22, 2026
 
@@ -1485,4 +1505,5 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 ---
 
 *Document prepared: April 2026 | Last updated: August 2026*
-*Version: 5.0 — Reflects Billing Enhancement, Multi-Discount Engine, Product Catalog Selection Screen, Repeat Order System, and Screen Header Standardisation*
+*Version: 5.3 — Reflects Single Product Quick Restock Action, Keyboard-Aware Compact Stock Modal, Product Name Display in Stock Modal Header, Edit Product Screen Visual Alignment, Floating Pill Navigation, Cross-Platform Haptics Engine, and Custom Alert Modal Component*
+

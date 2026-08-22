@@ -12,6 +12,8 @@ import { ForceUpdateModal } from "./src/components/ForceUpdateModal";
 import { MaintenanceModal } from "./src/components/MaintenanceModal";
 import { SoftUpdateModal } from "./src/components/SoftUpdateModal";
 
+import { AlertProvider } from "./src/context/AlertContext";
+
 WebBrowser.maybeCompleteAuthSession();
 
 /**
@@ -85,7 +87,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <VersionProvider>
-          <AppContent />
+          <AlertProvider>
+            <AppContent />
+          </AlertProvider>
         </VersionProvider>
       </AuthProvider>
     </SafeAreaProvider>

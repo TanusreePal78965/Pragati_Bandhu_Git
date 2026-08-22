@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
+import { haptics } from "../../utils/haptics";
 import {
     getAllProducts,
     getAllCustomers,
@@ -38,6 +39,7 @@ import {
     Category,
 } from "../../db/db";
 import DraftSwitcherModal from "../../components/billing/DraftSwitcherModal";
+import { useAlert } from "../../context/AlertContext";
 
 interface BillItem {
     product_id: string;
@@ -54,6 +56,7 @@ interface BillItem {
 export default function NewBillScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { showAlert } = useAlert();
 
     const [draftId, setDraftId] = useState<string | null>(null);
     const [paymentMode, setPaymentMode] = useState<"cash" | "udhar" | "upi">("cash");
@@ -237,13 +240,13 @@ export default function NewBillScreen() {
     const addProduct = (product: Product) => {
         const avail = availQty(product.id, product.stock_quantity);
         if (avail <= 0) {
-            Alert.alert("Out of Stock", `"${product.name}" is out of stock or fully reserved in another bill.`);
+            showAlert("Out of Stock", `"${product.name}" is out of stock or fully reserved in another bill.`, undefined, "warning");
             return;
         }
         const existing = billItems.find((i) => i.product_id === product.id);
         if (existing) {
             if (existing.qty >= avail) {
-                Alert.alert("Stock Limit", `Only ${avail} unit(s) of "${product.name}" available.`);
+                showAlert("Stock Limit", `Only ${avail} unit(s) of "${product.name}" available.`, undefined, "warning");
                 return;
             }
             setBillItems((prev) =>
@@ -271,6 +274,7 @@ export default function NewBillScreen() {
     };
 
     const updateQty = (productId: string, delta: number) => {
+        haptics.light();
         if (editingQty[productId] !== undefined) {
             setEditingQty((prev) => {
                 const copy = { ...prev };
@@ -292,7 +296,7 @@ export default function NewBillScreen() {
                     ? Math.floor(avail / item.units_per_pack)
                     : avail;
                 const unit = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : product.uom;
-                Alert.alert("Stock Limit", `Only ${availPacks} ${unit}(s) of "${product.name}" available.`);
+                showAlert("Stock Limit", `Only ${availPacks} ${unit}(s) of "${product.name}" available.`, undefined, "warning");
                 return;
             }
         }
@@ -330,7 +334,7 @@ export default function NewBillScreen() {
                 ? Math.floor(avail / item.units_per_pack)
                 : avail;
             const unit = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : product.uom;
-            Alert.alert("Stock Limit", `Only ${availDisplay} ${unit}(s) of "${product.name}" available.`);
+            showAlert("Stock Limit", `Only ${availDisplay} ${unit}(s) of "${product.name}" available.`, undefined, "warning");
             
             const snappedText = String(availDisplay);
             setEditingQty((prev) => ({ ...prev, [productId]: snappedText }));
@@ -448,9 +452,11 @@ export default function NewBillScreen() {
         const unitStr = item.is_pack_mode && item.purchase_uom ? item.purchase_uom : item.uom;
 
         if (!currentText || isNaN(parsed) || parsed <= effectivePurchasePrice) {
-            Alert.alert(
+            showAlert(
                 "Invalid Price",
-                `Selling price cannot be equal to or less than the purchase price (₹${effectivePurchasePrice.toFixed(2)} per ${unitStr}).`
+                `Selling price cannot be equal to or less than the purchase price (₹${effectivePurchasePrice.toFixed(2)} per ${unitStr}).`,
+                undefined,
+                "warning"
             );
         }
 
@@ -569,10 +575,11 @@ export default function NewBillScreen() {
     };
 
     const handleDiscard = () => {
-        Alert.alert(
-            "Discard Bill",
-            "Discard this bill? All items will be lost.",
-            [
+        showAlert({
+            title: "Discard Bill",
+            message: "Discard this bill? All items will be lost.",
+            type: "error",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Discard",
@@ -582,8 +589,8 @@ export default function NewBillScreen() {
                         navigation.goBack();
                     },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     const handleHoldAndNew = () => {
@@ -619,16 +626,17 @@ export default function NewBillScreen() {
 
     const handleFinalize = () => {
         if (billItems.length === 0) {
-            Alert.alert("Empty Bill", "Please add at least one product to the bill.");
+            showAlert("Empty Bill", "Please add at least one product to the bill.", undefined, "warning");
             return;
         }
         if (paymentMode === "udhar" && !selectedCustomer) {
-            Alert.alert("Customer Required", "Please select a customer for Udhar payment.");
+            showAlert("Customer Required", "Please select a customer for Udhar payment.", undefined, "warning");
             return;
         }
         if (!draftId) return;
 
         setSaving(true);
+        haptics.success();
         try {
             const finalDiscountType = discountType === "custom"
                 ? (customDiscountMode === "flat" ? "custom_flat" : "custom_percent")
@@ -653,11 +661,26 @@ export default function NewBillScreen() {
                 discountAmount,
                 finalDiscountType
             );
-            Alert.alert("Bill Saved!", `₹${grandTotal.toFixed(2)} bill saved successfully.`, [
-                { text: "OK", onPress: () => navigation.goBack() },
-            ]);
+            showAlert({
+                title: "Bill Saved!",
+                message: `₹${grandTotal.toFixed(2)} bill saved successfully.`,
+                type: "success",
+                buttons: [
+                    {
+                        text: "OK",
+                        style: "default",
+                        onPress: () => {
+                            if (navigation.canGoBack()) {
+                                navigation.goBack();
+                            } else {
+                                navigation.replace("MainTabs");
+                            }
+                        },
+                    },
+                ],
+            });
         } catch (e) {
-            Alert.alert("Error", "Could not save bill. Please try again.");
+            showAlert("Error", "Could not save bill. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }
@@ -827,7 +850,10 @@ export default function NewBillScreen() {
                 <View style={styles.paymentModeContainer}>
                     <TouchableOpacity
                         style={[styles.paymentBtn, paymentMode === "cash" && styles.paymentBtnActive]}
-                        onPress={() => setPaymentMode("cash")}
+                        onPress={() => {
+                            haptics.medium();
+                            setPaymentMode("cash");
+                        }}
                     >
                         <Ionicons name="cash-outline" size={18} color={paymentMode === "cash" ? colors.primary : "#94a3b8"} />
                         <Text style={[styles.paymentBtnText, paymentMode === "cash" && styles.paymentBtnTextActive]}>
@@ -836,7 +862,10 @@ export default function NewBillScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.paymentBtn, paymentMode === "upi" && styles.paymentBtnUpiActive]}
-                        onPress={() => setPaymentMode("upi")}
+                        onPress={() => {
+                            haptics.medium();
+                            setPaymentMode("upi");
+                        }}
                     >
                         <Ionicons name="phone-portrait-outline" size={18} color={paymentMode === "upi" ? "#7C3AED" : "#94a3b8"} />
                         <Text style={[styles.paymentBtnText, paymentMode === "upi" && styles.paymentBtnUpiText]}>
@@ -845,7 +874,10 @@ export default function NewBillScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.paymentBtn, paymentMode === "udhar" && styles.paymentBtnActive]}
-                        onPress={() => setPaymentMode("udhar")}
+                        onPress={() => {
+                            haptics.medium();
+                            setPaymentMode("udhar");
+                        }}
                     >
                         <Ionicons name="wallet-outline" size={18} color={paymentMode === "udhar" ? colors.primary : "#94a3b8"} />
                         <Text style={[styles.paymentBtnText, paymentMode === "udhar" && styles.paymentBtnTextActive]}>
@@ -1129,7 +1161,7 @@ export default function NewBillScreen() {
                     style={styles.estimateBtn}
                     onPress={() => {
                         if (billItems.length === 0) {
-                            Alert.alert("Empty Bill", "Add at least one product to preview an estimate.");
+                            showAlert("Empty Bill", "Add at least one product to preview an estimate.", undefined, "warning");
                             return;
                         }
                         setShowEstimate(true);
@@ -1506,7 +1538,7 @@ export default function NewBillScreen() {
                                                     style={[styles.modalStepperBtn, currentQty + step > avail && styles.modalStepperBtnDisabled]}
                                                     onPress={() => {
                                                         if (currentQty + step > avail) {
-                                                            Alert.alert("Stock Limit", `Only ${avail} ${item.uom} available.`);
+                                                            showAlert("Stock Limit", `Only ${avail} ${item.uom} available.`, undefined, "warning");
                                                             return;
                                                         }
                                                         setSelectedModalItems((prev) => ({
@@ -1523,7 +1555,7 @@ export default function NewBillScreen() {
                                                 style={[styles.modalAddBtn, avail <= 0 && styles.modalAddBtnDisabled]}
                                                 onPress={() => {
                                                     if (avail <= 0) {
-                                                        Alert.alert("Out of Stock", `"${item.name}" is out of stock.`);
+                                                        showAlert("Out of Stock", `"${item.name}" is out of stock.`, undefined, "warning");
                                                         return;
                                                     }
                                                     setSelectedModalItems((prev) => ({

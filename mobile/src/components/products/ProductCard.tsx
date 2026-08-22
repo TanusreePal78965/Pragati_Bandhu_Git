@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
@@ -15,7 +15,7 @@ interface ProductCardProps {
     selected?: boolean;
     onPress: () => void;
     onEdit?: () => void;
-    onDelete?: () => void;
+    onUpdateStock?: () => void;
 }
 
 export default function ProductCard({
@@ -28,14 +28,14 @@ export default function ProductCard({
     selected,
     onPress,
     onEdit,
-    onDelete,
+    onUpdateStock,
 }: ProductCardProps) {
     const isOut = stock === 0;
     const isLowStock = stock > 0 && stock <= threshold;
 
     return (
-        <TouchableOpacity style={styles.container} onPress={onPress}>
-            <View style={styles.content}>
+        <View style={styles.container}>
+            <TouchableOpacity style={styles.contentMain} onPress={onPress} activeOpacity={0.7}>
                 {/* Checkbox */}
                 <View style={styles.checkboxContainer}>
                     <Ionicons
@@ -67,18 +67,24 @@ export default function ProductCard({
                             : `${stock} ${unit}`}
                     </Text>
                 </View>
+            </TouchableOpacity>
 
-                {/* Edit & Delete Actions */}
-                <View style={styles.actions}>
-                    <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-                        <Ionicons name="pencil" size={16} color={colors.secondary} />
+            {/* Edit & Stock Actions */}
+            <View style={styles.actions}>
+                {onUpdateStock && (
+                    <TouchableOpacity onPress={onUpdateStock} style={styles.actionButton} activeOpacity={0.7}>
+                        <Image
+                            source={require("../../../assets/restock-icon.png")}
+                            style={styles.restockIcon}
+                            resizeMode="contain"
+                        />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-                        <Ionicons name="trash-outline" size={16} color={colors.secondary} />
-                    </TouchableOpacity>
-                </View>
+                )}
+                <TouchableOpacity onPress={onEdit} style={styles.actionButton} activeOpacity={0.7}>
+                    <Ionicons name="pencil" size={16} color={colors.secondary} />
+                </TouchableOpacity>
             </View>
-        </TouchableOpacity>
+        </View>
     );
 }
 
@@ -86,13 +92,16 @@ const styles = StyleSheet.create({
     container: {
         backgroundColor: colors.surface,
         paddingVertical: 6,
+        paddingHorizontal: spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-    },
-    content: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: spacing.md,
+    },
+    contentMain: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
     },
     checkboxContainer: {
         marginRight: spacing.sm,
@@ -133,9 +142,14 @@ const styles = StyleSheet.create({
     },
     actions: {
         flexDirection: "row",
+        alignItems: "center",
         gap: 8,
     },
     actionButton: {
         padding: 4,
+    },
+    restockIcon: {
+        width: 26,
+        height: 26,
     },
 });

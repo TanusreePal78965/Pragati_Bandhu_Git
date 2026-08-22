@@ -18,6 +18,7 @@ import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import FAB from "../../components/common/FAB";
 import { getAllBrands, deleteBrand, Brand } from "../../db/db";
+import { useAlert } from "../../context/AlertContext";
 
 const BrandItem = ({
     item,
@@ -47,7 +48,8 @@ const BrandItem = ({
 );
 
 export default function ManageBrandsScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
+    const { showAlert } = useAlert();
     const [brands, setBrands] = useState<Brand[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -59,17 +61,22 @@ export default function ManageBrandsScreen() {
     useFocusEffect(loadBrands);
 
     const handleDelete = (id: string) => {
-        Alert.alert("Delete Brand", "Are you sure? Products linked to this brand will be unbranded.", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete",
-                style: "destructive",
-                onPress: () => {
-                    deleteBrand(id);
-                    setBrands((prev) => prev.filter((b) => b.id !== id));
+        showAlert({
+            title: "Delete Brand",
+            message: "Are you sure? Products linked to this brand will be unbranded.",
+            type: "error",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                        deleteBrand(id);
+                        setBrands((prev) => prev.filter((b) => b.id !== id));
+                    },
                 },
-            },
-        ]);
+            ],
+        });
     };
 
     const filtered = searchQuery.trim()

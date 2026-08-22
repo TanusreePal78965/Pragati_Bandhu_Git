@@ -32,6 +32,7 @@ import { exportAsSql, queueAllLocalData, updateShop, getShop } from "../../db/db
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
 import { restoreFromCloud, deleteFromCloud } from "../../services/restoreService";
 import { startSyncService } from "../../services/syncService";
+import { useAlert } from "../../context/AlertContext";
 
 const SectionHeader = ({ title }: { title: string }) => (
     <View style={styles.sectionHeader}>
@@ -94,6 +95,7 @@ const SettingsInfoRow = ({
 );
 
 export default function SettingsScreen() {
+    const { showAlert } = useAlert();
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [shopInfo, setShopInfoState] = useState<StoredShopInfo | null>(null);
     const [syncPendingCount, setSyncPendingCount] = useState(0);
@@ -155,13 +157,13 @@ export default function SettingsScreen() {
             setIsSyncing(false);
             const synced = beforeCount - afterCount;
             if (synced > 0 && afterCount === 0) {
-                Alert.alert("Synced", `All ${synced} item${synced > 1 ? "s" : ""} uploaded successfully.`);
+                showAlert("Synced", `All ${synced} item${synced > 1 ? "s" : ""} uploaded successfully.`, undefined, "success");
             } else if (synced > 0 && afterCount > 0) {
-                Alert.alert("Partially Synced", `${synced} item${synced > 1 ? "s" : ""} uploaded. ${afterCount} still pending — they will retry automatically.`);
+                showAlert("Partially Synced", `${synced} item${synced > 1 ? "s" : ""} uploaded. ${afterCount} still pending — they will retry automatically.`, undefined, "warning");
             } else if (beforeCount === 0) {
-                Alert.alert("All Caught Up", "Nothing to sync.");
+                showAlert("All Caught Up", "Nothing to sync.", undefined, "info");
             } else {
-                Alert.alert("Sync Failed", `${afterCount} item${afterCount > 1 ? "s" : ""} could not be uploaded. Check your connection and try again.`);
+                showAlert("Sync Failed", `${afterCount} item${afterCount > 1 ? "s" : ""} could not be uploaded. Check your connection and try again.`, undefined, "error");
             }
         }
     };
@@ -169,7 +171,7 @@ export default function SettingsScreen() {
     const handleExport = () => {
         const rawPhone = shopInfo?.phone ?? phone ?? '';
         if (!rawPhone) {
-            Alert.alert("Export Failed", "Could not determine shop phone number.");
+            showAlert("Export Failed", "Could not determine shop phone number.", undefined, "error");
             return;
         }
         const shopId = rawPhone.slice(-10);
@@ -182,96 +184,91 @@ export default function SettingsScreen() {
         setVersionClicks(nextClicks);
         if (nextClicks >= 5 && !showExport) {
             setShowExport(true);
-            Alert.alert("Debug Mode", "Export Local Data button is now visible.");
+            showAlert("Debug Mode", "Export Local Data button is now visible.", undefined, "info");
         }
     };
 
     // ── Enable Cloud Backup ────────────────────────────────────────────────────
     const handleEnableCloudBackup = () => {
-        Alert.alert(
-            "Enable Cloud Backup?",
-            "All your existing data — products, customers, bills — will be uploaded to the cloud. You can restore it on any device after reinstalling.\n\nThis cannot be undone (you can disable sync later but cloud data remains).",
-            [
+        showAlert({
+            title: "Enable Cloud Backup?",
+            message: "All your existing data — products, customers, bills — will be uploaded to the cloud. You can restore it on any device after reinstalling.\n\nThis cannot be undone (you can disable sync later but cloud data remains).",
+            type: "confirm",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Enable",
+                    style: "default",
                     onPress: async () => {
                         setCloudUploadText('Enabling…');
                         setIsEnablingCloud(true);
                         try {
-                            // 1. Update local shop record
                             const localShop = getShop();
                             if (localShop) {
                                 updateShop({ ...localShop, aiConsent: true });
                             }
 
-                            // 2. Update AsyncStorage consent flags
                             const currentInfo = await getShopInfo();
                             if (currentInfo) {
                                 await persistShopInfo({ ...currentInfo, aiConsent: true });
                             }
                             await setHasConsent(true);
 
-                            // 3. Queue ALL existing local data for upload
                             queueAllLocalData();
 
-                            // 4. Show item count so the user knows something is happening (C10)
-                            const totalItems = getPendingSyncCount();
-                            setCloudUploadText(`Uploading ${totalItems} item${totalItems !== 1 ? 's' : ''}…`);
-
-                            // 5. Start the sync service — it flushes the queue internally
-                            //    when consent is detected (no separate flush needed). (C12)
-                            await startSyncService(
-                                () => setShopActive(false),
-                                () => { }
-                            );
-
-                            // 5. Refresh UI
+                            updateShop({ aiConsent: true });
+                            setCloudUploadText("Uploading data…");
+                            queueAllLocalData();
+                            await startSyncService(() => setShopActive(false), () => {});
+                            await flushSyncQueue();
                             const refreshed = await getShopInfo();
                             setShopInfoState(refreshed);
                             setSyncPendingCount(getPendingSyncCount());
-
-                            Alert.alert(
-                                "Cloud Backup Enabled",
-                                "Your data has been uploaded. Future changes will sync automatically."
-                            );
+                            showAlert({
+                                title: "Cloud Backup Enabled",
+                                message: "Your data has been uploaded. Future changes will sync automatically.",
+                                type: "success",
+                            });
                         } catch (e: any) {
-                            Alert.alert("Failed", e?.message ?? "Could not enable cloud backup. Try again.");
+                            showAlert("Failed", e?.message ?? "Could not enable cloud backup. Try again.", undefined, "error");
                         } finally {
                             setIsEnablingCloud(false);
                         }
                     },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     // ── Cloud Restore ──────────────────────────────────────────────────────────
     const handleRestoreFromCloud = () => {
-        Alert.alert(
-            "Restore from Cloud",
-            "This will download all your cloud data onto this device. Existing local data with the same ID will be updated.",
-            [
+        showAlert({
+            title: "Restore from Cloud",
+            message: "This will download all your cloud data onto this device. Existing local data with the same ID will be updated.",
+            type: "confirm",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Restore",
+                    style: "default",
                     onPress: async () => {
                         setIsRestoring(true);
                         const result = await restoreFromCloud();
                         setIsRestoring(false);
                         if (result.success && result.summary) {
                             const s = result.summary;
-                            Alert.alert(
-                                "Restore Complete",
-                                `Restored:\n• ${s.products} products\n• ${s.customers} customers\n• ${s.categories} categories\n• ${s.brands} brands\n• ${s.bills} bills`
-                            );
+                            showAlert({
+                                title: "Restore Complete",
+                                message: `Restored:\n• ${s.products} products\n• ${s.customers} customers\n• ${s.categories} categories\n• ${s.brands} brands\n• ${s.bills} bills`,
+                                type: "success",
+                            });
                         } else {
-                            Alert.alert("Restore Failed", result.error ?? "Could not connect to cloud. Check your internet connection and try again.");
+                            showAlert("Restore Failed", result.error ?? "Could not connect to cloud. Check your internet connection and try again.", undefined, "error");
                         }
                     },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     // ── Export Backup ──────────────────────────────────────────────────────────
@@ -464,18 +461,21 @@ export default function SettingsScreen() {
     };
 
     const handleLogout = () => {
-        Alert.alert(
-            "Logout",
-            "Are you sure you want to logout?",
-            [
+        showAlert({
+            title: "Logout",
+            message: "Are you sure you want to logout?",
+            type: "confirm",
+            buttons: [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Logout",
                     style: "destructive",
-                    onPress: async () => { await logout(); },
+                    onPress: async () => {
+                        await logout();
+                    },
                 },
-            ]
-        );
+            ],
+        });
     };
 
     return (
@@ -514,9 +514,9 @@ export default function SettingsScreen() {
                 </View>
 
                 {/* App Preferences */}
-                <SectionHeader title="APP PREFERENCES" />
+                {/*<SectionHeader title="APP PREFERENCES" />
                 <SettingsItem icon="language" title="Language" value="English" />
-                {/* <View style={styles.settingsItem}>
+                 <View style={styles.settingsItem}>
                     <View style={styles.settingsItemLeft}>
                         <View style={styles.iconContainer}>
                             <Ionicons
@@ -536,8 +536,8 @@ export default function SettingsScreen() {
                         }}
                         thumbColor="#ffffff"
                     />
-                </View> */}
-                <SettingsItem icon="notifications" title="Notification Settings" />
+                </View> 
+                <SettingsItem icon="notifications" title="Notification Settings" />*/}
 
                 {/* Business Info */}
                 <SectionHeader title="BUSINESS INFO" />

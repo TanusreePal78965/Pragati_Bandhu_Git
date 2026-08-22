@@ -8,6 +8,9 @@ import {
     Pressable,
     TextInput,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -128,266 +131,287 @@ export default function UpdateStockModal({
             animationType="slide"
             onRequestClose={onClose}
         >
-            <Pressable style={styles.overlay} onPress={onClose}>
-                <Pressable style={styles.content}>
-                    <View style={styles.handle} />
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+                <Pressable style={styles.overlay} onPress={onClose}>
+                    <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
+                        <View style={styles.handle} />
 
-                    <View style={styles.headerRow}>
-                        <Text style={styles.title}>Update Stock</Text>
-                        <TouchableOpacity style={styles.closeIconBtn} onPress={onClose} activeOpacity={0.7}>
-                            <Ionicons name="close" size={24} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.selectionBadge}>
-                        <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
-                        <Text style={styles.selectionBadgeText}>
-                            {selectedCount} Items Selected
-                        </Text>
-                    </View>
-
-                    {/* Mode Selector */}
-                    <View style={styles.modeSelector}>
-                        <TouchableOpacity
-                            style={[styles.modeTab, mode === "add" && styles.activeModeTab]}
-                            onPress={() => setMode("add")}
+                        <ScrollView
+                            style={styles.scrollStyle}
+                            contentContainerStyle={styles.scrollContentStyle}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}
                         >
-                            <Ionicons
-                                name="add-circle"
-                                size={20}
-                                color={mode === "add" ? colors.primary : colors.textSecondary}
-                            />
-                            <Text style={[styles.modeTabText, mode === "add" && styles.activeModeTabText]}>
-                                Add Stock
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modeTab, mode === "reduce" && styles.activeModeTab]}
-                            onPress={() => setMode("reduce")}
-                        >
-                            <Ionicons
-                                name="remove-circle"
-                                size={20}
-                                color={mode === "reduce" ? colors.primary : colors.textSecondary}
-                            />
-                            <Text style={[styles.modeTabText, mode === "reduce" && styles.activeModeTabText]}>
-                                Reduce Stock
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Pack Mode Toggle */}
-                    {anyHasPack && (
-                        <TouchableOpacity
-                            style={styles.packToggleRow}
-                            onPress={() => { setIsPackMode((v) => !v); setQuantityInput("1"); }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.packToggleLeft}>
-                                <Ionicons name="cube-outline" size={18} color={colors.primary} />
-                                <Text style={styles.packToggleText}>Enter quantity in packs/boxes</Text>
-                            </View>
-                            <View style={[styles.toggleTrack, isPackMode && styles.toggleTrackActive]}>
-                                <View style={[styles.toggleThumb, isPackMode && styles.toggleThumbActive]} />
-                            </View>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Quantity Selector */}
-                    <Text style={styles.label}>
-                        {isPackMode ? "Packs / Boxes Received" : "Quantity per Item"}
-                    </Text>
-                    <View style={styles.quantitySelector}>
-                        <TouchableOpacity style={styles.stepButton} onPress={handleDecrement}>
-                            <Ionicons name="remove" size={24} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                        <TextInput
-                            style={styles.quantityInput}
-                            value={quantityInput}
-                            onChangeText={setQuantityInput}
-                            keyboardType="numeric"
-                            selectTextOnFocus
-                            textAlign="center"
-                        />
-                        <TouchableOpacity style={styles.stepButton} onPress={handleIncrement}>
-                            <Ionicons name="add" size={24} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <Text style={styles.helperText}>
-                        {isPackMode
-                            ? "Each item's pack size will be used to calculate base units."
-                            : `This quantity will be applied to all ${selectedCount} selected products.`}
-                    </Text>
-
-                    {/* Pricing Inputs (Only for single product restocks) */}
-                    {singleProduct && mode === "add" && (
-                        <View style={styles.pricingSection}>
-                            <View style={styles.pricingRow}>
-                                <View style={styles.pricingInputContainer}>
-                                    <Text style={styles.pricingInputLabel}>New Purchase Price</Text>
-                                    <View style={styles.pricingInputBox}>
-                                        <Text style={styles.currencySymbol}>₹</Text>
-                                        <TextInput
-                                            style={styles.pricingTextInput}
-                                            value={purchasePriceInput}
-                                            onChangeText={setPurchasePriceInput}
-                                            keyboardType="numeric"
-                                            placeholder="0.00"
-                                            placeholderTextColor="#9ca3af"
-                                        />
-                                    </View>
-                                </View>
-
-                                <View style={styles.pricingInputContainer}>
-                                    <Text style={styles.pricingInputLabel}>New Selling Price</Text>
-                                    <View style={styles.pricingInputBox}>
-                                        <Text style={styles.currencySymbol}>₹</Text>
-                                        <TextInput
-                                            style={styles.pricingTextInput}
-                                            value={sellingPriceInput}
-                                            onChangeText={setSellingPriceInput}
-                                            keyboardType="numeric"
-                                            placeholder="0.00"
-                                            placeholderTextColor="#9ca3af"
-                                        />
-                                    </View>
-                                </View>
-                            </View>
-
-                            <Text style={styles.marginPreview}>
-                                Expected Margin: {currentMarginPct.toFixed(1)}% {originalMarginPct > 0 && `(Prev: ${originalMarginPct.toFixed(1)}%)`}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Pricing Strategy Selector (If purchase cost changed) */}
-                    {singleProduct && isCostChanged && mode === "add" && (
-                        <View style={styles.strategyContainer}>
-                            <Text style={styles.strategyLabel}>Cost price changed. Choose pricing strategy:</Text>
-                            
-                            <View style={styles.strategyOptions}>
-                                <TouchableOpacity
-                                    style={[styles.strategyOption, strategy === "average" && styles.strategyOptionActive]}
-                                    onPress={() => setStrategy("average")}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.radioDot, strategy === "average" && styles.radioDotActive]} />
-                                    <View style={styles.strategyTextContent}>
-                                        <Text style={styles.strategyOptionTitle}>Average Cost (Mix)</Text>
-                                        <Text style={styles.strategyOptionDesc}>
-                                            New average cost: ₹{weightedAvgCost.toFixed(2)}. Suggest selling at ₹{recommendedSellingPrice.toFixed(2)}.
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.strategyOption, strategy === "replace" && styles.strategyOptionActive]}
-                                    onPress={() => setStrategy("replace")}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.radioDot, strategy === "replace" && styles.radioDotActive]} />
-                                    <View style={styles.strategyTextContent}>
-                                        <Text style={styles.strategyOptionTitle}>Replacement (Update All)</Text>
-                                        <Text style={styles.strategyOptionDesc}>
-                                            Set all {totalStock} {singleProduct.uom} to restock purchase price ₹{newCost.toFixed(2)}.
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.strategyOption, strategy === "batch" && styles.strategyOptionActive]}
-                                    onPress={() => setStrategy("batch")}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.radioDot, strategy === "batch" && styles.radioDotActive]} />
-                                    <View style={styles.strategyTextContent}>
-                                        <Text style={styles.strategyOptionTitle}>Create New Batch</Text>
-                                        <Text style={styles.strategyOptionDesc}>
-                                            Keep old {oldStock} {singleProduct.uom} at old price. Create a new listing for new batch.
-                                        </Text>
-                                    </View>
+                            <View style={styles.headerRow}>
+                                <Text style={styles.title}>Update Stock</Text>
+                                <TouchableOpacity style={styles.closeIconBtn} onPress={onClose} activeOpacity={0.7}>
+                                    <Ionicons name="close" size={22} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
 
-                            {strategy === "batch" && (
-                                <View style={styles.batchNameContainer}>
-                                    <Text style={styles.batchNameLabel}>New Batch Name Suffix</Text>
-                                    <TextInput
-                                        style={styles.batchNameInput}
-                                        value={batchName}
-                                        onChangeText={setBatchName}
-                                        placeholder="e.g. Minikit - Batch 2"
-                                        placeholderTextColor="#9ca3af"
+                            <View style={styles.selectionBadge}>
+                                <Ionicons
+                                    name={singleProduct ? "cube-outline" : "checkmark-circle"}
+                                    size={14}
+                                    color={colors.primary}
+                                />
+                                <Text style={styles.selectionBadgeText} numberOfLines={1}>
+                                    {singleProduct
+                                        ? `${singleProduct.name}  ·  Current: ${singleProduct.stock_quantity} ${singleProduct.uom}`
+                                        : `${selectedCount} Items Selected`}
+                                </Text>
+                            </View>
+
+                            {/* Mode Selector */}
+                            <View style={styles.modeSelector}>
+                                <TouchableOpacity
+                                    style={[styles.modeTab, mode === "add" && styles.activeModeTab]}
+                                    onPress={() => setMode("add")}
+                                >
+                                    <Ionicons
+                                        name="add-circle"
+                                        size={18}
+                                        color={mode === "add" ? colors.primary : colors.textSecondary}
                                     />
+                                    <Text style={[styles.modeTabText, mode === "add" && styles.activeModeTabText]}>
+                                        Add Stock
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modeTab, mode === "reduce" && styles.activeModeTab]}
+                                    onPress={() => setMode("reduce")}
+                                >
+                                    <Ionicons
+                                        name="remove-circle"
+                                        size={18}
+                                        color={mode === "reduce" ? colors.primary : colors.textSecondary}
+                                    />
+                                    <Text style={[styles.modeTabText, mode === "reduce" && styles.activeModeTabText]}>
+                                        Reduce Stock
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Pack Mode Toggle */}
+                            {anyHasPack && (
+                                <TouchableOpacity
+                                    style={styles.packToggleRow}
+                                    onPress={() => { setIsPackMode((v) => !v); setQuantityInput("1"); }}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.packToggleLeft}>
+                                        <Ionicons name="cube-outline" size={16} color={colors.primary} />
+                                        <Text style={styles.packToggleText}>Enter quantity in packs/boxes</Text>
+                                    </View>
+                                    <View style={[styles.toggleTrack, isPackMode && styles.toggleTrackActive]}>
+                                        <View style={[styles.toggleThumb, isPackMode && styles.toggleThumbActive]} />
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Quantity Selector */}
+                            <Text style={styles.label}>
+                                {isPackMode ? "Packs / Boxes Received" : "Quantity per Item"}
+                            </Text>
+                            <View style={styles.quantitySelector}>
+                                <TouchableOpacity style={styles.stepButton} onPress={handleDecrement}>
+                                    <Ionicons name="remove" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                                <TextInput
+                                    style={styles.quantityInput}
+                                    value={quantityInput}
+                                    onChangeText={setQuantityInput}
+                                    keyboardType="numeric"
+                                    selectTextOnFocus
+                                    textAlign="center"
+                                />
+                                <TouchableOpacity style={styles.stepButton} onPress={handleIncrement}>
+                                    <Ionicons name="add" size={20} color={colors.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={styles.helperText}>
+                                {isPackMode
+                                    ? "Each item's pack size will be used to calculate base units."
+                                    : `This quantity will be applied to all ${selectedCount} selected products.`}
+                            </Text>
+
+                            {/* Pricing Inputs (Only for single product restocks) */}
+                            {singleProduct && mode === "add" && (
+                                <View style={styles.pricingSection}>
+                                    <View style={styles.pricingRow}>
+                                        <View style={styles.pricingInputContainer}>
+                                            <Text style={styles.pricingInputLabel}>New Purchase Price</Text>
+                                            <View style={styles.pricingInputBox}>
+                                                <Text style={styles.currencySymbol}>₹</Text>
+                                                <TextInput
+                                                    style={styles.pricingTextInput}
+                                                    value={purchasePriceInput}
+                                                    onChangeText={setPurchasePriceInput}
+                                                    keyboardType="numeric"
+                                                    placeholder="0.00"
+                                                    placeholderTextColor="#9ca3af"
+                                                />
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.pricingInputContainer}>
+                                            <Text style={styles.pricingInputLabel}>New Selling Price</Text>
+                                            <View style={styles.pricingInputBox}>
+                                                <Text style={styles.currencySymbol}>₹</Text>
+                                                <TextInput
+                                                    style={styles.pricingTextInput}
+                                                    value={sellingPriceInput}
+                                                    onChangeText={setSellingPriceInput}
+                                                    keyboardType="numeric"
+                                                    placeholder="0.00"
+                                                    placeholderTextColor="#9ca3af"
+                                                />
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.marginPreview}>
+                                        Expected Margin: {currentMarginPct.toFixed(1)}% {originalMarginPct > 0 && `(Prev: ${originalMarginPct.toFixed(1)}%)`}
+                                    </Text>
                                 </View>
                             )}
-                        </View>
-                    )}
 
-                    {/* Selected Items preview */}
-                    {!singleProduct && (
-                        <View style={styles.chipsRow}>
-                            {selectedProducts.map((product, index) => (
-                                <View key={product.id} style={styles.chip}>
-                                    <View
-                                        style={[
-                                            styles.dot,
-                                            { backgroundColor: itemDots[index % itemDots.length] },
-                                        ]}
-                                    />
-                                    <View>
-                                        <Text style={styles.chipText}>{product.name}</Text>
-                                        {isPackMode && (
-                                            <Text style={styles.chipSubText}>
-                                                {getPreviewLabel(product)}
-                                            </Text>
-                                        )}
+                            {/* Pricing Strategy Selector (If purchase cost changed) */}
+                            {singleProduct && isCostChanged && mode === "add" && (
+                                <View style={styles.strategyContainer}>
+                                    <Text style={styles.strategyLabel}>Cost price changed. Choose pricing strategy:</Text>
+                                    
+                                    <View style={styles.strategyOptions}>
+                                        <TouchableOpacity
+                                            style={[styles.strategyOption, strategy === "average" && styles.strategyOptionActive]}
+                                            onPress={() => setStrategy("average")}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={[styles.radioDot, strategy === "average" && styles.radioDotActive]} />
+                                            <View style={styles.strategyTextContent}>
+                                                <Text style={styles.strategyOptionTitle}>Average Cost (Mix)</Text>
+                                                <Text style={styles.strategyOptionDesc}>
+                                                    New average cost: ₹{weightedAvgCost.toFixed(2)}. Suggest selling at ₹{recommendedSellingPrice.toFixed(2)}.
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[styles.strategyOption, strategy === "replace" && styles.strategyOptionActive]}
+                                            onPress={() => setStrategy("replace")}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={[styles.radioDot, strategy === "replace" && styles.radioDotActive]} />
+                                            <View style={styles.strategyTextContent}>
+                                                <Text style={styles.strategyOptionTitle}>Replacement (Update All)</Text>
+                                                <Text style={styles.strategyOptionDesc}>
+                                                    Set all {totalStock} {singleProduct.uom} to restock purchase price ₹{newCost.toFixed(2)}.
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[styles.strategyOption, strategy === "batch" && styles.strategyOptionActive]}
+                                            onPress={() => setStrategy("batch")}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={[styles.radioDot, strategy === "batch" && styles.radioDotActive]} />
+                                            <View style={styles.strategyTextContent}>
+                                                <Text style={styles.strategyOptionTitle}>Create New Batch</Text>
+                                                <Text style={styles.strategyOptionDesc}>
+                                                    Keep old {oldStock} {singleProduct.uom} at old price. Create a new listing for new batch.
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
                                     </View>
+
+                                    {strategy === "batch" && (
+                                        <View style={styles.batchNameContainer}>
+                                            <Text style={styles.batchNameLabel}>New Batch Name Suffix</Text>
+                                            <TextInput
+                                                style={styles.batchNameInput}
+                                                value={batchName}
+                                                onChangeText={setBatchName}
+                                                placeholder="e.g. Minikit - Batch 2"
+                                                placeholderTextColor="#9ca3af"
+                                            />
+                                        </View>
+                                    )}
                                 </View>
-                            ))}
-                        </View>
-                    )}
+                            )}
 
-                    <TouchableOpacity
-                        style={styles.updateButton}
-                        onPress={() => {
-                            if (quantity <= 0) {
-                                Alert.alert("Validation", "Please enter a valid quantity greater than 0.");
-                                return;
-                            }
-                            if (singleProduct && mode === "add") {
-                                if (strategy === "batch" && !batchName.trim()) {
-                                    Alert.alert("Validation", "Please provide a suffix or name for the new batch.");
-                                    return;
-                                }
-                                onUpdate(
-                                    quantity,
-                                    mode,
-                                    isPackMode,
-                                    newCost,
-                                    newSelling,
-                                    strategy,
-                                    strategy === "batch" ? batchName.trim() : undefined
-                                );
-                            } else {
-                                onUpdate(quantity, mode, isPackMode);
-                            }
-                        }}
-                    >
-                        <Text style={styles.updateButtonText}>Update Stock</Text>
-                    </TouchableOpacity>
+                            {/* Selected Items preview */}
+                            {!singleProduct && (
+                                <View style={styles.chipsRow}>
+                                    {selectedProducts.map((product, index) => (
+                                        <View key={product.id} style={styles.chip}>
+                                            <View
+                                                style={[
+                                                    styles.dot,
+                                                    { backgroundColor: itemDots[index % itemDots.length] },
+                                                ]}
+                                            />
+                                            <View>
+                                                <Text style={styles.chipText}>{product.name}</Text>
+                                                {isPackMode && (
+                                                    <Text style={styles.chipSubText}>
+                                                        {getPreviewLabel(product)}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
 
-                    <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.updateButton}
+                                onPress={() => {
+                                    if (quantity <= 0) {
+                                        Alert.alert("Validation", "Please enter a valid quantity greater than 0.");
+                                        return;
+                                    }
+                                    if (singleProduct && mode === "add") {
+                                        if (strategy === "batch" && !batchName.trim()) {
+                                            Alert.alert("Validation", "Please provide a suffix or name for the new batch.");
+                                            return;
+                                        }
+                                        onUpdate(
+                                            quantity,
+                                            mode,
+                                            isPackMode,
+                                            newCost,
+                                            newSelling,
+                                            strategy,
+                                            strategy === "batch" ? batchName.trim() : undefined
+                                        );
+                                    } else {
+                                        onUpdate(quantity, mode, isPackMode);
+                                    }
+                                }}
+                            >
+                                <Text style={styles.updateButtonText}>Update Stock</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </Pressable>
                 </Pressable>
-            </Pressable>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    keyboardAvoidingView: {
+        flex: 1,
+    },
     overlay: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.5)",
@@ -395,22 +419,31 @@ const styles = StyleSheet.create({
     },
     content: {
         backgroundColor: "#fff",
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingHorizontal: spacing.xl,
-        paddingBottom: spacing.xl,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingHorizontal: spacing.md,
+        paddingBottom: Platform.OS === "ios" ? 24 : spacing.md,
+        maxHeight: "85%",
+        width: "100%",
+    },
+    scrollStyle: {
+        width: "100%",
+    },
+    scrollContentStyle: {
         alignItems: "center",
+        paddingBottom: 8,
     },
     handle: {
-        width: 48,
-        height: 5,
+        width: 36,
+        height: 4,
         backgroundColor: "#e5e7eb",
-        borderRadius: 2.5,
-        marginTop: 12,
-        marginBottom: 24,
+        borderRadius: 2,
+        marginTop: 8,
+        marginBottom: 10,
+        alignSelf: "center",
     },
     title: {
-        fontSize: 24,
+        fontSize: 18,
         fontWeight: "700",
         color: colors.text,
     },
@@ -419,7 +452,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "space-between",
         width: "100%",
-        marginBottom: 8,
+        marginBottom: 4,
     },
     closeIconBtn: {
         padding: 4,
@@ -429,22 +462,23 @@ const styles = StyleSheet.create({
         alignItems: "center",
         backgroundColor: "#edf2ff",
         paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 16,
+        paddingVertical: 5,
+        borderRadius: 12,
         gap: 6,
-        marginBottom: 24,
+        marginBottom: 10,
+        maxWidth: "100%",
     },
     selectionBadgeText: {
         color: colors.primary,
-        fontWeight: "600",
-        fontSize: 14,
+        fontWeight: "700",
+        fontSize: 13,
     },
     modeSelector: {
         flexDirection: "row",
         backgroundColor: "#f3f4f6",
-        padding: 4,
-        borderRadius: 12,
-        marginBottom: 16,
+        padding: 3,
+        borderRadius: 10,
+        marginBottom: 10,
         width: "100%",
     },
     modeTab: {
@@ -452,20 +486,20 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        paddingVertical: 12,
-        borderRadius: 10,
-        gap: 8,
+        paddingVertical: 8,
+        borderRadius: 8,
+        gap: 6,
     },
     activeModeTab: {
         backgroundColor: "#fff",
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowRadius: 2,
+        elevation: 1,
     },
     modeTabText: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: "600",
         color: colors.textSecondary,
     },
@@ -477,37 +511,37 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "space-between",
         backgroundColor: "#f0f9ff",
-        borderRadius: 10,
-        padding: 12,
-        marginBottom: 16,
+        borderRadius: 8,
+        padding: 8,
+        marginBottom: 10,
         width: "100%",
         borderWidth: 1,
         borderColor: "#bae6fd",
     },
-    packToggleLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
-    packToggleText: { fontSize: 13, fontWeight: "600", color: colors.text },
+    packToggleLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+    packToggleText: { fontSize: 12, fontWeight: "600", color: colors.text },
     toggleTrack: {
-        width: 40,
-        height: 22,
-        borderRadius: 11,
+        width: 36,
+        height: 20,
+        borderRadius: 10,
         backgroundColor: "#d1d5db",
         padding: 2,
         justifyContent: "center",
     },
     toggleTrackActive: { backgroundColor: colors.primary },
     toggleThumb: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
         backgroundColor: "#fff",
         alignSelf: "flex-start",
     },
     toggleThumbActive: { alignSelf: "flex-end" },
     label: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: "700",
         color: colors.text,
-        marginBottom: 12,
+        marginBottom: 6,
         alignSelf: "flex-start",
     },
     quantitySelector: {
@@ -516,53 +550,53 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         borderWidth: 1,
         borderColor: "#e5e7eb",
-        borderRadius: 12,
+        borderRadius: 10,
         width: "100%",
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        marginBottom: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        marginBottom: 4,
     },
     stepButton: { padding: 4 },
     quantityValue: {
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: "800",
         color: colors.text,
     },
     quantityInput: {
-        fontSize: 28,
+        fontSize: 22,
         fontWeight: "800",
         color: colors.text,
-        minWidth: 100,
+        minWidth: 80,
         textAlign: "center",
         paddingVertical: 0,
     },
     helperText: {
-        fontSize: 12,
+        fontSize: 11,
         color: colors.textSecondary,
-        marginBottom: 20,
+        marginBottom: 10,
         textAlign: "center",
     },
     pricingSection: {
         width: "100%",
-        marginBottom: 16,
+        marginBottom: 10,
         backgroundColor: "#f8fafc",
-        padding: 12,
-        borderRadius: 12,
+        padding: 10,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: "#cbd5e1",
     },
     pricingRow: {
         flexDirection: "row",
-        gap: 12,
+        gap: 10,
     },
     pricingInputContainer: {
         flex: 1,
     },
     pricingInputLabel: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: "600",
         color: colors.textSecondary,
-        marginBottom: 6,
+        marginBottom: 4,
     },
     pricingInputBox: {
         flexDirection: "row",
@@ -572,55 +606,55 @@ const styles = StyleSheet.create({
         borderColor: "#cbd5e1",
         borderRadius: 8,
         paddingHorizontal: 8,
-        height: 40,
+        height: 36,
     },
     currencySymbol: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: "600",
         color: "#64748b",
         marginRight: 4,
     },
     pricingTextInput: {
         flex: 1,
-        fontSize: 15,
+        fontSize: 14,
         color: colors.text,
         fontWeight: "600",
         padding: 0,
     },
     marginPreview: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: "700",
         color: colors.primary,
-        marginTop: 8,
+        marginTop: 6,
         textAlign: "right",
     },
     strategyContainer: {
         width: "100%",
-        marginBottom: 16,
-        padding: 12,
-        borderRadius: 12,
+        marginBottom: 10,
+        padding: 10,
+        borderRadius: 10,
         backgroundColor: "#fffbeb",
         borderWidth: 1,
-        borderColor: "#fde68a",
+        borderColor: "#fcd34d",
     },
     strategyLabel: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: "700",
         color: "#92400e",
-        marginBottom: 10,
+        marginBottom: 8,
     },
     strategyOptions: {
-        gap: 8,
+        gap: 6,
     },
     strategyOption: {
         flexDirection: "row",
         alignItems: "flex-start",
-        padding: 10,
+        padding: 8,
         backgroundColor: "#fff",
         borderWidth: 1,
         borderColor: "#fcd34d",
         borderRadius: 8,
-        gap: 10,
+        gap: 8,
     },
     strategyOptionActive: {
         borderColor: "#d97706",
@@ -644,7 +678,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     strategyOptionTitle: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: "700",
         color: colors.text,
     },
@@ -654,9 +688,9 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     batchNameContainer: {
-        marginTop: 12,
+        marginTop: 8,
         backgroundColor: "#fff",
-        padding: 8,
+        padding: 6,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: "#fcd34d",
@@ -665,11 +699,11 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: "600",
         color: colors.textSecondary,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     batchNameInput: {
-        height: 32,
-        fontSize: 13,
+        height: 30,
+        fontSize: 12,
         color: colors.text,
         fontWeight: "600",
         borderBottomWidth: 1,
@@ -679,10 +713,10 @@ const styles = StyleSheet.create({
     chipsRow: {
         flexDirection: "row",
         flexWrap: "wrap",
-        gap: 8,
+        gap: 6,
         justifyContent: "center",
-        marginBottom: 28,
-        paddingHorizontal: spacing.md,
+        marginBottom: 16,
+        paddingHorizontal: spacing.sm,
     },
     chip: {
         flexDirection: "row",
@@ -690,50 +724,50 @@ const styles = StyleSheet.create({
         backgroundColor: "#fff",
         borderWidth: 1,
         borderColor: "#f3f4f6",
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 10,
-        gap: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        gap: 6,
     },
     dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
         marginTop: 4,
     },
     chipText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: "500",
         color: colors.text,
     },
     chipSubText: {
-        fontSize: 11,
+        fontSize: 10,
         color: colors.primary,
         fontWeight: "600",
-        marginTop: 2,
+        marginTop: 1,
     },
     updateButton: {
         backgroundColor: colors.primary,
         width: "100%",
-        paddingVertical: 16,
-        borderRadius: 12,
+        paddingVertical: 12,
+        borderRadius: 10,
         alignItems: "center",
-        marginBottom: 12,
+        marginBottom: 8,
         shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     updateButtonText: {
         color: "#fff",
         fontWeight: "700",
-        fontSize: 16,
+        fontSize: 15,
     },
     cancelButton: {
         width: "100%",
-        paddingVertical: 16,
-        borderRadius: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
         alignItems: "center",
         borderWidth: 1,
         borderColor: "#e5e7eb",
@@ -741,6 +775,6 @@ const styles = StyleSheet.create({
     cancelButtonText: {
         color: colors.textSecondary,
         fontWeight: "700",
-        fontSize: 16,
+        fontSize: 14,
     },
 });

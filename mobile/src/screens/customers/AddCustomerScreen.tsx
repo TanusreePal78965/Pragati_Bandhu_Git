@@ -18,9 +18,11 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import { insertCustomer } from "../../db/db";
+import { useAlert } from "../../context/AlertContext";
 
 export default function AddCustomerScreen() {
     const navigation = useNavigation();
+    const { showAlert } = useAlert();
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [initialBalance, setInitialBalance] = useState("");
@@ -39,7 +41,7 @@ export default function AddCustomerScreen() {
             });
             navigation.goBack();
         } catch (e) {
-            Alert.alert("Error", "Could not save customer. Please try again.");
+            showAlert("Error", "Could not save customer. Please try again.", undefined, "error");
         } finally {
             setSaving(false);
         }

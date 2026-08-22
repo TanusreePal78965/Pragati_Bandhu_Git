@@ -18,6 +18,7 @@ import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import FAB from "../../components/common/FAB";
 import { getAllCategories, deleteCategory, Category } from "../../db/db";
+import { useAlert } from "../../context/AlertContext";
 
 /** icon stored as "Ionicons:cart" or "MCI:coffee" */
 const renderIcon = (iconField: string, color: string, size = 24) => {
@@ -57,7 +58,8 @@ const CategoryCard = ({
 );
 
 export default function ManageCategoriesScreen() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
+    const { showAlert } = useAlert();
     const [categories, setCategories] = useState<Category[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -69,17 +71,22 @@ export default function ManageCategoriesScreen() {
     useFocusEffect(loadCategories);
 
     const handleDelete = (id: string) => {
-        Alert.alert("Delete Category", "Are you sure? Products in this category will be uncategorised.", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete",
-                style: "destructive",
-                onPress: () => {
-                    deleteCategory(id);
-                    setCategories((prev) => prev.filter((c) => c.id !== id));
+        showAlert({
+            title: "Delete Category",
+            message: "Are you sure? Products in this category will be uncategorised.",
+            type: "error",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                        deleteCategory(id);
+                        setCategories((prev) => prev.filter((c) => c.id !== id));
+                    },
                 },
-            },
-        ]);
+            ],
+        });
     };
 
     const filtered = searchQuery.trim()

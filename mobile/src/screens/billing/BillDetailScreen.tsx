@@ -21,6 +21,7 @@ import { typography } from "../../theme/typography";
 import { getBillItems, Bill, BillItem, createDraft, upsertDraft, upsertDraftItems, getAllProducts } from "../../db/db";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 import { toUtcDate } from "../../utils/dateUtils";
+import { useAlert } from "../../context/AlertContext";
 
 const formatDateTime = (dateStr: string) => {
     const d = toUtcDate(dateStr);
@@ -55,6 +56,7 @@ const renderItemDetails = (item: BillItem): string => {
 export default function BillDetailScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { showAlert } = useAlert();
     const bill: Bill = route.params?.bill;
     const [items, setItems] = useState<BillItem[]>([]);
     const [shopInfo, setShopInfo] = useState<StoredShopInfo | null>(null);
@@ -348,7 +350,7 @@ export default function BillDetailScreen() {
 
     const handleRepeatOrder = () => {
         if (!items || items.length === 0) {
-            Alert.alert("Empty Order", "This bill has no items to repeat.");
+            showAlert("Empty Order", "This bill has no items to repeat.", undefined, "warning");
             return;
         }
 
@@ -487,7 +489,7 @@ export default function BillDetailScreen() {
                     <TouchableOpacity 
                         onPress={async () => {
                             await Clipboard.setStringAsync(bill.id.toUpperCase());
-                            Alert.alert("Copied", "Bill ID copied to clipboard");
+                            showAlert("Copied", "Bill ID copied to clipboard", undefined, "success");
                         }} 
                         activeOpacity={0.6}
                     >

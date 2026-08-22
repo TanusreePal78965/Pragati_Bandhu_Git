@@ -17,6 +17,7 @@ import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import FAB from "../../components/common/FAB";
+import { haptics } from "../../utils/haptics";
 import { getAllCustomers, Customer } from "../../db/db";
 
 const AVATAR_COLORS = ["#DBEAFE", "#FFEDD5", "#F3E8FF", "#FCE7F3", "#DCFCE7", "#FEF9C3"];
@@ -140,7 +141,10 @@ export default function CustomersScreen() {
             />
 
             <FAB
-                onPress={() => navigation.navigate("AddCustomer")}
+                onPress={() => {
+                    haptics.medium();
+                    navigation.navigate("AddCustomer");
+                }}
                 offsetTabBar={true}
             />
         </SafeAreaView>

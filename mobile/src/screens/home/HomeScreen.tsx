@@ -18,6 +18,8 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, getShop, getSalesByRange, Bill, Product } from "../../db/db";
 import { toUtcDate } from "../../utils/dateUtils";
 
+import { haptics } from "../../utils/haptics";
+
 export default function HomeScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
     const [todaySales, setTodaySales] = useState({ total: 0, count: 0 });
@@ -114,7 +116,10 @@ export default function HomeScreen() {
                                 </View>
                                 <TouchableOpacity
                                     style={styles.alertAction}
-                                    onPress={() => navigation.navigate("AddProduct")}
+                                    onPress={() => {
+                                        haptics.medium();
+                                        navigation.navigate("AddProduct");
+                                    }}
                                 >
                                     <Text style={styles.alertActionText}>Add Stock</Text>
                                 </TouchableOpacity>
@@ -130,7 +135,10 @@ export default function HomeScreen() {
                                 </View>
                                 <TouchableOpacity
                                     style={styles.alertAction}
-                                    onPress={() => navigation.navigate("Inventory")}
+                                    onPress={() => {
+                                        haptics.medium();
+                                        navigation.navigate("Inventory");
+                                    }}
                                 >
                                     <Text style={styles.alertActionText}>Restock</Text>
                                 </TouchableOpacity>
@@ -159,7 +167,10 @@ export default function HomeScreen() {
 
                 <TouchableOpacity
                     style={styles.primaryAction}
-                    onPress={() => navigation.navigate("NewBill")}
+                    onPress={() => {
+                        haptics.medium();
+                        navigation.navigate("NewBill");
+                    }}
                 >
                     <Ionicons name="cart-outline" size={20} color="#fff" />
                     <Text style={styles.primaryActionText}>Create New Bill</Text>
