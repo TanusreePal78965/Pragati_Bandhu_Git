@@ -583,7 +583,7 @@ export default function SettingsScreen() {
                     {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
                         <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, marginTop: 4 }}>
                             <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>
-                                To manage your account status or update settings, visit the web portal.
+                                To manage your account expiry, visit the web portal.
                             </Text>
                             <TouchableOpacity
                                 onPress={() => Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew")}
@@ -602,7 +602,7 @@ export default function SettingsScreen() {
                         </View>
                     )}
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>CLOUD BACKUP & AI CONSENT</Text>
+                        <Text style={styles.infoLabel}>CLOUD BACKUP</Text>
                         <View style={styles.badgeRow}>
                             <View style={[
                                 styles.badge,
@@ -840,11 +840,11 @@ const styles = StyleSheet.create({
     },
     sectionHeader: {
         paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.sm,
+        paddingVertical: 4,
         backgroundColor: "#f3f4f6",
     },
     sectionHeaderTitle: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: "600",
         color: colors.textSecondary,
         letterSpacing: 0.5,
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: spacing.sm,
-        paddingVertical: 12,
+        paddingVertical: 8,
         backgroundColor: colors.surface,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
@@ -864,11 +864,11 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     iconContainer: {
-        width: 32,
+        width: 28,
         alignItems: "center",
     },
     settingsItemTitle: {
-        fontSize: typography.sizes.md,
+        fontSize: 14,
         color: colors.text,
         marginLeft: spacing.sm,
     },
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     settingsItemValue: {
-        fontSize: typography.sizes.sm,
+        fontSize: 12,
         color: colors.textSecondary,
         marginRight: spacing.xs,
     },
@@ -886,18 +886,18 @@ const styles = StyleSheet.create({
     },
     infoRow: {
         paddingHorizontal: spacing.sm,
-        paddingVertical: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },
     infoLabel: {
-        fontSize: 10,
+        fontSize: 9,
         color: colors.textSecondary,
         fontWeight: "600",
-        marginBottom: 4,
+        marginBottom: 2,
     },
     infoValue: {
-        fontSize: typography.sizes.md,
+        fontSize: 14,
         color: colors.text,
         fontWeight: "500",
     },
@@ -907,8 +907,8 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         backgroundColor: "#fef2f2",
         marginHorizontal: spacing.sm,
-        marginVertical: 8,
-        padding: 12,
+        marginVertical: 6,
+        padding: 8,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: "#fee2e2",
@@ -917,7 +917,7 @@ const styles = StyleSheet.create({
         color: colors.error,
         fontWeight: "700",
         marginLeft: spacing.sm,
-        fontSize: typography.sizes.md,
+        fontSize: 14,
     },
     badgeRow: {
         flexDirection: "row",
@@ -927,9 +927,9 @@ const styles = StyleSheet.create({
     badge: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 20,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 14,
         gap: 4,
     },
     badgeActive: {
@@ -939,17 +939,17 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border,
     },
     badgeText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: "600",
     },
     syncButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
+        gap: 6,
         marginHorizontal: spacing.sm,
-        marginTop: spacing.sm,
-        padding: 12,
+        marginTop: 6,
+        padding: 8,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: colors.primary,
@@ -961,17 +961,17 @@ const styles = StyleSheet.create({
     syncButtonText: {
         color: colors.primary,
         fontWeight: "600",
-        fontSize: typography.sizes.sm,
+        fontSize: 13,
     },
     exportButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
-        marginTop: 16,
+        gap: 6,
+        marginTop: 10,
         marginHorizontal: spacing.sm,
-        marginBottom: spacing.sm,
-        padding: 12,
+        marginBottom: 6,
+        padding: 8,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: colors.border,
@@ -980,34 +980,34 @@ const styles = StyleSheet.create({
     exportText: {
         color: colors.textSecondary,
         fontWeight: "600",
-        fontSize: typography.sizes.sm,
+        fontSize: 13,
     },
     enableCloudButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
+        gap: 6,
         marginHorizontal: spacing.sm,
-        marginTop: spacing.sm,
-        marginBottom: spacing.xs,
-        padding: 12,
+        marginTop: 6,
+        marginBottom: 4,
+        padding: 8,
         borderRadius: 8,
         backgroundColor: colors.primary,
     },
     enableCloudText: {
         color: "#ffffff",
         fontWeight: "700",
-        fontSize: typography.sizes.sm,
+        fontSize: 13,
     },
     deleteDataButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
+        gap: 6,
         marginHorizontal: spacing.sm,
-        marginTop: spacing.sm,
-        marginBottom: spacing.xs,
-        padding: 12,
+        marginTop: 6,
+        marginBottom: 4,
+        padding: 8,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: "#fee2e2",
@@ -1016,18 +1016,18 @@ const styles = StyleSheet.create({
     deleteDataText: {
         color: colors.error,
         fontWeight: "600",
-        fontSize: typography.sizes.sm,
+        fontSize: 13,
     },
     inlineLoader: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
+        gap: 6,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
+        paddingVertical: 4,
         backgroundColor: colors.surface,
     },
     inlineLoaderText: {
-        fontSize: typography.sizes.sm,
+        fontSize: 12,
         color: colors.textSecondary,
     },
 });

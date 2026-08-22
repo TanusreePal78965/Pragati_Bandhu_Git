@@ -1,44 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
     TextInput,
+    ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import { getAllProducts } from "../../db/db";
 
-const UOM_GROUPS: { label: string; emoji: string; items: string[] }[] = [
-    {
-        label: "Weight",
-        emoji: "⚖️",
-        items: ["kg", "gm", "mg", "Quintal"],
-    },
-    {
-        label: "Volume",
-        emoji: "💧",
-        items: ["Liter", "ml"],
-    },
-    {
-        label: "Count",
-        emoji: "🔢",
-        items: ["Pcs", "Dozen", "Pair", "Set"],
-    },
-    {
-        label: "Packaging",
-        emoji: "📦",
-        items: ["Pack", "Box", "Bag", "Carton", "Sachet", "Strip", "Bottle", "Roll", "Ream", "Bundle"],
-    },
-    {
-        label: "Length",
-        emoji: "📏",
-        items: ["Meter", "ft"],
-    },
+const POPULAR_UOMS = [
+    "Pcs", "kg", "gm", "Liter", "ml", "Box", "Pack", "Dozen", "Pair", "Set", "Quintal", "Meter", "ft", "Bag", "Carton", "Strip", "Bottle"
 ];
 
-// Flat list of all known UOMs for checking "is custom"
-export const ALL_KNOWN_UOMS = UOM_GROUPS.flatMap((g) => g.items);
+export const ALL_KNOWN_UOMS = POPULAR_UOMS;
 
 interface UomSelectorProps {
     selectedUom: string;
@@ -46,9 +23,33 @@ interface UomSelectorProps {
 }
 
 export default function UomSelector({ selectedUom, onSelect }: UomSelectorProps) {
-    const isCustom = !ALL_KNOWN_UOMS.includes(selectedUom);
+    const isCustom = !POPULAR_UOMS.includes(selectedUom) && selectedUom !== "";
     const [showCustomInput, setShowCustomInput] = useState(isCustom);
     const [customValue, setCustomValue] = useState(isCustom ? selectedUom : "");
+
+    // Dynamically sort UOMs by usage frequency in existing products
+    const sortedUoms = useMemo(() => {
+        try {
+            const products = getAllProducts();
+            const counts: Record<string, number> = {};
+            products.forEach((p) => {
+                if (p.uom) {
+                    counts[p.uom] = (counts[p.uom] || 0) + 1;
+                }
+            });
+
+            return [...POPULAR_UOMS].sort((a, b) => {
+                const countA = counts[a] || 0;
+                const countB = counts[b] || 0;
+                if (countB !== countA) {
+                    return countB - countA;
+                }
+                return POPULAR_UOMS.indexOf(a) - POPULAR_UOMS.indexOf(b);
+            });
+        } catch {
+            return POPULAR_UOMS;
+        }
+    }, []);
 
     const handleKnownSelect = (uom: string) => {
         setShowCustomInput(false);
@@ -57,7 +58,9 @@ export default function UomSelector({ selectedUom, onSelect }: UomSelectorProps)
 
     const handleOtherPress = () => {
         setShowCustomInput(true);
-        onSelect(customValue || "");
+        if (customValue) {
+            onSelect(customValue);
+        }
     };
 
     const handleCustomChange = (text: string) => {
@@ -67,116 +70,91 @@ export default function UomSelector({ selectedUom, onSelect }: UomSelectorProps)
 
     return (
         <View style={styles.container}>
-            {UOM_GROUPS.map((group) => (
-                <View key={group.label} style={styles.group}>
-                    <Text style={styles.groupLabel}>
-                        {group.emoji}  {group.label}
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContainer}
+                keyboardShouldPersistTaps="handled"
+            >
+                {sortedUoms.map((uom) => {
+                    const active = selectedUom === uom && !showCustomInput;
+                    return (
+                        <TouchableOpacity
+                            key={uom}
+                            style={[styles.chip, active && styles.chipActive]}
+                            onPress={() => handleKnownSelect(uom)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                {uom}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+
+                <TouchableOpacity
+                    style={[styles.chip, styles.chipOther, showCustomInput && styles.chipActive]}
+                    onPress={handleOtherPress}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons
+                        name="create-outline"
+                        size={12}
+                        color={showCustomInput ? "#fff" : colors.textSecondary}
+                    />
+                    <Text style={[styles.chipText, showCustomInput && styles.chipTextActive]}>
+                        Custom
                     </Text>
-                    <View style={styles.chipsWrap}>
-                        {group.items.map((uom) => {
-                            const active = selectedUom === uom && !showCustomInput;
-                            return (
-                                <TouchableOpacity
-                                    key={uom}
-                                    style={[styles.chip, active && styles.chipActive]}
-                                    onPress={() => handleKnownSelect(uom)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                                        {uom}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                </View>
-            ))}
+                </TouchableOpacity>
+            </ScrollView>
 
-            {/* Other / Custom */}
-            <View style={styles.group}>
-                <Text style={styles.groupLabel}>✏️  Other</Text>
-                <View style={styles.chipsWrap}>
-                    <TouchableOpacity
-                        style={[styles.chip, styles.chipOther, showCustomInput && styles.chipActive]}
-                        onPress={handleOtherPress}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons
-                            name="create-outline"
-                            size={13}
-                            color={showCustomInput ? "#fff" : colors.textSecondary}
-                        />
-                        <Text style={[styles.chipText, showCustomInput && styles.chipTextActive]}>
-                            Custom
-                        </Text>
-                    </TouchableOpacity>
+            {showCustomInput && (
+                <View style={styles.customInputRow}>
+                    <TextInput
+                        style={styles.customInput}
+                        placeholder="Type unit (e.g. Tablet, Vial)"
+                        placeholderTextColor="#9ca3af"
+                        value={customValue}
+                        onChangeText={handleCustomChange}
+                        autoFocus
+                    />
                 </View>
-
-                {showCustomInput && (
-                    <View style={styles.customInputRow}>
-                        <TextInput
-                            style={styles.customInput}
-                            placeholder="Type your unit (e.g. Vial, Tablet, Ampule)"
-                            placeholderTextColor="#9ca3af"
-                            value={customValue}
-                            onChangeText={handleCustomChange}
-                            autoFocus
-                        />
-                    </View>
-                )}
-            </View>
-
-            {/* Selected indicator */}
-            {selectedUom ? (
-                <View style={styles.selectedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
-                    <Text style={styles.selectedText}>
-                        Selected: <Text style={styles.selectedValue}>{selectedUom}</Text>
-                    </Text>
-                </View>
-            ) : null}
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { gap: 16 },
-    group: { gap: 8 },
-    groupLabel: {
-        fontSize: 11,
-        fontWeight: "700",
-        color: "#9ca3af",
-        letterSpacing: 0.5,
-        textTransform: "uppercase",
-    },
-    chipsWrap: {
+    container: { gap: 6 },
+    scrollContainer: {
         flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 8,
+        alignItems: "center",
+        gap: 6,
+        paddingVertical: 2,
     },
     chip: {
         flexDirection: "row",
         alignItems: "center",
         gap: 4,
-        backgroundColor: "#f3f4f6",
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1.5,
-        borderColor: "transparent",
+        backgroundColor: "#f1f5f9",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#cbd5e1",
     },
     chipActive: {
         backgroundColor: colors.primary,
         borderColor: colors.primary,
     },
     chipOther: {
-        borderColor: "#e5e7eb",
-        backgroundColor: "#f9fafb",
+        borderColor: "#cbd5e1",
+        backgroundColor: "#f8fafc",
     },
     chipText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: "600",
-        color: "#374151",
+        color: "#334155",
     },
     chipTextActive: {
         color: "#fff",
@@ -186,31 +164,12 @@ const styles = StyleSheet.create({
     },
     customInput: {
         backgroundColor: "#fff",
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: colors.primary,
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        height: 44,
-        fontSize: 15,
-        color: colors.text,
-    },
-    selectedBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: "#eff6ff",
-        paddingHorizontal: 12,
-        paddingVertical: 6,
         borderRadius: 8,
-        alignSelf: "flex-start",
-    },
-    selectedText: {
-        fontSize: 12,
-        color: colors.textSecondary,
-        fontWeight: "500",
-    },
-    selectedValue: {
-        color: colors.primary,
-        fontWeight: "700",
+        paddingHorizontal: 10,
+        height: 36,
+        fontSize: 13,
+        color: colors.text,
     },
 });

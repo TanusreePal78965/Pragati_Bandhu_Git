@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   Linking,
   StyleSheet,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 interface Props {
@@ -39,7 +39,11 @@ export function SoftUpdateModal({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconBadge}>
-            <Ionicons name="sparkles" size={32} color={colors.primary} />
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
           <Text style={styles.title}>{title}</Text>
@@ -72,7 +76,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 340,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     elevation: 5,
@@ -82,13 +86,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   iconBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  logoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
   },
   title: {
     fontSize: 20,

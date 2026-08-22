@@ -37,7 +37,7 @@ const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => (
             ]}>
                 <Ionicons
                     name={bill.payment_mode === "udhar" ? "wallet-outline" : bill.payment_mode === "upi" ? "phone-portrait-outline" : "cash-outline"}
-                    size={20}
+                    size={16}
                     color={bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success}
                 />
             </View>
@@ -66,7 +66,7 @@ const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => (
         </View>
         <View style={styles.cardRight}>
             <Text style={styles.amount}>₹{bill.total_amount.toFixed(2)}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
         </View>
     </TouchableOpacity>
 );
@@ -100,7 +100,7 @@ export default function BillsScreen() {
 
             {/* Search */}
             <View style={styles.searchContainer}>
-                <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+                <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
                 <TextInput
                     style={styles.searchInput}
                     placeholder="Search by customer name..."
@@ -110,7 +110,7 @@ export default function BillsScreen() {
                 />
                 {search.length > 0 && (
                     <TouchableOpacity onPress={() => setSearch("")}>
-                        <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                        <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -153,7 +153,7 @@ export default function BillsScreen() {
                 )}
                 ListEmptyComponent={
                     <View style={styles.empty}>
-                        <Ionicons name="receipt-outline" size={52} color={colors.border} />
+                        <Ionicons name="receipt-outline" size={40} color={colors.border} />
                         <Text style={styles.emptyText}>No transactions found</Text>
                         <Text style={styles.emptySubText}>Bills you create will appear here</Text>
                     </View>
@@ -170,69 +170,69 @@ const styles = StyleSheet.create({
         alignItems: "center",
         backgroundColor: colors.surface,
         marginHorizontal: spacing.md,
-        marginTop: spacing.md,
-        paddingHorizontal: spacing.md,
-        borderRadius: 12,
-        height: 46,
+        marginTop: 6,
+        paddingHorizontal: 10,
+        borderRadius: 10,
+        height: 38,
         borderWidth: 1,
         borderColor: colors.border,
-        gap: 8,
+        gap: 6,
     },
     searchInput: { flex: 1, fontSize: 14, color: colors.text },
     filterRow: {
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: spacing.md,
-        marginTop: spacing.sm,
-        marginBottom: spacing.sm,
-        gap: 8,
+        marginTop: 4,
+        marginBottom: 4,
+        gap: 6,
     },
     filterChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 14,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
     },
     filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     filterChipUpiActive: { backgroundColor: "#7C3AED", borderColor: "#7C3AED" },
-    filterChipText: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
+    filterChipText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
     filterChipTextActive: { color: "#fff" },
     filterChipUpiText: { color: "#fff" },
     filterSpacer: { flex: 1 },
-    totalLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: "600" },
-    list: { paddingHorizontal: spacing.md, paddingBottom: 32 },
+    totalLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: "600" },
+    list: { paddingHorizontal: spacing.md, paddingBottom: 24 },
     card: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         backgroundColor: colors.surface,
-        borderRadius: 12,
-        padding: spacing.md,
-        marginBottom: spacing.sm,
+        borderRadius: 10,
+        padding: 10,
+        marginBottom: 6,
         borderWidth: 1,
         borderColor: colors.border,
     },
     cardLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
     modeIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: "center",
         justifyContent: "center",
-        marginRight: 12,
+        marginRight: 8,
     },
     cardInfo: { flex: 1 },
-    customerName: { fontSize: 15, fontWeight: "700", color: colors.text },
-    meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    tagRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
-    tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-    tagText: { fontSize: 11, fontWeight: "700" },
-    itemCount: { fontSize: 12, color: colors.textSecondary },
-    cardRight: { alignItems: "flex-end", gap: 4 },
-    amount: { fontSize: 16, fontWeight: "800", color: colors.primary },
-    empty: { alignItems: "center", paddingTop: 80, gap: 8 },
-    emptyText: { fontSize: typography.sizes.lg, fontWeight: "700", color: colors.textSecondary },
-    emptySubText: { fontSize: typography.sizes.sm, color: colors.textSecondary },
+    customerName: { fontSize: 14, fontWeight: "700", color: colors.text },
+    meta: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+    tagRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+    tag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
+    tagText: { fontSize: 10, fontWeight: "700" },
+    itemCount: { fontSize: 11, color: colors.textSecondary },
+    cardRight: { alignItems: "flex-end", gap: 2 },
+    amount: { fontSize: 14, fontWeight: "800", color: colors.primary },
+    empty: { alignItems: "center", paddingTop: 40, gap: 6 },
+    emptyText: { fontSize: 16, fontWeight: "700", color: colors.textSecondary },
+    emptySubText: { fontSize: 13, color: colors.textSecondary },
 });

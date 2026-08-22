@@ -127,6 +127,9 @@ export interface Bill {
   total_amount: number;
   total_items: number;
   bill_date: string;
+  discount_percent?: number;
+  discount_amount?: number;
+  discount_type?: string;
 }
 
 export interface ReportData {
@@ -910,6 +913,9 @@ export interface DraftBill {
   customer_id: string | null;
   customer_name: string | null;
   payment_mode: 'cash' | 'udhar' | 'upi';
+  discount_percent?: number;
+  discount_amount?: number;
+  discount_type?: string;
   created_at: string;
   updated_at: string;
 }
@@ -954,12 +960,15 @@ export const createDraft = (): string => {
 export const upsertDraft = (
   draftId: string,
   customer: { id: string | null; name: string | null } | null,
-  paymentMode: 'cash' | 'udhar' | 'upi'
+  paymentMode: 'cash' | 'udhar' | 'upi',
+  discountPercent: number = 0,
+  discountAmount: number = 0,
+  discountType: string = 'none'
 ): void => {
   try {
     db.runSync(
-      `UPDATE draft_bills SET customer_id = ?, customer_name = ?, payment_mode = ?, updated_at = datetime('now') WHERE id = ?`,
-      [customer?.id ?? null, customer?.name ?? null, paymentMode, draftId]
+      `UPDATE draft_bills SET customer_id = ?, customer_name = ?, payment_mode = ?, discount_percent = ?, discount_amount = ?, discount_type = ?, updated_at = datetime('now') WHERE id = ?`,
+      [customer?.id ?? null, customer?.name ?? null, paymentMode, discountPercent, discountAmount, discountType, draftId]
     );
   } catch (e) {
     console.error('upsertDraft error:', e);
@@ -1075,8 +1084,20 @@ export const getReservationsMap = (excludeDraftId: string | null = null): Record
   }
 };
 
+export const cleanupEmptyDrafts = (excludeDraftId: string | null = null): void => {
+  try {
+    db.runSync(
+      `DELETE FROM draft_bills WHERE id != ? AND id NOT IN (SELECT DISTINCT draft_id FROM draft_bill_items)`,
+      [excludeDraftId ?? '']
+    );
+  } catch (e) {
+    console.error('cleanupEmptyDrafts error:', e);
+  }
+};
+
 export const cleanupOldDrafts = (): void => {
   try {
+    cleanupEmptyDrafts(null);
     db.runSync(
       `DELETE FROM draft_bill_items WHERE draft_id IN (
          SELECT id FROM draft_bills WHERE created_at < datetime('now', '-1 day')
@@ -1105,7 +1126,10 @@ export const finalizeDraft = (
     line_total: number;
     display_qty?: string | null;
     purchase_price?: number;
-  }>
+  }>,
+  discountPercent: number = 0,
+  discountAmount: number = 0,
+  discountType: string = 'none'
 ): string => {
   const billId = genId();
   const billItemsForSync: any[] = [];
@@ -1116,9 +1140,9 @@ export const finalizeDraft = (
   try {
     db.withTransactionSync(() => {
       db.runSync(
-        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [billId, customer?.id ?? null, customer?.name ?? null, paymentMode, totalAmount, totalItems]
+        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [billId, customer?.id ?? null, customer?.name ?? null, paymentMode, totalAmount, totalItems, discountPercent, discountAmount, discountType]
       );
 
       for (const item of items) {
@@ -1175,6 +1199,9 @@ export const finalizeDraft = (
           payment_mode: paymentMode,
           total_amount: totalAmount,
           total_items: totalItems,
+          discount_percent: discountPercent,
+          discount_amount: discountAmount,
+          discount_type: discountType,
         },
         items: billItemsForSync,
         salesLog: salesLogForSync,

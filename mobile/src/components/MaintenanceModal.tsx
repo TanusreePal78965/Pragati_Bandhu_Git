@@ -8,6 +8,7 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -38,7 +39,11 @@ export function MaintenanceModal({
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.iconContainer}>
-            <Ionicons name="construct" size={72} color="#f59e0b" />
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
           <Text style={styles.title}>Under Maintenance</Text>
@@ -68,13 +73,18 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: '#fef3c7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+  },
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
   },
   title: {
     fontSize: 24,

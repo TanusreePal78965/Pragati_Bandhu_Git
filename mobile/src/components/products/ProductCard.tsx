@@ -71,10 +71,10 @@ export default function ProductCard({
                 {/* Edit & Delete Actions */}
                 <View style={styles.actions}>
                     <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-                        <Ionicons name="pencil" size={20} color={colors.secondary} />
+                        <Ionicons name="pencil" size={16} color={colors.secondary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-                        <Ionicons name="trash-outline" size={20} color={colors.secondary} />
+                        <Ionicons name="trash-outline" size={16} color={colors.secondary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -85,7 +85,7 @@ export default function ProductCard({
 const styles = StyleSheet.create({
     container: {
         backgroundColor: colors.surface,
-        paddingVertical: spacing.sm,
+        paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },

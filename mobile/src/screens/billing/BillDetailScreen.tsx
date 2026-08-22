@@ -18,7 +18,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
-import { getBillItems, Bill, BillItem } from "../../db/db";
+import { getBillItems, Bill, BillItem, createDraft, upsertDraft, upsertDraftItems, getAllProducts } from "../../db/db";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 import { toUtcDate } from "../../utils/dateUtils";
 
@@ -346,6 +346,51 @@ export default function BillDetailScreen() {
         }
     };
 
+    const handleRepeatOrder = () => {
+        if (!items || items.length === 0) {
+            Alert.alert("Empty Order", "This bill has no items to repeat.");
+            return;
+        }
+
+        const newDraftId = createDraft();
+        const allProds = getAllProducts();
+
+        const draftItems = items.map((i) => {
+            const prod = allProds.find((p) => p.id === i.product_id);
+            const unitPrice = prod ? prod.selling_price : i.unit_price;
+            return {
+                product_id: i.product_id,
+                product_name: i.product_name,
+                qty: i.qty,
+                unit_price: unitPrice,
+                line_total: i.qty * unitPrice,
+                display_qty: i.display_qty ?? null,
+                uom: i.uom ?? (prod ? prod.uom : "Pcs"),
+                units_per_pack: prod ? prod.units_per_pack : null,
+                purchase_uom: prod ? prod.purchase_uom : null,
+                is_pack_mode: false,
+                purchase_price: prod ? prod.purchase_price : (i.purchase_price ?? 0),
+            };
+        });
+
+        upsertDraftItems(newDraftId, draftItems);
+
+        const customer = bill.customer_id
+            ? { id: bill.customer_id, name: bill.customer_name }
+            : null;
+
+        upsertDraft(
+            newDraftId,
+            customer,
+            bill.payment_mode,
+            bill.discount_percent ?? 0,
+            bill.discount_amount ?? 0,
+            bill.discount_type ?? "none"
+        );
+
+        navigation.navigate("NewBill", { draftId: newDraftId });
+    };
+
     if (!bill) {
         return (
             <SafeAreaView style={styles.container} edges={["top"]}>
@@ -372,10 +417,12 @@ export default function BillDetailScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Bill Details</Text>
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Bill Details</Text>
+                </View>
                 <TouchableOpacity onPress={onSharePress} style={styles.backBtn}>
                     <Ionicons name="share-outline" size={24} color={colors.primary} />
                 </TouchableOpacity>
@@ -422,6 +469,17 @@ export default function BillDetailScreen() {
                             {modeLabelLong}
                         </Text>
                     </View>
+                    {Boolean(bill.discount_amount && bill.discount_amount > 0) && (
+                        <View style={styles.infoRow}>
+                            <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
+                            <Text style={styles.infoLabel}>
+                                Discount ({bill.discount_type === "custom_flat" ? "Flat ₹" : `${bill.discount_percent ?? 0}%`})
+                            </Text>
+                            <Text style={[styles.infoValue, { color: "#DC2626" }]}>
+                                -₹{(bill.discount_amount ?? 0).toFixed(2)}
+                            </Text>
+                        </View>
+                    )}
 
                     <View style={styles.divider} />
 
@@ -471,6 +529,12 @@ export default function BillDetailScreen() {
                     <Text style={styles.grandTotalLabel}>GRAND TOTAL</Text>
                     <Text style={styles.grandTotalValue}>₹{bill.total_amount.toFixed(2)}</Text>
                 </View>
+
+                {/* Repeat Order Button */}
+                <TouchableOpacity style={styles.repeatOrderBtn} onPress={handleRepeatOrder} activeOpacity={0.8}>
+                    <Ionicons name="repeat-outline" size={20} color="#FFFFFF" />
+                    <Text style={styles.repeatOrderBtnText}>Repeat Order</Text>
+                </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
@@ -487,6 +551,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    headerLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
     backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
     headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
@@ -585,6 +654,26 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
     grandTotalLabel: { fontSize: 13, fontWeight: "700", color: colors.textSecondary },
-    grandTotalValue: { fontSize: 24, fontWeight: "800", color: colors.primary },
+    grandTotalValue: { fontSize: 22, fontWeight: "800", color: colors.primary },
+    repeatOrderBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+        paddingVertical: 14,
+        marginTop: 16,
+        gap: 8,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    repeatOrderBtnText: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#FFFFFF",
+    },
     errorText: { textAlign: "center", color: colors.textSecondary, marginTop: 40 },
 });

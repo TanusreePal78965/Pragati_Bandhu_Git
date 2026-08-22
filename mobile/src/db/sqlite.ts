@@ -15,7 +15,11 @@ let _currentDbKey: string | null = null;
 
 const db = new Proxy({} as SQLite.SQLiteDatabase, {
   get(_, prop: string | symbol) {
-    if (!_db) throw new Error(`[SQLite] No database open — openUserDatabase(dbKey) must be called first`);
+    if (!_db) {
+      const key = _currentDbKey || 'default';
+      _db = SQLite.openDatabaseSync(`shopai_${key}.db`);
+      initTables(_db);
+    }
     const val = (_db as any)[prop];
     return typeof val === 'function' ? val.bind(_db) : val;
   },
@@ -69,6 +73,9 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       payment_mode TEXT DEFAULT 'cash',
       total_amount REAL NOT NULL,
       total_items INTEGER NOT NULL,
+      discount_percent REAL DEFAULT 0,
+      discount_amount REAL DEFAULT 0,
+      discount_type TEXT DEFAULT 'none',
       bill_date TEXT DEFAULT (datetime('now'))
     );
 
@@ -117,6 +124,9 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       customer_id TEXT,
       customer_name TEXT,
       payment_mode TEXT DEFAULT 'cash',
+      discount_percent REAL DEFAULT 0,
+      discount_amount REAL DEFAULT 0,
+      discount_type TEXT DEFAULT 'none',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -166,6 +176,12 @@ function initTables(database: SQLite.SQLiteDatabase): void {
   try { database.runSync('ALTER TABLE bill_items ADD COLUMN display_qty TEXT DEFAULT NULL'); } catch (_) {}
   try { database.runSync('ALTER TABLE bill_items ADD COLUMN purchase_price REAL DEFAULT 0'); } catch (_) {}
   try { database.runSync('ALTER TABLE draft_bill_items ADD COLUMN purchase_price REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE bills ADD COLUMN discount_percent REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE bills ADD COLUMN discount_amount REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync("ALTER TABLE bills ADD COLUMN discount_type TEXT DEFAULT 'none'"); } catch (_) {}
+  try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_percent REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_amount REAL DEFAULT 0'); } catch (_) {}
+  try { database.runSync("ALTER TABLE draft_bills ADD COLUMN discount_type TEXT DEFAULT 'none'"); } catch (_) {}
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

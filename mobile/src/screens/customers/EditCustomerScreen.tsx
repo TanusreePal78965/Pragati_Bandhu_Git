@@ -172,11 +172,12 @@ export default function EditCustomerScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Edit Customer</Text>
-                <View style={{ width: 40 }} />
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Edit Customer</Text>
+                </View>
             </View>
 
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -416,6 +417,11 @@ const styles = StyleSheet.create({
         height: 56,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    headerLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
     headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
     headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },

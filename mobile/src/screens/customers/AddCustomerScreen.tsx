@@ -50,11 +50,12 @@ export default function AddCustomerScreen() {
             <StatusBar barStyle="dark-content" />
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Add New Customer</Text>
-                <View style={{ width: 40 }} />
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Add New Customer</Text>
+                </View>
             </View>
 
             <KeyboardAvoidingView
@@ -161,6 +162,11 @@ const styles = StyleSheet.create({
         height: 60,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    headerLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
     backButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
     headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },

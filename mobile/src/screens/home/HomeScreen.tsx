@@ -77,11 +77,11 @@ export default function HomeScreen() {
                     <View style={styles.salesCard}>
                         <View style={styles.salesHeader}>
                             <Text style={styles.salesLabel}>TODAY'S TOTAL SALES</Text>
-                            <Ionicons name="cash-outline" size={40} color={colors.primary + "20"} style={styles.salesIconBg} />
+                            <Ionicons name="cash-outline" size={32} color={colors.primary + "20"} style={styles.salesIconBg} />
                         </View>
                         <Text style={styles.salesValue}>{formatCurrency(todaySales.total)}</Text>
                         <View style={styles.trendRow}>
-                            <Ionicons name="receipt-outline" size={16} color={colors.success} />
+                            <Ionicons name="receipt-outline" size={14} color={colors.success} />
                             <Text style={styles.trendText}>{todaySales.count} bill{todaySales.count !== 1 ? "s" : ""} today</Text>
                             {salesTrend !== null && (
                                 <View style={[
@@ -146,7 +146,7 @@ export default function HomeScreen() {
                                     </Text>
                                     <Text style={styles.alertSub}>No low stock items</Text>
                                 </View>
-                                <Ionicons name="checkmark-circle" size={32} color={colors.success} />
+                                <Ionicons name="checkmark-circle" size={24} color={colors.success} />
                             </View>
                         </View>
                     )}
@@ -161,7 +161,7 @@ export default function HomeScreen() {
                     style={styles.primaryAction}
                     onPress={() => navigation.navigate("NewBill")}
                 >
-                    <Ionicons name="cart-outline" size={24} color="#fff" />
+                    <Ionicons name="cart-outline" size={20} color="#fff" />
                     <Text style={styles.primaryActionText}>Create New Bill</Text>
                 </TouchableOpacity>
 
@@ -171,7 +171,7 @@ export default function HomeScreen() {
                         onPress={() => navigation.navigate("Inventory")}
                     >
                         <View style={[styles.secondaryActionIcon, { backgroundColor: colors.primary + "10" }]}>
-                            <Ionicons name="cube-outline" size={24} color={colors.primary} />
+                            <Ionicons name="cube-outline" size={20} color={colors.primary} />
                         </View>
                         <Text style={styles.secondaryActionText}>Inventory</Text>
                     </TouchableOpacity>
@@ -180,7 +180,7 @@ export default function HomeScreen() {
                         onPress={() => navigation.navigate("Customers")}
                     >
                         <View style={[styles.secondaryActionIcon, { backgroundColor: "#EEF2FF" }]}>
-                            <Ionicons name="people-outline" size={24} color="#4F46E5" />
+                            <Ionicons name="people-outline" size={20} color="#4F46E5" />
                         </View>
                         <Text style={styles.secondaryActionText}>Customers</Text>
                     </TouchableOpacity>
@@ -327,95 +327,95 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
     scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.tabBarOffset },
-    mainStatsContainer: { gap: spacing.sm, marginTop: spacing.sm },
+    mainStatsContainer: { gap: 8, marginTop: 6 },
     salesCard: {
         backgroundColor: colors.surface,
-        borderRadius: spacing.roundness,
-        padding: spacing.md,
+        borderRadius: 10,
+        padding: 10,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 3,
+        shadowRadius: 6,
+        elevation: 2,
         borderWidth: 1,
         borderColor: colors.border,
     },
     salesHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-    salesLabel: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, letterSpacing: 1 },
+    salesLabel: { fontSize: 10, fontWeight: "600", color: colors.textSecondary, letterSpacing: 0.5 },
     salesIconBg: { position: "absolute", right: 0, top: 0 },
-    salesValue: { fontSize: 28, fontWeight: "800", color: colors.primary, marginVertical: spacing.sm },
-    trendRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-    trendText: { fontSize: 12, color: colors.success, fontWeight: "600" },
-    trendBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-    trendBadgeText: { fontSize: 11, fontWeight: "700" },
-    alertCard: { borderRadius: spacing.roundness, padding: spacing.md, borderWidth: 1, borderStyle: "dashed" },
-    alertLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginBottom: spacing.sm },
+    salesValue: { fontSize: 22, fontWeight: "800", color: colors.primary, marginVertical: 2 },
+    trendRow: { flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap" },
+    trendText: { fontSize: 11, color: colors.success, fontWeight: "600" },
+    trendBadge: { flexDirection: "row", alignItems: "center", gap: 2, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+    trendBadgeText: { fontSize: 10, fontWeight: "700" },
+    alertCard: { borderRadius: 10, padding: 10, borderWidth: 1, borderStyle: "dashed" },
+    alertLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4 },
     alertMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    alertValue: { fontSize: 20, fontWeight: "700", color: "#1E293B" },
-    alertSub: { fontSize: 13, color: "#64748B", marginTop: 2 },
-    alertAction: { backgroundColor: "#B45309", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-    alertActionText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.sm },
-    sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.textSecondary, letterSpacing: 1 },
+    alertValue: { fontSize: 16, fontWeight: "700", color: "#1E293B" },
+    alertSub: { fontSize: 12, color: "#64748B", marginTop: 1 },
+    alertAction: { backgroundColor: "#B45309", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+    alertActionText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, marginBottom: 4 },
+    sectionTitle: { fontSize: 11, fontWeight: "800", color: colors.textSecondary, letterSpacing: 0.5 },
     primaryAction: {
         backgroundColor: colors.primary,
-        borderRadius: spacing.roundness,
-        paddingVertical: 14,
+        borderRadius: 10,
+        paddingVertical: 10,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: spacing.sm,
+        gap: 6,
         shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 8 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
-        shadowRadius: 12,
-        elevation: 6,
+        shadowRadius: 6,
+        elevation: 3,
     },
-    primaryActionText: { color: "#fff", fontSize: 18, fontWeight: "700" },
-    secondaryActionsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
+    primaryActionText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+    secondaryActionsRow: { flexDirection: "row", gap: 8, marginTop: 6 },
     secondaryActionCard: { 
         flex: 1, 
         backgroundColor: colors.surface, 
-        borderRadius: spacing.roundness, 
-        padding: spacing.sm, 
+        borderRadius: 10, 
+        padding: 8, 
         alignItems: "center", 
         borderWidth: 1, 
         borderColor: colors.border,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowRadius: 3,
+        elevation: 1,
     },
-    secondaryActionIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
-    secondaryActionText: { fontSize: 14, fontWeight: "600", color: colors.text },
-    aiSection: { marginTop: spacing.lg },
-    aiHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
-    aiTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-    aiTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-    aiCard: { backgroundColor: "#EEF2FF", borderRadius: spacing.roundness, padding: spacing.md, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: spacing.sm },
-    aiMessage: { fontSize: 15, color: "#1E293B", lineHeight: 22, fontWeight: "500" },
-    aiFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.md },
-    aiBadge: { backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
-    aiBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-    aiTime: { fontSize: 12, color: colors.textSecondary },
-    activityList: { backgroundColor: colors.surface, borderRadius: spacing.roundness, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-    activityItem: { flexDirection: "row", alignItems: "center", padding: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-    activityIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", marginRight: spacing.sm },
+    secondaryActionIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+    secondaryActionText: { fontSize: 13, fontWeight: "600", color: colors.text },
+    aiSection: { marginTop: 10 },
+    aiHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    aiTitleRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    aiTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+    aiCard: { backgroundColor: "#EEF2FF", borderRadius: 10, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.primary, marginBottom: 6 },
+    aiMessage: { fontSize: 13, color: "#1E293B", lineHeight: 18, fontWeight: "500" },
+    aiFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+    aiBadge: { backgroundColor: colors.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    aiBadgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
+    aiTime: { fontSize: 11, color: colors.textSecondary },
+    activityList: { backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+    activityItem: { flexDirection: "row", alignItems: "center", padding: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+    activityIcon: { width: 28, height: 28, borderRadius: 6, alignItems: "center", justifyContent: "center", marginRight: 8 },
     activityContent: { flex: 1 },
-    activityTitle: { fontSize: 15, fontWeight: "600", color: colors.text },
-    activitySubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    activityAmount: { fontSize: 15, fontWeight: "700", color: colors.text },
-    emptyActivity: { alignItems: "center", paddingVertical: spacing.lg },
-    emptyActivityText: { fontSize: 14, color: colors.textSecondary },
+    activityTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
+    activitySubtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
+    activityAmount: { fontSize: 14, fontWeight: "700", color: colors.text },
+    emptyActivity: { alignItems: "center", paddingVertical: 12 },
+    emptyActivityText: { fontSize: 13, color: colors.textSecondary },
     upgradeNudge: {
         flexDirection: "row",
         alignItems: "flex-start",
         gap: 6,
         backgroundColor: "#EFF6FF",
-        padding: 10,
-        borderRadius: 8,
-        marginTop: 8,
+        padding: 8,
+        borderRadius: 6,
+        marginTop: 6,
     },
-    upgradeNudgeText: { flex: 1, fontSize: 12, color: "#1d4ed8", lineHeight: 18 },
+    upgradeNudgeText: { flex: 1, fontSize: 11, color: "#1d4ed8", lineHeight: 16 },
 });

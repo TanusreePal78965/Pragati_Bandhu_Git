@@ -130,18 +130,19 @@ export default function NotificationsScreen() {
 
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <View style={styles.headerCenter}>
-                    <Text style={styles.headerTitle}>Notifications</Text>
-                    {notifications.length > 0 && (
-                        <View style={styles.countBadge}>
-                            <Text style={styles.countBadgeText}>{notifications.length}</Text>
-                        </View>
-                    )}
+                <View style={styles.headerLeft}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
+                    </TouchableOpacity>
+                    <View style={styles.headerCenter}>
+                        <Text style={styles.headerTitle}>Notifications</Text>
+                        {notifications.length > 0 && (
+                            <View style={styles.countBadge}>
+                                <Text style={styles.countBadgeText}>{notifications.length}</Text>
+                            </View>
+                        )}
+                    </View>
                 </View>
-                <View style={{ width: 40 }} />
             </View>
 
             {/* Summary pills */}
@@ -205,6 +206,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.surface,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    headerLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
     },
     backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
     headerCenter: { flexDirection: "row", alignItems: "center", gap: 8 },

@@ -216,19 +216,19 @@ export default function ProductsScreen() {
                             style={styles.headerButton}
                             onPress={() => navigation.navigate("ManageCategories")}
                         >
-                            <Ionicons name="folder-outline" size={22} color={colors.textSecondary} />
+                            <Ionicons name="folder-outline" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerButton}
                             onPress={() => navigation.navigate("ManageBrands")}
                         >
-                            <Ionicons name="pricetag-outline" size={22} color={colors.textSecondary} />
+                            <Ionicons name="pricetag-outline" size={24} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.headerButton}
                             onPress={() => navigation.navigate("Notifications")}
                         >
-                            <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+                            <Ionicons name="notifications-outline" size={24} color={colors.textSecondary} />
                             <View style={styles.notificationDot} />
                         </TouchableOpacity>
                     </View>
@@ -379,84 +379,85 @@ const styles = StyleSheet.create({
         alignItems: "center",
         backgroundColor: "#f3f4f6",
         marginHorizontal: spacing.md,
-        paddingHorizontal: spacing.md,
-        borderRadius: 12,
-        height: 48,
-        marginBottom: spacing.md,
+        paddingHorizontal: 10,
+        borderRadius: 10,
+        height: 40,
+        marginTop: 6,
+        marginBottom: 8,
     },
-    searchInput: { flex: 1, marginLeft: spacing.sm, fontSize: 16, color: colors.text },
-    categoryContainer: { marginBottom: spacing.md },
-    categoryScroll: { paddingHorizontal: spacing.md, gap: 8 },
+    searchInput: { flex: 1, marginLeft: 6, fontSize: 14, color: colors.text },
+    categoryContainer: { marginBottom: 6 },
+    categoryScroll: { paddingHorizontal: spacing.md, gap: 6 },
     categoryChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 14,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
     },
     activeCategoryChip: { backgroundColor: colors.primary, borderColor: colors.primary },
-    categoryText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
+    categoryText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
     activeCategoryText: { color: "#fff" },
     statusRow: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         paddingHorizontal: spacing.md,
-        marginBottom: spacing.sm,
+        marginBottom: 4,
     },
-    statusLabel: { fontSize: 12, fontWeight: "700", color: colors.textSecondary, letterSpacing: 0.5 },
+    statusLabel: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, letterSpacing: 0.5 },
     listContent: { paddingBottom: spacing.tabBarOffset },
-    emptyContainer: { alignItems: "center", justifyContent: "center", marginTop: 64 },
-    emptyText: { marginTop: spacing.md, fontSize: typography.sizes.md, color: colors.textSecondary, textAlign: "center" },
+    emptyContainer: { alignItems: "center", justifyContent: "center", marginTop: 48 },
+    emptyText: { marginTop: spacing.md, fontSize: 14, color: colors.textSecondary, textAlign: "center" },
     selectionOverlay: {
         position: "absolute",
-        bottom: spacing.tabBarOffset + spacing.md,
+        bottom: spacing.tabBarOffset + 8,
         left: spacing.md,
         right: spacing.md,
         backgroundColor: "#111827",
-        borderRadius: 16,
-        padding: spacing.md,
+        borderRadius: 12,
+        padding: 10,
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
     },
-    selectionLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+    selectionLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
     selectionBadge: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
         backgroundColor: colors.primary,
         alignItems: "center",
         justifyContent: "center",
     },
-    selectionBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-    selectionText: { color: "#fff", fontWeight: "600" },
-    selectionActions: { flexDirection: "row", alignItems: "center", gap: 16 },
-    selectionAction: { alignItems: "center", gap: 4 },
-    selectionActionText: { color: "#fff", fontSize: 9, fontWeight: "700" },
+    selectionBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+    selectionText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+    selectionActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+    selectionAction: { alignItems: "center", gap: 2 },
+    selectionActionText: { color: "#fff", fontSize: 8, fontWeight: "700" },
     headerButtonsRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
+        gap: 6,
     },
     headerButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 10,
+        width: 36,
+        height: 36,
+        borderRadius: 8,
         backgroundColor: "#f8fafc",
         alignItems: "center",
         justifyContent: "center",
     },
     notificationDot: {
         position: "absolute",
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        top: 8,
+        right: 8,
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
         backgroundColor: colors.error,
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: "#fff",
     },
 });

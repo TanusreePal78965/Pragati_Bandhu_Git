@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** August 11, 2026 — v4.6
+> **Last updated:** August 22, 2026 — v5.2
 
 ---
 
@@ -528,10 +528,10 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| 1 | Products → SQLite | ✅ | ProductsScreen + AddProductScreen wired; `useFocusEffect` refreshes list on nav return |
+| 1 | Products → SQLite | ✅ | ProductsScreen + AddProductScreen wired; `useFocusEffect` refreshes list on nav return; **v5.1:** Compact card redesign; **v5.2:** Fixed placeholder clipping with `paddingVertical: 0`, placed save buttons inside ScrollView (non-sticky), audited full inventory system |
 | 2 | Categories → SQLite | ✅ | ManageCategoriesScreen + AddCategoryScreen wired; icons encoded as `"Ionicons:cart"` in DB |
 | 3 | Brands → SQLite | ✅ | ManageBrandsScreen + AddBrandScreen wired |
-| 4 | Link categories + brands to Add Product form | ✅ | Category + brand chip selectors pull live from SQLite |
+| 4 | Link categories + brands to Add Product form | ✅ | Category + brand chip selectors pull live from SQLite; **v5.1:** Arranged Category & Brand side-by-side in 2-column grid |
 | 5 | Customers → SQLite | ✅ | CustomersScreen + AddCustomerScreen wired; udhar balance tracked |
 | 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance |
 | 7 | Sales log → SQLite | ✅ | `sales_log` row written per product on every bill checkout |
@@ -927,9 +927,25 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 150 | `app_settings` Database Schema | ✅ | Created `app_settings` key-value migration (`supabase/migrations/009_create_app_settings.sql`) with version controls, maintenance mode parameters, store URLs, and RLS policies. |
-| 151 | Web Admin Settings Page | ✅ | Created `web/src/pages/admin/AdminSettings.tsx`, registered `/admin/settings` route in `App.tsx`, and added "App Settings" to `AdminLayout.tsx` sidebar with sticky save footer bar and `isDirty` state indicator. |
+| 151 | Web Admin Settings Page | ✅ | Created `web/src/pages/admin/AdminSettings.tsx`, registered `/admin/settings` route in `App.tsx`, and added "App Settings" to `AdminLayout.tsx` sidebar. Features full-width responsive 2-column grid layout (`.admin-two-col-grid`), sticky save footer bar (`.admin-sticky-footer`), and `isDirty` state indicator. |
 | 152 | Expo Mobile Version Enforcement | ✅ | Created version helper (`mobile/src/lib/version.ts`), `VersionContext.tsx` provider, and mobile modal components (`ForceUpdateModal.tsx`, `MaintenanceModal.tsx`, `SoftUpdateModal.tsx`). Wired startup version checks and `AppState` active event listener in `App.tsx`. Locked Android hardware Back button on mandatory updates. |
 | 153 | Version Code Display in UI | ✅ | Updated `LoginScreen.tsx` and `SettingsScreen.tsx` to dynamically display the full app version string including build version code (e.g. `v1.0.0 (1)`). |
+
+---
+
+### 14.23 Billing Enhancement, Discounting & Repeat Order System (v5.0)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 154 | Screen Header Alignment | ✅ | Standardized screen headers to left-align title next to back arrow `<--` across `NewBillScreen`, `BillDetailScreen`, `AddCustomerScreen`, `EditCustomerScreen`, `NotificationsScreen`. |
+| 155 | Unit Price & Pack Editing Validation | ✅ | Added selling price text input per bill item card; enforces `selling_price > purchase_price` (accounting for pack purchase price) on blur and text change. |
+| 156 | Multi-Discount & Below Cost Warning | ✅ | Implemented 0%, 5%, 10%, 15%, 20%, Custom `%`, and Custom `₹` Flat Amount discount selector options; pops `Below Cost Price Warning Modal` with `Okay` and `Cancel` if discount drops selling price to or below purchase price. |
+| 157 | Collapsible Discount Placement | ✅ | Anchored discount selector toggle bar directly on top of Total Items sticky footer; expands/collapses upward without obscuring totals. |
+| 158 | Local SQLite & Supabase PostgreSQL Schema | ✅ | Added `discount_percent`, `discount_amount`, and `discount_type` columns and migrations to SQLite (`bills`, `draft_bills`) and Supabase PostgreSQL (`public.bills` via `010_add_discount_to_bills.sql`). |
+| 159 | Sync & Draft Persistence | ✅ | `finalizeDraft` and `upsertDraft` in `db.ts` preserve `discount_type` and amounts across draft switching and include full compound payload in `syncQueue.ts`. |
+| 160 | Hot Reload Database Safeguard | ✅ | Updated SQLite proxy in `sqlite.ts` to auto-reopen database on fast refresh to prevent `[SQLite] No database open` errors. |
+| 161 | Multi-Product Catalog Selection Screen | ✅ | Added `[ 📦 Catalog ]` button in `NewBillScreen` opening a full-screen catalog selection modal; features search, category filters, quantity steppers (`+`/`-`), pack toggles, live subtotal, and "Add to Bill". |
+| 162 | Repeat Order Action | ✅ | Added `[ 🔄 Repeat Order ]` button to `BillDetailScreen`; copies historical items, customer, and discount info into a fresh draft and navigates directly to `NewBillScreen`. |
 
 ---
 
@@ -995,6 +1011,25 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v5.2 — August 22, 2026
+
+**Mobile Form Polish & Inventory System Audit**
+- **TextInput Placeholder Fix**: Resolved vertical clipping of input placeholders (`Product Name *`, `0.00`, `0`) across `AddProductScreen.tsx` by setting explicit `paddingVertical: 0` and adjusting container heights.
+- **Non-Sticky Save Buttons**: Relocated form action buttons (`Save Product`, `Save All Products`) inside their respective `ScrollView` elements so they scroll naturally with content instead of hovering as a sticky footer.
+- **Inventory Audit**: Verified full end-to-end functionality across product listings, multi-add table mode, weighted-average stock updates, batch creations, and SQLite/Supabase synchronization.
+
+---
+
+### v5.1 — August 22, 2026
+
+**Mobile Add Product Screen Compact Card Redesign**
+- **Structured Card Containers**: Grouped form fields into 3 distinct white cards (Basic Info, Pricing & Inventory, Bulk Packaging) over a clean soft slate background (`#f1f5f9`).
+- **2-Column Layouts**: Placed Category and Brand selectors side-by-side in a 2-column grid. Arranged Purchase Price & Selling Price, as well as Initial Stock & Low Stock Alert in 2-column side-by-side rows.
+- **Horizontal UOM Selector**: Re-engineered `UomSelector.tsx` from vertical group headers into a single-line horizontal scrollable chip bar with a custom unit option.
+- **Segmented Control**: Upgraded mode tabs into a compact iOS/Android-style segmented control switcher.
+
+---
 
 ### v4.8 — August 21, 2026
 
@@ -1305,7 +1340,13 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **New Feature: PDF Receipt Generation.** Added `expo-print` to generate professional, styled receipts from HTML.
 - **Header Branding:** Receipts automatically pull Shop Name, Owner Name, and Phone from settings to appear at the header.
 - **Native Sharing:** Integrated with `expo-sharing` to allow one-tap sharing to WhatsApp, Email, or Files via the OS share sheet.
-- **UI Update:** Share icon added to the top-right header of `BillDetailScreen`.
+### v5.0 — August 22, 2026
+
+**Mobile App Dense POS Layout & Screen Compacting Redesign**
+- **Mobile Screen Compacting**: Redesigned UI element sizes, paddings, margins, card heights, icon sizes, and header dimensions across all core mobile app screens (`HomeScreen`, `NewBillScreen`, `ProductsScreen`, `CustomersScreen`, `BillsScreen`, `ReportsScreen`, `SettingsScreen`).
+- **Dense POS Billing (`NewBillScreen.tsx`)**: Compacted customer details card, product search input height (48 -> 40), payment mode buttons (48 -> 38), empty state spacing, item card padding, and action buttons height (56 -> 46) so shopkeepers can see more bill items on screen without scrolling.
+- **Compact Shared Header (`ScreenHeader.tsx`)**: Reduced header container padding and title font size (24 -> 20) for clean space utilization across all main tab views.
+- **Home, Inventory, Customers, Bills, Reports & Settings Screens**: Reduced card paddings, list item row heights, avatar dimensions (40x40 -> 32x32), search bar heights, and filter chip paddings across all mobile screens.
 
 ### v4.9 — August 22, 2026
 
@@ -1428,5 +1469,20 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 
 ---
 
-*Document prepared: April 2026 | Last updated: July 2026*
-*Version: 3.7 — Reflects Play Store Release Build and EAS Insights/Observe Integration*
+### v5.0 — August 22, 2026
+
+- **Header Sizing & Icon Alignment Standardised**: Standardised header button box sizes (34px → 36px), icon dimensions (22px → 24px), and notification dot placement in `ProductsScreen.tsx` (Inventory) to match `ScreenHeader.tsx` standard used across Home, Customers, Reports, and Settings screens.
+- **Settings Screen Compact Layout & Version Formatting**: Refined section paddings, item heights, icon widths, badge padding, button margins, and dynamic version label format (`v${getAppVersion()} (${getAppVersionCode()})`) in `SettingsScreen.tsx`.
+- **Header Alignment Standardised**: Left-aligned header titles next to back arrow across `NewBillScreen`, `BillDetailScreen`, `AddCustomerScreen`, `EditCustomerScreen`, `NotificationsScreen`.
+- **Selling Price Validation**: Added editable selling price field in billing items with validation enforcing `selling_price > purchase_price` per unit/pack.
+- **Advanced Discounting System**: Added 0%, 5%, 10%, 15%, 20%, Custom %, and Custom Flat ₹ discount options. Implemented Below Cost Price Warning Modal (`Okay` / `Cancel`) when discounts breach purchase price.
+- **Collapsible Discount Placement**: Anchored discount selector toggle bar directly above the sticky total items footer.
+- **Database & Sync Engine**: Added `discount_percent`, `discount_amount`, and `discount_type` columns to local SQLite (`bills`, `draft_bills`) and Supabase PostgreSQL (`public.bills` via `010_add_discount_to_bills.sql`). Saved in drafts and queued in `syncQueue.ts`.
+- **Hot Reload Crash Protection**: Updated SQLite Proxy in `sqlite.ts` to auto-reopen database on fast refresh, eliminating `[SQLite] No database open` errors.
+- **Multi-Product Catalog Selection Screen**: Added `[ 📦 Catalog ]` button opening a full-screen product selection modal with category chips, live search, `+`/`-` quantity steppers, unit/pack toggles, and live subtotal checkout.
+- **Repeat Order Feature**: Added `[ 🔄 Repeat Order ]` button in `BillDetailScreen` to clone historical receipt items into a new draft and open `NewBillScreen`.
+
+---
+
+*Document prepared: April 2026 | Last updated: August 2026*
+*Version: 5.0 — Reflects Billing Enhancement, Multi-Discount Engine, Product Catalog Selection Screen, Repeat Order System, and Screen Header Standardisation*
