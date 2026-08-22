@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import type { AuthStackParamList } from "../../navigation/AuthNavigator";
 import { useAuth } from "../../context/AuthContext";
+import { getAppVersion, getAppVersionCode } from "../../lib/version";
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">;
 
@@ -198,6 +199,10 @@ export default function LoginScreen() {
                     <TouchableOpacity onPress={() => navigation.navigate("HelpCenter")}>
                         <Text style={styles.supportText}>Need help? Visit our Help Center</Text>
                     </TouchableOpacity>
+
+                    <Text style={styles.versionText}>
+                        v{getAppVersion()} ({getAppVersionCode()})
+                    </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -405,5 +410,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "#64748B",
         textAlign: "center",
+    },
+    versionText: {
+        marginTop: 12,
+        fontSize: 12,
+        color: "#94A3B8",
+        textAlign: "center",
+        fontWeight: "500",
     },
 });

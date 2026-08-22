@@ -25,6 +25,7 @@ import { spacing } from "../../theme/spacing";
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { useAuth } from "../../context/AuthContext";
 import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent, getStoredShopId } from "../../utils/storage";
+import { getAppVersion, getAppVersionCode } from "../../lib/version";
 import { supabase } from "../../lib/supabase";
 import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
 import { exportAsSql, queueAllLocalData, updateShop, getShop } from "../../db/db";
@@ -737,7 +738,7 @@ export default function SettingsScreen() {
                 <SettingsItem
                     icon="information-circle"
                     title="App Version"
-                    value="v1.0.0"
+                    value={`v${getAppVersion()} (${getAppVersionCode()})`}
                     showChevron={false}
                     onPress={handleVersionPress}
                 />

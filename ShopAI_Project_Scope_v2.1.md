@@ -914,6 +914,24 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.21 Default AI Consent on Registration (v4.8)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 149 | Default `ai_consent: true` on Registration | ✅ | Updated `register-shop` Edge Function and `backend/src/routes/shops.js` to set `ai_consent: true` by default upon registration. |
+
+---
+
+### 14.22 Server-Driven Version Enforcement & Maintenance Mode (v4.9)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 150 | `app_settings` Database Schema | ✅ | Created `app_settings` key-value migration (`supabase/migrations/009_create_app_settings.sql`) with version controls, maintenance mode parameters, store URLs, and RLS policies. |
+| 151 | Web Admin Settings Page | ✅ | Created `web/src/pages/admin/AdminSettings.tsx`, registered `/admin/settings` route in `App.tsx`, and added "App Settings" to `AdminLayout.tsx` sidebar with sticky save footer bar and `isDirty` state indicator. |
+| 152 | Expo Mobile Version Enforcement | ✅ | Created version helper (`mobile/src/lib/version.ts`), `VersionContext.tsx` provider, and mobile modal components (`ForceUpdateModal.tsx`, `MaintenanceModal.tsx`, `SoftUpdateModal.tsx`). Wired startup version checks and `AppState` active event listener in `App.tsx`. Locked Android hardware Back button on mandatory updates. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -976,6 +994,13 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v4.8 — August 21, 2026
+
+**Default AI Consent on Registration**
+- **Automatic Cloud/AI Consent for New Registrations**: Updated `supabase/functions/register-shop/index.ts` to include `ai_consent: true` in the initial insert payload so shops registered via the web platform have AI consent and cloud sync enabled immediately. Updated `backend/src/routes/shops.js` fallback default as well.
+
+---
 
 ### v4.7 — August 17, 2026
 
@@ -1280,6 +1305,15 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Header Branding:** Receipts automatically pull Shop Name, Owner Name, and Phone from settings to appear at the header.
 - **Native Sharing:** Integrated with `expo-sharing` to allow one-tap sharing to WhatsApp, Email, or Files via the OS share sheet.
 - **UI Update:** Share icon added to the top-right header of `BillDetailScreen`.
+
+### v4.9 — August 22, 2026
+
+**Server-Driven Version Enforcement & Maintenance Mode Blueprint**
+- **Supabase DB Schema**: Created key-value configuration table `app_settings` (`key`, `value`) to control version enforcement (`app_min_version`, `app_min_version_code`, `app_latest_version`, `app_latest_version_code`) and maintenance mode (`app_maintenance_mode`, `app_maintenance_message`).
+- **Web Admin Studio (`web/src/pages/admin/AdminSettings.tsx`)**: Created unified settings control panel for Super Admins with sticky save footer bar, unsaved changes indicator (`isDirty`), and warning indicator when maintenance mode is ON.
+- **Expo Mobile App (`mobile/`)**: Created version helper (`version.ts`), store (`useVersionStore.ts`), non-dismissible `ForceUpdateModal` (with Android hardware Back press lock), `MaintenanceModal`, and `SoftUpdateModal`. Bound startup version checks and `AppState` active event listener in `App.tsx`.
+
+---
 
 ### v4.0 — August 11, 2026
 

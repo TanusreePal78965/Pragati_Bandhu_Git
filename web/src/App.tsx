@@ -16,6 +16,7 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminPayments from './pages/admin/AdminPayments';
 import AdminShops from './pages/admin/AdminShops';
+import AdminSettings from './pages/admin/AdminSettings';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -415,6 +416,7 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="shops" element={<AdminShops />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>

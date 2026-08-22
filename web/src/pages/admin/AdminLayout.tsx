@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, Store, LogOut } from 'lucide-react';
+import { LayoutDashboard, CreditCard, Store, Sliders, LogOut } from 'lucide-react';
 import logoUrl from '../../assets/icon.png';
 import '../../Admin.css';
 
@@ -61,6 +61,12 @@ export default function AdminLayout() {
           >
             <Store className="admin-nav-icon" /> Shops
           </Link>
+          <Link 
+            to="/admin/settings" 
+            className={`admin-nav-item ${location.pathname.includes('/admin/settings') ? 'active' : ''}`}
+          >
+            <Sliders className="admin-nav-icon" /> App Settings
+          </Link>
         </nav>
       </aside>
 
@@ -78,6 +84,7 @@ export default function AdminLayout() {
             {location.pathname === '/admin' && 'Overview'}
             {location.pathname.includes('/admin/payments') && 'Payments Management'}
             {location.pathname.includes('/admin/shops') && 'Shop Management'}
+            {location.pathname.includes('/admin/settings') && 'App Version & Maintenance Settings'}
             </div>
           </div>
           <div className="admin-header-actions">
