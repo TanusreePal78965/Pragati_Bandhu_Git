@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, ShieldAlert, Smartphone, Save, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Sliders, ShieldAlert, AlertOctagon, Sparkles, ShoppingBag, Save, AlertTriangle, CheckCircle } from 'lucide-react';
 import '../../Admin.css';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   app_force_update_title: 'Update Required',
   app_force_update_message: 'A mandatory update is required to continue using Pragati Bandhu.',
   app_soft_update_title: 'New Version Available',
-  app_soft_update_message: 'A new version of Pragati Bandhu is available with performance improvements.',
+  app_soft_update_message: 'A new version of Pragati Bandhu is available with new features.',
   app_play_store_url: 'https://play.google.com/store/apps/details?id=com.pragatibandhu.app',
   app_app_store_url: 'https://apps.apple.com/app/id6400000000',
 };
@@ -139,10 +139,11 @@ export default function AdminSettings() {
 
   return (
     <div style={{ paddingBottom: '5rem', maxWidth: '1000px' }}>
+      {/* Header Title */}
       <div className="admin-page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 className="admin-page-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Sliders size={26} color="#2563eb" /> App Version Control & Maintenance Mode
+            <Sliders size={26} color="#2563eb" /> App Version Control & Maintenance Settings
             {isDirty && (
               <span
                 style={{
@@ -158,7 +159,7 @@ export default function AdminSettings() {
             )}
           </h1>
           <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: '0.9rem' }}>
-            Manage force updates, soft updates, and global maintenance mode across Android & iOS apps without code redeployments.
+            Manage app maintenance downtime, mandatory updates, and optional update popups dynamically without app redeployments.
           </p>
         </div>
       </div>
@@ -183,14 +184,17 @@ export default function AdminSettings() {
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Maintenance Mode Card */}
+        {/* Card 1: Maintenance Mode */}
         <div className="admin-card" style={{ borderLeft: settings.app_maintenance_mode ? '5px solid #ef4444' : '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <ShieldAlert size={22} color={settings.app_maintenance_mode ? '#ef4444' : '#64748b'} />
             <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: settings.app_maintenance_mode ? '#b91c1c' : '#0f172a' }}>
-              Maintenance Mode Control
+              1. Global Maintenance Mode (Kill-Switch)
             </h2>
           </div>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1rem 0' }}>
+            Turn this on during server maintenance or critical migrations to block all app users and show a maintenance screen.
+          </p>
 
           <div style={{ backgroundColor: settings.app_maintenance_mode ? '#fef2f2' : '#f8fafc', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', fontWeight: 600, color: settings.app_maintenance_mode ? '#991b1b' : '#334155' }}>
@@ -200,15 +204,12 @@ export default function AdminSettings() {
                 onChange={(e) => handleChange('app_maintenance_mode', e.target.checked)}
                 style={{ width: '18px', height: '18px', cursor: 'pointer' }}
               />
-              Enable Global Maintenance Kill-Switch
+              Enable Global Maintenance Mode
             </label>
-            <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.85rem', color: '#64748b' }}>
-              When enabled, all mobile clients will be blocked from API operations and shown the maintenance screen below.
-            </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontWeight: 600, fontSize: '0.9rem', color: '#334155' }}>Maintenance Message (Shown to users):</label>
+            <label style={{ fontWeight: 600, fontSize: '0.85rem', color: '#334155' }}>Maintenance Message Shown to App Users:</label>
             <textarea
               rows={2}
               value={settings.app_maintenance_message}
@@ -218,19 +219,22 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        {/* Version Rules Card */}
-        <div className="admin-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <Smartphone size={22} color="#2563eb" />
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#0f172a' }}>
-              App Version Rules & Thresholds
+        {/* Card 2: Mandatory Force Update */}
+        <div className="admin-card" style={{ borderLeft: '5px solid #dc2626' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <AlertOctagon size={22} color="#dc2626" />
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#991b1b' }}>
+              2. Mandatory Force Update (Hard Block)
             </h2>
           </div>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
+            App build numbers below this threshold will be <strong>HARD BLOCKED</strong> and forced to update before accessing the app.
+          </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Minimum Version Code (Android)
+                Minimum Android Version Code (e.g. 2)
               </label>
               <input
                 type="number"
@@ -238,12 +242,12 @@ export default function AdminSettings() {
                 onChange={(e) => handleChange('app_min_version_code', e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
               />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Client versionCode below this will be HARD BLOCKED.</span>
+              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 500 }}>Apps with versionCode &lt; this value are locked out.</span>
             </div>
 
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Minimum Version (iOS / Fallback)
+                Minimum iOS Version String (e.g. 1.0.0)
               </label>
               <input
                 type="text"
@@ -251,51 +255,22 @@ export default function AdminSettings() {
                 onChange={(e) => handleChange('app_min_version', e.target.value)}
                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
               />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Semver string (e.g. 1.0.0)</span>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Latest Published Version Code
-              </label>
-              <input
-                type="number"
-                value={settings.app_latest_version_code}
-                onChange={(e) => handleChange('app_latest_version_code', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Client versionCode below this sees SOFT UPDATE modal.</span>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Latest Published Version
-              </label>
-              <input
-                type="text"
-                value={settings.app_latest_version}
-                onChange={(e) => handleChange('app_latest_version', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Semver string (e.g. 1.1.0)</span>
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Used for iOS / fallback check.</span>
             </div>
           </div>
 
-          <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '1.5rem 0' }} />
-
-          {/* Modal Messages Configuration */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#b91c1c' }}>
-                Mandatory Update Modal Text
-              </h3>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Title:</label>
+          <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '8px', border: '1px solid #fecaca' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#991b1b' }}>
+              Force Update Modal Content
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
                 <input
                   type="text"
                   value={settings.app_force_update_title}
                   onChange={(e) => handleChange('app_force_update_title', e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                  style={{ width: '100%', padding: '0.5.rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                 />
               </div>
               <div>
@@ -308,13 +283,56 @@ export default function AdminSettings() {
                 />
               </div>
             </div>
+          </div>
+        </div>
 
-            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#15803d' }}>
-                Optional Soft Update Modal Text
-              </h3>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Title:</label>
+        {/* Card 3: Optional Soft Update */}
+        <div className="admin-card" style={{ borderLeft: '5px solid #16a34a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <Sparkles size={22} color="#16a34a" />
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#15803d' }}>
+              3. Optional Soft Update (Feature Popup Banner)
+            </h2>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
+            App build numbers below this version will see a <strong>DISMISSIBLE</strong> update banner suggesting they upgrade.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+            <div>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                Latest Published Android Version Code (e.g. 3)
+              </label>
+              <input
+                type="number"
+                value={settings.app_latest_version_code}
+                onChange={(e) => handleChange('app_latest_version_code', e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 500 }}>Apps with versionCode &lt; this value see soft popup.</span>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                Latest Published iOS Version String (e.g. 1.1.0)
+              </label>
+              <input
+                type="text"
+                value={settings.app_latest_version}
+                onChange={(e) => handleChange('app_latest_version', e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Latest semver release string.</span>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#15803d' }}>
+              Soft Update Modal Content
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
                 <input
                   type="text"
                   value={settings.app_soft_update_title}
@@ -333,8 +351,20 @@ export default function AdminSettings() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Store URLs */}
+        {/* Card 4: Store Links */}
+        <div className="admin-card" style={{ borderLeft: '5px solid #2563eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <ShoppingBag size={22} color="#2563eb" />
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#1e40af' }}>
+              4. Store Deep Links
+            </h2>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1rem 0' }}>
+            URLs opened when users tap "Update Now" inside the mobile app.
+          </p>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
             <div>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
