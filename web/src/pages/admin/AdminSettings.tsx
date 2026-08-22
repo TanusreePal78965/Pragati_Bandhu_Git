@@ -373,7 +373,7 @@ export default function AdminSettings() {
             padding: '1rem 2rem',
             display: 'flex',
             alignItems: 'center',
-            justify: 'space-between',
+            justifyContent: 'space-between',
             boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
             zIndex: 40,
           }}

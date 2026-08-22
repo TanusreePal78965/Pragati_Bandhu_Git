@@ -929,6 +929,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 150 | `app_settings` Database Schema | ✅ | Created `app_settings` key-value migration (`supabase/migrations/009_create_app_settings.sql`) with version controls, maintenance mode parameters, store URLs, and RLS policies. |
 | 151 | Web Admin Settings Page | ✅ | Created `web/src/pages/admin/AdminSettings.tsx`, registered `/admin/settings` route in `App.tsx`, and added "App Settings" to `AdminLayout.tsx` sidebar with sticky save footer bar and `isDirty` state indicator. |
 | 152 | Expo Mobile Version Enforcement | ✅ | Created version helper (`mobile/src/lib/version.ts`), `VersionContext.tsx` provider, and mobile modal components (`ForceUpdateModal.tsx`, `MaintenanceModal.tsx`, `SoftUpdateModal.tsx`). Wired startup version checks and `AppState` active event listener in `App.tsx`. Locked Android hardware Back button on mandatory updates. |
+| 153 | Version Code Display in UI | ✅ | Updated `LoginScreen.tsx` and `SettingsScreen.tsx` to dynamically display the full app version string including build version code (e.g. `v1.0.0 (1)`). |
 
 ---
 
@@ -1312,6 +1313,7 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Supabase DB Schema**: Created key-value configuration table `app_settings` (`key`, `value`) to control version enforcement (`app_min_version`, `app_min_version_code`, `app_latest_version`, `app_latest_version_code`) and maintenance mode (`app_maintenance_mode`, `app_maintenance_message`).
 - **Web Admin Studio (`web/src/pages/admin/AdminSettings.tsx`)**: Created unified settings control panel for Super Admins with sticky save footer bar, unsaved changes indicator (`isDirty`), and warning indicator when maintenance mode is ON.
 - **Expo Mobile App (`mobile/`)**: Created version helper (`version.ts`), store (`useVersionStore.ts`), non-dismissible `ForceUpdateModal` (with Android hardware Back press lock), `MaintenanceModal`, and `SoftUpdateModal`. Bound startup version checks and `AppState` active event listener in `App.tsx`.
+- **UI Version Display**: Updated `LoginScreen.tsx` and `SettingsScreen.tsx` to dynamically display full app version string including build version code (e.g. `v1.0.0 (1)`).
 
 ---
 
