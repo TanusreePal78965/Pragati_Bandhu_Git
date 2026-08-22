@@ -138,7 +138,7 @@ export default function AdminSettings() {
   }
 
   return (
-    <div style={{ paddingBottom: '5rem', maxWidth: '1000px' }}>
+    <div style={{ paddingBottom: '6rem', width: '100%' }}>
       {/* Header Title */}
       <div className="admin-page-header-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
@@ -185,7 +185,7 @@ export default function AdminSettings() {
 
       <form onSubmit={handleSubmit}>
         {/* Card 1: Maintenance Mode */}
-        <div className="admin-card" style={{ borderLeft: settings.app_maintenance_mode ? '5px solid #ef4444' : '1px solid #e2e8f0' }}>
+        <div className="admin-card" style={{ borderLeft: settings.app_maintenance_mode ? '5px solid #ef4444' : '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <ShieldAlert size={22} color={settings.app_maintenance_mode ? '#ef4444' : '#64748b'} />
             <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: settings.app_maintenance_mode ? '#b91c1c' : '#0f172a' }}>
@@ -219,135 +219,142 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        {/* Card 2: Mandatory Force Update */}
-        <div className="admin-card" style={{ borderLeft: '5px solid #dc2626' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-            <AlertOctagon size={22} color="#dc2626" />
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#991b1b' }}>
-              2. Mandatory Force Update (Hard Block)
-            </h2>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
-            App build numbers below this threshold will be <strong>HARD BLOCKED</strong> and forced to update before accessing the app.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+        {/* Responsive 2-Column Grid for Force Update & Soft Update Cards on Desktop */}
+        <div className="admin-two-col-grid">
+          {/* Card 2: Mandatory Force Update */}
+          <div className="admin-card" style={{ borderLeft: '5px solid #dc2626', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Minimum Android Version Code (e.g. 2)
-              </label>
-              <input
-                type="number"
-                value={settings.app_min_version_code}
-                onChange={(e) => handleChange('app_min_version_code', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 500 }}>Apps with versionCode &lt; this value are locked out.</span>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Minimum iOS Version String (e.g. 1.0.0)
-              </label>
-              <input
-                type="text"
-                value={settings.app_min_version}
-                onChange={(e) => handleChange('app_min_version', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Used for iOS / fallback check.</span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '8px', border: '1px solid #fecaca' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#991b1b' }}>
-              Force Update Modal Content
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
-                <input
-                  type="text"
-                  value={settings.app_force_update_title}
-                  onChange={(e) => handleChange('app_force_update_title', e.target.value)}
-                  style={{ width: '100%', padding: '0.5.rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <AlertOctagon size={22} color="#dc2626" />
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#991b1b' }}>
+                  2. Mandatory Force Update
+                </h2>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Message Body:</label>
-                <textarea
-                  rows={2}
-                  value={settings.app_force_update_message}
-                  onChange={(e) => handleChange('app_force_update_message', e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }}
-                />
+              <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
+                App build numbers below this threshold will be <strong>HARD BLOCKED</strong>.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                    Min Android Version Code
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.app_min_version_code}
+                    onChange={(e) => handleChange('app_min_version_code', e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 500 }}>versionCode &lt; this is locked out.</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                    Min iOS Version String
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.app_min_version}
+                    onChange={(e) => handleChange('app_min_version', e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>iOS semver (e.g. 1.0.0)</span>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Card 3: Optional Soft Update */}
-        <div className="admin-card" style={{ borderLeft: '5px solid #16a34a' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-            <Sparkles size={22} color="#16a34a" />
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#15803d' }}>
-              3. Optional Soft Update (Feature Popup Banner)
-            </h2>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
-            App build numbers below this version will see a <strong>DISMISSIBLE</strong> update banner suggesting they upgrade.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Latest Published Android Version Code (e.g. 3)
-              </label>
-              <input
-                type="number"
-                value={settings.app_latest_version_code}
-                onChange={(e) => handleChange('app_latest_version_code', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 500 }}>Apps with versionCode &lt; this value see soft popup.</span>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
-                Latest Published iOS Version String (e.g. 1.1.0)
-              </label>
-              <input
-                type="text"
-                value={settings.app_latest_version}
-                onChange={(e) => handleChange('app_latest_version', e.target.value)}
-                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Latest semver release string.</span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#15803d' }}>
-              Soft Update Modal Content
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
-                <input
-                  type="text"
-                  value={settings.app_soft_update_title}
-                  onChange={(e) => handleChange('app_soft_update_title', e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
-                />
+            <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '8px', border: '1px solid #fecaca', marginTop: '1rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#991b1b' }}>
+                Force Update Modal Content
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
+                  <input
+                    type="text"
+                    value={settings.app_force_update_title}
+                    onChange={(e) => handleChange('app_force_update_title', e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Message Body:</label>
+                  <textarea
+                    rows={2}
+                    value={settings.app_force_update_message}
+                    onChange={(e) => handleChange('app_force_update_message', e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }}
+                  />
+                </div>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Message Body:</label>
-                <textarea
-                  rows={2}
-                  value={settings.app_soft_update_message}
-                  onChange={(e) => handleChange('app_soft_update_message', e.target.value)}
-                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }}
-                />
+            </div>
+          </div>
+
+          {/* Card 3: Optional Soft Update */}
+          <div className="admin-card" style={{ borderLeft: '5px solid #16a34a', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <Sparkles size={22} color="#16a34a" />
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: '#15803d' }}>
+                  3. Optional Soft Update
+                </h2>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
+                App build numbers below this version will see a <strong>DISMISSIBLE</strong> banner.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                    Latest Android Version Code
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.app_latest_version_code}
+                    onChange={(e) => handleChange('app_latest_version_code', e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 500 }}>versionCode &lt; this sees soft popup.</span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#334155', marginBottom: '0.25rem' }}>
+                    Latest iOS Version String
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.app_latest_version}
+                    onChange={(e) => handleChange('app_latest_version', e.target.value)}
+                    style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>iOS semver (e.g. 1.1.0)</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '1rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem 0', color: '#15803d' }}>
+                Soft Update Modal Content
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Modal Title:</label>
+                  <input
+                    type="text"
+                    value={settings.app_soft_update_title}
+                    onChange={(e) => handleChange('app_soft_update_title', e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.25rem' }}>Message Body:</label>
+                  <textarea
+                    rows={2}
+                    value={settings.app_soft_update_message}
+                    onChange={(e) => handleChange('app_soft_update_message', e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -392,22 +399,7 @@ export default function AdminSettings() {
         </div>
 
         {/* Sticky Save Footer Bar */}
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: '260px',
-            right: 0,
-            backgroundColor: '#fff',
-            borderTop: '1px solid #e2e8f0',
-            padding: '1rem 2rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
-            zIndex: 40,
-          }}
-        >
+        <div className="admin-sticky-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {isDirty ? (
               <span style={{ color: '#d97706', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

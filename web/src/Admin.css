@@ -336,3 +336,39 @@
     font-size: 0.85rem;
   }
 }
+
+/* Responsive Grid & Sticky Footer for Settings */
+.admin-two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-sticky-footer {
+  position: fixed;
+  bottom: 0;
+  left: 260px;
+  right: 0;
+  background-color: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+  z-index: 40;
+  transition: left 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .admin-sticky-footer {
+    left: 0;
+    padding: 0.75rem 1rem;
+  }
+  
+  .admin-two-col-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
