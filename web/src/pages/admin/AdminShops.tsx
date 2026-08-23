@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, Power, CalendarPlus, FileText, X } from 'lucide-react';
+import { Search, MoreVertical, Power, CalendarPlus, FileText, RotateCcw, X } from 'lucide-react';
 import '../../Admin.css';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -87,6 +87,17 @@ export default function AdminShops() {
     }
   };
 
+  const formatDateDdMmmYyyy = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '-';
+    const day = String(d.getDate()).padStart(2, '0');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   const handleExtendPlan = async (shopId: string) => {
     setActiveMenu(null);
     if (!confirm('Are you sure you want to manually add 30 days to this shop\'s plan?')) return;
@@ -99,7 +110,26 @@ export default function AdminShops() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to extend plan');
-      alert(`Success! New expiry date: ${new Date(data.newExpiry).toLocaleDateString()}`);
+      alert(`Success! New expiry date: ${formatDateDdMmmYyyy(data.newExpiry)}`);
+      fetchShops();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleResetTestData = async (shopId: string, shopName: string) => {
+    setActiveMenu(null);
+    if (!confirm(`ARE YOU SURE you want to clear ALL products, bills, customers, and testing data for "${shopName}"?\n\nThe shop profile will remain intact, but all transaction and inventory data will be wiped permanently!`)) return;
+
+    const token = localStorage.getItem('adminToken')!;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/payments/admin/shops/${shopId}/reset-data`, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset test data');
+      alert(`Success! All testing data for "${shopName}" has been reset.`);
       fetchShops();
     } catch (e: any) {
       alert(e.message);
@@ -197,7 +227,7 @@ export default function AdminShops() {
                     <td>
                       {shop.plan_expires_at ? (
                         <div style={{ color: isExpired ? '#ef4444' : '#0f172a', fontWeight: isExpired ? 600 : 400 }}>
-                          {new Date(shop.plan_expires_at).toLocaleDateString()}
+                          {formatDateDdMmmYyyy(shop.plan_expires_at)}
                           {isExpired && <span style={{ display: 'block', fontSize: '0.75rem' }}>(Expired)</span>}
                         </div>
                       ) : (
@@ -220,7 +250,7 @@ export default function AdminShops() {
                         <div ref={menuRef} style={{
                           position: 'absolute', right: '2.5rem', top: '1rem', background: '#fff',
                           border: '1px solid #e2e8f0', borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          zIndex: 50, minWidth: '160px', textAlign: 'left', overflow: 'hidden'
+                          zIndex: 50, minWidth: '170px', textAlign: 'left', overflow: 'hidden'
                         }}>
                           <button 
                             onClick={() => handleViewDetails(shop.id)}
@@ -246,10 +276,20 @@ export default function AdminShops() {
                             onClick={() => handleExtendPlan(shop.id)}
                             style={{
                               display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.75rem 1rem', 
-                              border: 'none', background: 'none', color: '#334155', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500
+                              border: 'none', background: 'none', color: '#334155', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
+                              borderBottom: '1px solid #f1f5f9'
                             }}
                           >
                             <CalendarPlus size={14} /> Extend Plan (30d)
+                          </button>
+                          <button 
+                            onClick={() => handleResetTestData(shop.id, shop.shop_name)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.75rem 1rem', 
+                              border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500
+                            }}
+                          >
+                            <RotateCcw size={14} /> Clear Test Data
                           </button>
                         </div>
                       )}

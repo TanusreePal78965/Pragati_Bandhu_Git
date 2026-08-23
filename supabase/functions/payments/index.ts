@@ -285,6 +285,34 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, plan_expires_at }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // === ADMIN: RESET SHOP TEST DATA ===
+    if (path.startsWith('/admin/shops/') && path.endsWith('/reset-data') && req.method === 'POST') {
+      const shopId = path.split('/admin/shops/')[1].split('/reset-data')[0]
+      const authHeader = req.headers.get('authorization')
+      if (!authHeader) throw new Error('Missing authorization')
+      const token = authHeader.replace('Bearer ', '')
+      await verifyAdminToken(token)
+
+      // 1. Get bill IDs for this shop to delete bill_items safely
+      const { data: bills } = await supabase.from('bills').select('id').eq('shop_id', shopId)
+      if (bills && bills.length > 0) {
+        const billIds = bills.map(b => b.id)
+        await supabase.from('bill_items').delete().in('bill_id', billIds)
+      }
+
+      // 2. Delete operational data
+      await supabase.from('bills').delete().eq('shop_id', shopId)
+      await supabase.from('draft_bills').delete().eq('shop_id', shopId)
+      await supabase.from('udhar_payments').delete().eq('shop_id', shopId)
+      await supabase.from('products').delete().eq('shop_id', shopId)
+      await supabase.from('categories').delete().eq('shop_id', shopId)
+      await supabase.from('brands').delete().eq('shop_id', shopId)
+      await supabase.from('customers').delete().eq('shop_id', shopId)
+      await supabase.from('notifications').delete().eq('shop_id', shopId)
+
+      return new Response(JSON.stringify({ success: true, message: 'All shop test data reset successfully' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     // === ADMIN: APPROVE PAYMENT ===
     if (path.startsWith('/admin/approve/') && req.method === 'POST') {
       const paymentId = path.split('/admin/approve/')[1]

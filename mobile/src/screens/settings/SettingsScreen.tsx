@@ -29,7 +29,7 @@ import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUs
 import { getAppVersion, getAppVersionCode } from "../../lib/version";
 import { supabase } from "../../lib/supabase";
 import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
-import { exportAsSql, queueAllLocalData, updateShop, getShop } from "../../db/db";
+import { exportAsSql, queueAllLocalData, updateShop, getShop, resetShopTestData } from "../../db/db";
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
 import { restoreFromCloud, deleteFromCloud } from "../../services/restoreService";
 import { startSyncService } from "../../services/syncService";
@@ -482,6 +482,48 @@ export default function SettingsScreen() {
         );
     };
 
+    const handleStartFresh = () => {
+        showAlert({
+            title: "Start Fresh / Reset Test Data?",
+            message: "This will delete all products, categories, brands, customers, bills, and udhar records on this device.\n\nYour shop account and profile will remain saved.",
+            type: "confirm",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Reset Test Data",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            resetShopTestData();
+                            const shopId = await getStoredShopId();
+                            if (shopId && shopInfo?.aiConsent) {
+                                const { data: session } = await supabase.auth.getSession();
+                                const token = session?.session?.access_token;
+                                if (token) {
+                                    fetch(`${supabase.supabaseUrl}/functions/v1/payments/admin/shops/${shopId}/reset-data`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'apikey': supabase.supabaseKey,
+                                            'Authorization': `Bearer ${token}`
+                                        }
+                                    }).catch(() => {});
+                                }
+                            }
+                            setSyncPendingCount(getPendingSyncCount());
+                            showAlert({
+                                title: "Fresh Start Ready",
+                                message: "All testing products, bills, and customers have been cleared. Your shop profile is ready for real data!",
+                                type: "success"
+                            });
+                        } catch (e: any) {
+                            showAlert("Reset Failed", e?.message ?? "Could not reset test data.", undefined, "error");
+                        }
+                    }
+                }
+            ]
+        });
+    };
+
     const handleLogout = () => {
         showAlert({
             title: "Logout",
@@ -760,6 +802,13 @@ export default function SettingsScreen() {
                     icon="folder-open-outline"
                     title="Import from Backup"
                     onPress={handleImportJson}
+                    showChevron={false}
+                />
+
+                <SettingsItem
+                    icon="refresh-outline"
+                    title="Start Fresh (Reset Test Data)"
+                    onPress={handleStartFresh}
                     showChevron={false}
                 />
 

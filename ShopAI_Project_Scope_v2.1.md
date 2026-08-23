@@ -1543,6 +1543,21 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Multi-Product Catalog Selection Screen**: Added `[ 📦 Catalog ]` button opening a full-screen product selection modal with category chips, live search, `+`/`-` quantity steppers, unit/pack toggles, and live subtotal checkout.
 - **Repeat Order Feature**: Added `[ 🔄 Repeat Order ]` button in `BillDetailScreen` to clone historical receipt items into a new draft and open `NewBillScreen`.
 
+### v5.10 — August 23, 2026
+
+- **Clear Test Data / Start Fresh Action Feature**:
+  - **Supabase Edge Function Endpoint (`payments/index.ts`)**: Added `POST /admin/shops/:id/reset-data` endpoint to delete all operational test data (`bills`, `bill_items`, `draft_bills`, `udhar_payments`, `products`, `categories`, `brands`, `customers`, `notifications`) for a target shop while leaving the `shops` profile row intact.
+  - **Admin Web Portal (`AdminShops.tsx`)**: Added **"Clear Test Data"** button to the action dropdown menu for each shop in `/admin/shops`, featuring a double-confirmation prompt.
+  - **Mobile Database & Settings (`db.ts`, `SettingsScreen.tsx`)**: Added `resetShopTestData()` helper in SQLite database layer and added **"Start Fresh (Reset Test Data)"** button under `DATA & BACKUP` in mobile app Settings.
+
+---
+
+### v5.9 — August 23, 2026
+
+- **Admin Registered Shops Expiry Date Formatting**: Updated `AdminShops.tsx` (`/admin/shops` page on Web portal) to format plan expiry dates as `dd-mmm-yyyy` (e.g. `23-Aug-2026`) using a custom `formatDateDdMmmYyyy` helper function.
+
+---
+
 ### v5.8 — August 23, 2026
 
 - **Supabase Cloud Schema Migration**:
@@ -1586,5 +1601,5 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 ---
 
 *Document prepared: April 2026 | Last updated: August 23, 2026*
-*Version: 5.8 — Remote Supabase Migration, 4-Layer Out-of-Stock Sync & Batch Defaults*
+*Version: 5.10 — Clear Test Data / Start Fresh Action Feature*
 

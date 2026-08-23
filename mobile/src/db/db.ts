@@ -1293,3 +1293,25 @@ export const getTopProducts = (from: string, to: string, limit = 5): TopProduct[
     return [];
   }
 };
+
+export const resetShopTestData = (): void => {
+  try {
+    db.withTransactionSync(() => {
+      db.runSync(`DELETE FROM bill_items`);
+      db.runSync(`DELETE FROM sales_log`);
+      db.runSync(`DELETE FROM bills`);
+      db.runSync(`DELETE FROM draft_bill_items`);
+      db.runSync(`DELETE FROM draft_bills`);
+      db.runSync(`DELETE FROM udhar_payments`);
+      db.runSync(`DELETE FROM products`);
+      db.runSync(`DELETE FROM categories`);
+      db.runSync(`DELETE FROM brands`);
+      db.runSync(`DELETE FROM customers`);
+      db.runSync(`DELETE FROM notifications`);
+      db.runSync(`DELETE FROM sync_queue`);
+    });
+  } catch (e) {
+    console.error('resetShopTestData error:', e);
+    throw e;
+  }
+};
