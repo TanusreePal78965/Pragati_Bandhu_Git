@@ -384,7 +384,7 @@ export default function BillDetailScreen() {
         upsertDraft(
             newDraftId,
             customer,
-            bill.payment_mode,
+            bill.payment_mode === "udhar_clear" ? "cash" : bill.payment_mode,
             bill.discount_percent ?? 0,
             bill.discount_amount ?? 0,
             bill.discount_type ?? "none"
@@ -404,14 +404,15 @@ export default function BillDetailScreen() {
         );
     }
 
+    const isUdharClear = bill.payment_mode === "udhar_clear";
     const isUdhar = bill.payment_mode === "udhar";
     const isUpi = bill.payment_mode === "upi";
-    const modeColor = isUdhar ? "#D97706" : isUpi ? "#7C3AED" : colors.success;
-    const modeBgColor = isUdhar ? "#FEF9C3" : isUpi ? "#EDE9FE" : "#DCFCE7";
-    const modeTextColor = isUdhar ? "#92400E" : isUpi ? "#5B21B6" : "#166534";
-    const modeIcon = isUdhar ? "wallet-outline" : isUpi ? "phone-portrait-outline" : "cash-outline";
-    const modeLabel = isUdhar ? "Udhar" : isUpi ? "UPI" : "Cash";
-    const modeLabelLong = isUdhar ? "Udhar (Credit)" : isUpi ? "UPI Payment" : "Cash";
+    const modeColor = isUdharClear ? colors.success : isUdhar ? "#D97706" : isUpi ? "#7C3AED" : colors.success;
+    const modeBgColor = isUdharClear ? "#ECFDF5" : isUdhar ? "#FEF9C3" : isUpi ? "#EDE9FE" : "#DCFCE7";
+    const modeTextColor = isUdharClear ? colors.success : isUdhar ? "#92400E" : isUpi ? "#5B21B6" : "#166534";
+    const modeIcon = isUdharClear ? "checkmark-circle" : isUdhar ? "wallet-outline" : isUpi ? "phone-portrait-outline" : "cash-outline";
+    const modeLabel = isUdharClear ? "Udhar Cleared" : isUdhar ? "Udhar" : isUpi ? "UPI" : "Cash";
+    const modeLabelLong = isUdharClear ? "Udhar Payment Received" : isUdhar ? "Udhar (Credit)" : isUpi ? "UPI Payment" : "Cash";
 
     return (
         <SafeAreaView style={styles.container} edges={["top"]}>

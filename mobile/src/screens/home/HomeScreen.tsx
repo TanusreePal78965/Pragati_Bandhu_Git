@@ -289,45 +289,66 @@ export default function HomeScreen() {
                     </View>
                 ) : (
                     <View style={styles.activityList}>
-                        {recentBills.map((bill) => (
-                            <TouchableOpacity
-                                key={bill.id}
-                                style={styles.activityItem}
-                                onPress={() => navigation.navigate("BillDetail", { bill })}
-                            >
-                                <View
-                                    style={[
-                                        styles.activityIcon,
-                                        {
-                                            backgroundColor:
-                                                bill.payment_mode === "udhar" ? "#FEF3C7"
-                                                : bill.payment_mode === "upi" ? "#F5F3FF"
-                                                : "#DCFCE7",
-                                        },
-                                    ]}
+                        {recentBills.map((bill) => {
+                            const isUdharClear = bill.payment_mode === "udhar_clear";
+                            const isUdhar = bill.payment_mode === "udhar";
+                            const isUpi = bill.payment_mode === "upi";
+
+                            return (
+                                <TouchableOpacity
+                                    key={bill.id}
+                                    style={styles.activityItem}
+                                    onPress={() => navigation.navigate("BillDetail", { bill })}
                                 >
-                                    <Ionicons
-                                        name={bill.payment_mode === "udhar" ? "wallet-outline" : bill.payment_mode === "upi" ? "phone-portrait-outline" : "receipt-outline"}
-                                        size={20}
-                                        color={bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success}
-                                    />
-                                </View>
-                                <View style={styles.activityContent}>
-                                    <Text style={styles.activityTitle}>
-                                        {bill.customer_name
-                                            ? `Bill for ${bill.customer_name}`
-                                            : "Walk-in Customer"}
+                                    <View
+                                        style={[
+                                            styles.activityIcon,
+                                            {
+                                                backgroundColor:
+                                                    isUdharClear ? "#ECFDF5"
+                                                    : isUdhar ? "#FEF3C7"
+                                                    : isUpi ? "#F5F3FF"
+                                                    : "#DCFCE7",
+                                            },
+                                        ]}
+                                    >
+                                        <Ionicons
+                                            name={
+                                                isUdharClear ? "checkmark-circle"
+                                                : isUdhar ? "wallet-outline"
+                                                : isUpi ? "phone-portrait-outline"
+                                                : "receipt-outline"
+                                            }
+                                            size={20}
+                                            color={
+                                                isUdharClear ? colors.success
+                                                : isUdhar ? "#D97706"
+                                                : isUpi ? "#7C3AED"
+                                                : colors.success
+                                            }
+                                        />
+                                    </View>
+                                    <View style={styles.activityContent}>
+                                        <Text style={styles.activityTitle}>
+                                            {isUdharClear
+                                                ? `Udhar Paid by ${bill.customer_name ?? "Customer"}`
+                                                : bill.customer_name
+                                                ? `Bill for ${bill.customer_name}`
+                                                : "Walk-in Customer"}
+                                        </Text>
+                                        <Text style={styles.activitySubtitle}>
+                                            {formatTime(bill.bill_date)} ·{" "}
+                                            {isUdharClear
+                                                ? "Payment Received"
+                                                : `${bill.total_items} items · ${isUdhar ? "Udhar" : isUpi ? "UPI" : "Cash"}`}
+                                        </Text>
+                                    </View>
+                                    <Text style={[styles.activityAmount, isUdharClear && { color: colors.success }]}>
+                                        {isUdharClear ? `+ ₹${bill.total_amount.toFixed(2)}` : `₹${bill.total_amount.toFixed(2)}`}
                                     </Text>
-                                    <Text style={styles.activitySubtitle}>
-                                        {formatTime(bill.bill_date)} · {bill.total_items} items ·{" "}
-                                        {bill.payment_mode === "udhar" ? "Udhar" : bill.payment_mode === "upi" ? "UPI" : "Cash"}
-                                    </Text>
-                                </View>
-                                <Text style={styles.activityAmount}>
-                                    ₹{bill.total_amount.toFixed(2)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 )}
             </ScrollView>

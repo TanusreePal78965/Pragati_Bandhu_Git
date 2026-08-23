@@ -182,6 +182,7 @@ function initTables(database: SQLite.SQLiteDatabase): void {
   try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_percent REAL DEFAULT 0'); } catch (_) {}
   try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_amount REAL DEFAULT 0'); } catch (_) {}
   try { database.runSync("ALTER TABLE draft_bills ADD COLUMN discount_type TEXT DEFAULT 'none'"); } catch (_) {}
+  try { database.runSync("UPDATE bills SET bill_date = datetime(bill_date) WHERE bill_date IS NOT NULL AND bill_date LIKE '%T%';"); } catch (_) {}
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

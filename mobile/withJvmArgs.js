@@ -15,7 +15,7 @@ module.exports = function withJvmArgs(config) {
       config.modResults.push({
         type: 'property',
         key: 'org.gradle.jvmargs',
-        value: '-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:-TieredCompilation',
+        value: '-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:-TieredCompilation',
       });
     }
 

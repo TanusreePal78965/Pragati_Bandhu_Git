@@ -33,15 +33,7 @@ const formatCurrency = (amount: number) =>
 
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 import { useAlert } from "../../context/AlertContext";
-import { toUtcDate } from "../../utils/dateUtils";
-
-const formatDateTime = (dateStr: string) => {
-    const d = toUtcDate(dateStr);
-    return d.toLocaleString("en-IN", {
-        day: "2-digit", month: "short",
-        hour: "2-digit", minute: "2-digit", hour12: true,
-    });
-};
+import { formatDateTime } from "../../utils/dateUtils";
 
 export default function EditCustomerScreen() {
     const navigation = useNavigation<any>();
@@ -160,9 +152,8 @@ export default function EditCustomerScreen() {
         haptics.success();
         try {
             recordUdharPayment(customerId, amount);
-            // Refresh balance in state immediately
-            const updated = getCustomerById(customerId);
-            if (updated) setCustomer(updated);
+            // Refresh customer balance & bill history log immediately
+            loadData();
             setShowPaymentModal(false);
             setPaymentInput("");
             showAlert(
@@ -292,38 +283,45 @@ export default function EditCustomerScreen() {
                         </View>
                     ) : (
                         <View style={styles.billList}>
-                            {bills.map((bill, index) => (
-                                <TouchableOpacity
-                                    key={bill.id}
-                                    style={[
-                                        styles.billRow,
-                                        index === bills.length - 1 && { borderBottomWidth: 0 },
-                                    ]}
-                                    onPress={() => navigation.navigate("BillDetail", { bill })}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={[
-                                        styles.billIcon,
-                                        { backgroundColor: bill.payment_mode === "udhar" ? "#FEF3C7" : "#DCFCE7" },
-                                    ]}>
-                                        <Ionicons
-                                            name={bill.payment_mode === "udhar" ? "wallet-outline" : "cash-outline"}
-                                            size={16}
-                                            color={bill.payment_mode === "udhar" ? "#D97706" : colors.success}
-                                        />
-                                    </View>
-                                    <View style={styles.billInfo}>
-                                        <Text style={styles.billDate}>{formatDateTime(bill.bill_date)}</Text>
-                                        <Text style={styles.billMeta}>
-                                            {bill.total_items} item{bill.total_items !== 1 ? "s" : ""} · {bill.payment_mode === "udhar" ? "Udhar" : "Cash"}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.billRight}>
-                                        <Text style={styles.billAmount}>₹{bill.total_amount.toFixed(2)}</Text>
-                                        <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
+                            {bills.map((bill, index) => {
+                                const isUdharClear = bill.payment_mode === "udhar_clear";
+                                const isUdhar = bill.payment_mode === "udhar";
+
+                                return (
+                                    <TouchableOpacity
+                                        key={bill.id}
+                                        style={[
+                                            styles.billRow,
+                                            index === bills.length - 1 && { borderBottomWidth: 0 },
+                                        ]}
+                                        onPress={() => navigation.navigate("BillDetail", { bill })}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[
+                                            styles.billIcon,
+                                            { backgroundColor: isUdharClear ? "#ECFDF5" : isUdhar ? "#FEF3C7" : "#DCFCE7" },
+                                        ]}>
+                                            <Ionicons
+                                                name={isUdharClear ? "checkmark-circle" : isUdhar ? "wallet-outline" : "cash-outline"}
+                                                size={16}
+                                                color={isUdharClear ? colors.success : isUdhar ? "#D97706" : colors.success}
+                                            />
+                                        </View>
+                                        <View style={styles.billInfo}>
+                                            <Text style={styles.billDate}>{formatDateTime(bill.bill_date)}</Text>
+                                            <Text style={styles.billMeta}>
+                                                {isUdharClear ? "Udhar Payment Received" : `${bill.total_items} item${bill.total_items !== 1 ? "s" : ""} · ${isUdhar ? "Udhar" : "Cash"}`}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.billRight}>
+                                            <Text style={[styles.billAmount, isUdharClear && { color: colors.success }]}>
+                                                {isUdharClear ? `+ ₹${bill.total_amount.toFixed(2)}` : `₹${bill.total_amount.toFixed(2)}`}
+                                            </Text>
+                                            <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     )}
 

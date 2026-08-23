@@ -12,6 +12,7 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import { getSalesByRange, getTopProducts, getRecentBills, ReportData, TopProduct, Bill } from "../../db/db";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 import { useAlert } from "../../context/AlertContext";
+import { toUtcDate } from "../../utils/dateUtils";
 
 type RangeKey = "today" | "week" | "month";
 
@@ -32,9 +33,6 @@ const getRangeDates = (range: RangeKey): { from: string; to: string } => {
 };
 
 const fmt = (n: number) => `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-
-const toUtcDate = (dateStr: string) =>
-    new Date(dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z');
 
 const formatDateTime = (dateStr: string) => {
     const d = toUtcDate(dateStr);

@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** August 22, 2026 — v5.2
+> **Last updated:** August 23, 2026 — v5.3
 
 ---
 
@@ -533,10 +533,10 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 3 | Brands → SQLite | ✅ | ManageBrandsScreen + AddBrandScreen wired |
 | 4 | Link categories + brands to Add Product form | ✅ | Category + brand chip selectors pull live from SQLite; **v5.1:** Arranged Category & Brand side-by-side in 2-column grid |
 | 5 | Customers → SQLite | ✅ | CustomersScreen + AddCustomerScreen wired; udhar balance tracked |
-| 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance |
+| 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance. **v5.3:** Ordered by `datetime(bill_date) DESC, rowid DESC`; explicit `datetime('now')` default on insert; timestamp normalisation migration added |
 | 7 | Sales log → SQLite | ✅ | `sales_log` row written per product on every bill checkout |
 | 8 | Reports → SQLite | ✅ | ReportsScreen queries real `getTodaySales`, `getSalesByRange`, `getTopProducts`; also shows last 10 transactions. **v2.8:** PDF export implemented via `expo-print` + `expo-sharing`; generates a full HTML report (summary stats, top products, recent transactions) and shares via OS share sheet. Net Profit renamed from "Est. Profit"; now computed from real `purchase_price` vs `selling_price` per bill item (not hardcoded 20%). |
-| 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` |
+| 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` (ordered by creation time descending) |
 | 10 | Low stock detection (local) | ✅ | `getLowStockProducts()` computes `stock < min_threshold` on device; shown as attention card on HomeScreen |
 
 ---
@@ -1011,6 +1011,13 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v5.3 — August 23, 2026
+
+**Bill Creation Time Order & Timestamp Normalisation**
+- **Created Time Descending Order**: Updated SQLite bill query functions (`getRecentBills`, `getAllBills`, `getBillsByCustomer`) to order by `datetime(bill_date) DESC, rowid DESC` to ensure newest bills always display first regardless of timestamp formatting.
+- **Timestamp Normalisation Migration**: Added an additive SQLite migration in `sqlite.ts` to convert legacy ISO string timestamps containing `'T'` into standard SQLite `datetime('now')` format, fixing string sorting quirks in SQLite.
+- **Consistent Bill Creation Timestamps**: Explicitly passed `datetime('now')` for `bill_date` across all bill insertion paths (`insertBill`, `insertBillFromDraft`, `recordUdharPayment`).
 
 ### v5.2 — August 22, 2026
 
@@ -1502,8 +1509,14 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Multi-Product Catalog Selection Screen**: Added `[ 📦 Catalog ]` button opening a full-screen product selection modal with category chips, live search, `+`/`-` quantity steppers, unit/pack toggles, and live subtotal checkout.
 - **Repeat Order Feature**: Added `[ 🔄 Repeat Order ]` button in `BillDetailScreen` to clone historical receipt items into a new draft and open `NewBillScreen`.
 
+### v5.4 — August 23, 2026
+
+- **Robust Date Parsing & Formatting Helper (`dateUtils.ts`)**: Upgraded `toUtcDate()` to safely parse SQLite timestamps (`YYYY-MM-DD HH:MM:SS`), ISO strings, numeric timestamps, and fallback safely without returning `NaN`/`Invalid Date` or throwing errors on null/undefined values. Added `formatDate()` and `formatDateTime()` helpers.
+- **Customer List Date Display Fix (`CustomersScreen.tsx`)**: Replaced fragile inline string manipulation with `formatDate()` in `CustomersScreen.tsx` to fix the "Invalid Date" bug on customer rows.
+- **Restock Purchase History Date Fix (`EditProductScreen.tsx`, `db.ts`)**: Replaced inline formatting with central `formatDateTime()` in `EditProductScreen.tsx` purchase/restock history list. Updated `insertPurchaseLog()` in `db.ts` to explicitly insert `created_at` timestamp.
+
 ---
 
-*Document prepared: April 2026 | Last updated: August 2026*
-*Version: 5.3 — Reflects Single Product Quick Restock Action, Keyboard-Aware Compact Stock Modal, Product Name Display in Stock Modal Header, Edit Product Screen Visual Alignment, Floating Pill Navigation, Cross-Platform Haptics Engine, and Custom Alert Modal Component*
+*Document prepared: April 2026 | Last updated: August 23, 2026*
+*Version: 5.4 — Reflects Robust Date Parsing & Formatting Helper, Customer & Restock Date Display Fixes, Single Product Quick Restock Action, Keyboard-Aware Compact Stock Modal, and Custom Alert Modal Component*
 

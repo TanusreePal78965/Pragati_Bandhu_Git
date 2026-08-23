@@ -28,48 +28,58 @@ const formatTime = (dateStr: string) => {
     return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 };
 
-const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-        <View style={styles.cardLeft}>
-            <View style={[
-                styles.modeIcon,
-                { backgroundColor: bill.payment_mode === "udhar" ? "#FEF3C7" : bill.payment_mode === "upi" ? "#F5F3FF" : "#DCFCE7" },
-            ]}>
-                <Ionicons
-                    name={bill.payment_mode === "udhar" ? "wallet-outline" : bill.payment_mode === "upi" ? "phone-portrait-outline" : "cash-outline"}
-                    size={16}
-                    color={bill.payment_mode === "udhar" ? "#D97706" : bill.payment_mode === "upi" ? "#7C3AED" : colors.success}
-                />
-            </View>
-            <View style={styles.cardInfo}>
-                <Text style={styles.customerName} numberOfLines={1}>
-                    {bill.customer_name ?? "Walk-in Customer"}
-                </Text>
-                <Text style={styles.meta}>
-                    {formatDate(bill.bill_date)} · {formatTime(bill.bill_date)}
-                </Text>
-                <View style={styles.tagRow}>
-                    <View style={[
-                        styles.tag,
-                        { backgroundColor: bill.payment_mode === "udhar" ? "#FEF9C3" : bill.payment_mode === "upi" ? "#EDE9FE" : "#DCFCE7" },
-                    ]}>
-                        <Text style={[
-                            styles.tagText,
-                            { color: bill.payment_mode === "udhar" ? "#92400E" : bill.payment_mode === "upi" ? "#5B21B6" : "#166534" },
+const BillCard = ({ bill, onPress }: { bill: Bill; onPress: () => void }) => {
+    const isUdharClear = bill.payment_mode === "udhar_clear";
+    const isUdhar = bill.payment_mode === "udhar";
+    const isUpi = bill.payment_mode === "upi";
+
+    return (
+        <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+            <View style={styles.cardLeft}>
+                <View style={[
+                    styles.modeIcon,
+                    { backgroundColor: isUdharClear ? "#ECFDF5" : isUdhar ? "#FEF3C7" : isUpi ? "#F5F3FF" : "#DCFCE7" },
+                ]}>
+                    <Ionicons
+                        name={isUdharClear ? "checkmark-circle" : isUdhar ? "wallet-outline" : isUpi ? "phone-portrait-outline" : "cash-outline"}
+                        size={16}
+                        color={isUdharClear ? colors.success : isUdhar ? "#D97706" : isUpi ? "#7C3AED" : colors.success}
+                    />
+                </View>
+                <View style={styles.cardInfo}>
+                    <Text style={styles.customerName} numberOfLines={1}>
+                        {bill.customer_name ?? "Walk-in Customer"}
+                    </Text>
+                    <Text style={styles.meta}>
+                        {formatDate(bill.bill_date)} · {formatTime(bill.bill_date)}
+                    </Text>
+                    <View style={styles.tagRow}>
+                        <View style={[
+                            styles.tag,
+                            { backgroundColor: isUdharClear ? "#ECFDF5" : isUdhar ? "#FEF9C3" : isUpi ? "#EDE9FE" : "#DCFCE7" },
                         ]}>
-                            {bill.payment_mode === "udhar" ? "Udhar" : bill.payment_mode === "upi" ? "UPI" : "Cash"}
+                            <Text style={[
+                                styles.tagText,
+                                { color: isUdharClear ? colors.success : isUdhar ? "#92400E" : isUpi ? "#5B21B6" : "#166534" },
+                            ]}>
+                                {isUdharClear ? "Udhar Cleared" : isUdhar ? "Udhar" : isUpi ? "UPI" : "Cash"}
+                            </Text>
+                        </View>
+                        <Text style={styles.itemCount}>
+                            {isUdharClear ? "Payment Received" : `${bill.total_items} item${bill.total_items !== 1 ? "s" : ""}`}
                         </Text>
                     </View>
-                    <Text style={styles.itemCount}>{bill.total_items} item{bill.total_items !== 1 ? "s" : ""}</Text>
                 </View>
             </View>
-        </View>
-        <View style={styles.cardRight}>
-            <Text style={styles.amount}>₹{bill.total_amount.toFixed(2)}</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
-        </View>
-    </TouchableOpacity>
-);
+            <View style={styles.cardRight}>
+                <Text style={[styles.amount, isUdharClear && { color: colors.success }]}>
+                    {isUdharClear ? `+ ₹${bill.total_amount.toFixed(2)}` : `₹${bill.total_amount.toFixed(2)}`}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+            </View>
+        </TouchableOpacity>
+    );
+};
 
 export default function BillsScreen() {
     const navigation = useNavigation<any>();

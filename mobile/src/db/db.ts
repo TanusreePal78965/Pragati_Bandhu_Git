@@ -123,7 +123,7 @@ export interface Bill {
   id: string;
   customer_id: string | null;
   customer_name: string | null;
-  payment_mode: 'cash' | 'udhar' | 'upi';
+  payment_mode: 'cash' | 'udhar' | 'upi' | 'udhar_clear';
   total_amount: number;
   total_items: number;
   bill_date: string;
@@ -431,11 +431,12 @@ export const insertPurchaseLog = (
   sellingPrice: number
 ): void => {
   const id = genId();
+  const createdAt = new Date().toISOString();
   try {
     db.runSync(
-      `INSERT INTO purchase_log (id, product_id, product_name, qty, purchase_price, selling_price)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, productId, productName, qty, purchasePrice, sellingPrice]
+      `INSERT INTO purchase_log (id, product_id, product_name, qty, purchase_price, selling_price, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, productId, productName, qty, purchasePrice, sellingPrice, createdAt]
     );
     addToSyncQueue('purchase_log', 'INSERT', id, {
       id,
@@ -444,6 +445,7 @@ export const insertPurchaseLog = (
       qty,
       purchase_price: purchasePrice,
       selling_price: sellingPrice,
+      created_at: createdAt,
     });
   } catch (e) {
     console.error('insertPurchaseLog error:', e);
@@ -551,6 +553,33 @@ export const recordUdharPayment = (id: string, paymentAmount: number): void => {
     );
     const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
     if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
+
+    // Log the udhar payment transaction in bills table so history is recorded
+    const billId = `bill_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const customerName = updated?.name ?? 'Customer';
+
+    db.runSync(
+      `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
+       VALUES (?, ?, ?, 'udhar_clear', ?, 0, 0, 0, 'none', datetime('now'))`,
+      [billId, id, customerName, paymentAmount]
+    );
+
+    addToSyncQueue('bills', 'INSERT', billId, {
+      bill: {
+        id: billId,
+        customer_id: id,
+        customer_name: customerName,
+        payment_mode: 'udhar_clear',
+        total_amount: paymentAmount,
+        total_items: 0,
+        discount_percent: 0,
+        discount_amount: 0,
+        discount_type: 'none',
+        bill_date: new Date().toISOString(),
+      },
+      items: [],
+      salesLog: [],
+    });
   } catch (e) {
     console.error('recordUdharPayment error:', e);
     throw e;
@@ -588,8 +617,8 @@ export const insertBill = (
     db.withTransactionSync(() => {
       // 1. Insert bill
       db.runSync(
-        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, bill_date)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
         [
           billId,
           bill.customer_id,
@@ -680,7 +709,7 @@ export const insertBill = (
 export const getRecentBills = (limit = 5): Bill[] => {
   try {
     return db.getAllSync(
-      'SELECT * FROM bills ORDER BY bill_date DESC LIMIT ?',
+      'SELECT * FROM bills ORDER BY datetime(bill_date) DESC, rowid DESC LIMIT ?',
       [limit]
     ) as Bill[];
   } catch (e) {
@@ -692,7 +721,7 @@ export const getRecentBills = (limit = 5): Bill[] => {
 export const getAllBills = (): Bill[] => {
   try {
     return db.getAllSync(
-      'SELECT * FROM bills ORDER BY bill_date DESC'
+      'SELECT * FROM bills ORDER BY datetime(bill_date) DESC, rowid DESC'
     ) as Bill[];
   } catch (e) {
     console.error('getAllBills error:', e);
@@ -718,7 +747,7 @@ export const getBillItems = (billId: string): BillItem[] => {
 export const getBillsByCustomer = (customerId: string, limit = 10): Bill[] => {
   try {
     return db.getAllSync(
-      'SELECT * FROM bills WHERE customer_id = ? ORDER BY bill_date DESC LIMIT ?',
+      'SELECT * FROM bills WHERE customer_id = ? ORDER BY datetime(bill_date) DESC, rowid DESC LIMIT ?',
       [customerId, limit]
     ) as Bill[];
   } catch (e) {
@@ -733,7 +762,7 @@ export const getTodaySales = (): { total: number; count: number } => {
   try {
     const row = db.getFirstSync(
       `SELECT COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS count
-       FROM bills WHERE date(bill_date) = date('now')`
+       FROM bills WHERE date(bill_date) = date('now') AND payment_mode != 'udhar_clear'`
     ) as { total: number; count: number };
     return row ?? { total: 0, count: 0 };
   } catch (e) {
@@ -746,11 +775,11 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
   try {
     const row = db.getFirstSync(
       `SELECT
-         COALESCE(SUM(total_amount), 0) AS total_sales,
+         COALESCE(SUM(CASE WHEN payment_mode != 'udhar_clear' THEN total_amount ELSE 0 END), 0) AS total_sales,
          COALESCE(SUM(CASE WHEN payment_mode = 'cash' THEN total_amount ELSE 0 END), 0) AS cash_sales,
          COALESCE(SUM(CASE WHEN payment_mode = 'udhar' THEN total_amount ELSE 0 END), 0) AS udhar_sales,
          COALESCE(SUM(CASE WHEN payment_mode = 'upi' THEN total_amount ELSE 0 END), 0) AS upi_sales,
-         COUNT(*) AS bill_count
+         COUNT(CASE WHEN payment_mode != 'udhar_clear' THEN 1 END) AS bill_count
        FROM bills
        WHERE date(bill_date) BETWEEN date(?) AND date(?)`,
       [from, to]
@@ -1140,8 +1169,8 @@ export const finalizeDraft = (
   try {
     db.withTransactionSync(() => {
       db.runSync(
-        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
         [billId, customer?.id ?? null, customer?.name ?? null, paymentMode, totalAmount, totalItems, discountPercent, discountAmount, discountType]
       );
 

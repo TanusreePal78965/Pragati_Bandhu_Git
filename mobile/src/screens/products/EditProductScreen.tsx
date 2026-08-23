@@ -18,7 +18,7 @@ import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/nativ
 import ScreenHeader from "../../components/common/ScreenHeader";
 import { getAllCategories, getAllBrands, updateProduct, getPurchaseLogsByProduct, Product, Category, Brand, PurchaseLog } from "../../db/db";
 import UomSelector from "../../components/products/UomSelector";
-import { toUtcDate } from "../../utils/dateUtils";
+import { toUtcDate, formatDateTime } from "../../utils/dateUtils";
 import { useAlert } from "../../context/AlertContext";
 import { haptics } from "../../utils/haptics";
 
@@ -349,16 +349,6 @@ export default function EditProductScreen() {
                         ) : (
                             <View style={styles.historyList}>
                                 {purchaseLogs.map((log, index) => {
-                                    const formatDateTime = (dateStr: string) => {
-                                        try {
-                                            const d = toUtcDate(dateStr);
-                                            const date = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-                                            const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-                                            return `${date} · ${time}`;
-                                        } catch (_) {
-                                            return dateStr;
-                                        }
-                                    };
                                     return (
                                         <View
                                             key={log.id}

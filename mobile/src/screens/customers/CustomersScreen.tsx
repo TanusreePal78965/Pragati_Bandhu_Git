@@ -19,6 +19,7 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import FAB from "../../components/common/FAB";
 import { haptics } from "../../utils/haptics";
 import { getAllCustomers, Customer } from "../../db/db";
+import { formatDate } from "../../utils/dateUtils";
 
 const AVATAR_COLORS = ["#DBEAFE", "#FFEDD5", "#F3E8FF", "#FCE7F3", "#DCFCE7", "#FEF9C3"];
 
@@ -124,7 +125,7 @@ export default function CustomersScreen() {
                             <View style={styles.itemRow}>
                                 <Text style={styles.itemPhone}>{item.phone || "No Phone"}</Text>
                                 <Text style={styles.itemLastTrans}>
-                                    {new Date(item.created_at.endsWith('Z') ? item.created_at : item.created_at.replace(' ', 'T') + 'Z').toLocaleDateString("en-IN")}
+                                    {formatDate(item.created_at)}
                                 </Text>
                             </View>
                         </View>
