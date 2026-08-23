@@ -16,6 +16,7 @@ export interface ShopInfo {
   phone?: string;
   aiConsent?: boolean;
   isActive?: boolean;
+  allowOutOfStockBilling?: boolean;
 }
 
 export const getShop = (): ShopInfo | null => {
@@ -29,8 +30,9 @@ export const getShop = (): ShopInfo | null => {
       phone: row.phone,
       whatsappNumber: row.whatsapp_number,
       category: row.business_category,
-      aiConsent: row.ai_consent === 1,
-      isActive: row.is_active === 1,
+      aiConsent: row.ai_consent == 1 || row.ai_consent === true || row.ai_consent === 'true',
+      isActive: row.is_active == 1 || row.is_active === true || row.is_active === 'true',
+      allowOutOfStockBilling: row.allow_out_of_stock_billing == 1 || row.allow_out_of_stock_billing === true || row.allow_out_of_stock_billing === 'true',
     };
   } catch (e) {
     console.error('getShop error:', e);
@@ -40,21 +42,23 @@ export const getShop = (): ShopInfo | null => {
 
 export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): void => {
   try {
-    const row = db.getFirstSync('SELECT id, phone FROM shop LIMIT 1') as any;
+    const row = db.getFirstSync('SELECT * FROM shop LIMIT 1') as any;
     if (!row) return;
+
+    const newShopName = data.shopName !== undefined ? data.shopName : (row.shop_name ?? '');
+    const newOwnerName = data.ownerName !== undefined ? data.ownerName : (row.owner_name ?? '');
+    const newWhatsapp = data.whatsappNumber !== undefined ? data.whatsappNumber : (row.whatsapp_number ?? '');
+    const newCategory = data.category !== undefined ? data.category : (row.business_category ?? '');
+    const newAiConsent = data.aiConsent !== undefined ? (data.aiConsent ? 1 : 0) : (row.ai_consent ?? 0);
+    const newAllowOutOfStock = data.allowOutOfStockBilling !== undefined ? (data.allowOutOfStockBilling ? 1 : 0) : (row.allow_out_of_stock_billing ?? 0);
+
     db.runSync(
-      `UPDATE shop SET shop_name=?, owner_name=?, whatsapp_number=?, business_category=?, ai_consent=? WHERE id=?`,
-      [
-        data.shopName ?? '',
-        data.ownerName ?? '',
-        data.whatsappNumber ?? '',
-        data.category ?? '',
-        data.aiConsent ? 1 : 0,
-        row.id,
-      ]
+      `UPDATE shop SET shop_name=?, owner_name=?, whatsapp_number=?, business_category=?, ai_consent=?, allow_out_of_stock_billing=? WHERE id=?`,
+      [newShopName, newOwnerName, newWhatsapp, newCategory, newAiConsent, newAllowOutOfStock, row.id]
     );
+
     // Exclude aiConsent — consent is pushed directly from EditShopScreen to avoid
-    // stale local values overwriting Supabase (which would break device-conflict detection).
+    // stale local values overwriting Supabase.
     const { aiConsent: _omit, ...syncData } = data;
     addToSyncQueue('shop', 'UPDATE', row.id, { ...syncData, phone: row.phone });
   } catch (e) {
@@ -89,6 +93,7 @@ export interface Product {
   uom: string;
   purchase_uom: string | null;
   units_per_pack: number | null;
+  track_stock?: number;
   updated_at: string;
   // joined fields (populated by getAllProducts)
   category_name?: string;
@@ -282,13 +287,21 @@ export const getProductById = (id: string): Product | null => {
   }
 };
 
-export const getLowStockProducts = (): Product[] => {
+export const getLowStockProducts = (allowOutOfStockOverride?: boolean): Product[] => {
   try {
+    if (allowOutOfStockOverride === true) {
+      return [];
+    }
+    const shop = getShop();
+    if (shop?.allowOutOfStockBilling) {
+      return [];
+    }
     return db.getAllSync(`
       SELECT p.*, c.name AS category_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.stock_quantity <= p.min_stock_threshold
+      WHERE (p.track_stock IS NULL OR p.track_stock = 1)
+        AND p.stock_quantity <= p.min_stock_threshold
       ORDER BY p.stock_quantity ASC
     `) as Product[];
   } catch (e) {
@@ -308,12 +321,13 @@ export const insertProduct = (product: {
   uom: string;
   purchase_uom?: string | null;
   units_per_pack?: number | null;
+  track_stock?: number;
 }): string => {
   const id = genId();
   try {
     db.runSync(
-      `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack, track_stock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         product.name,
@@ -326,9 +340,10 @@ export const insertProduct = (product: {
         product.uom,
         product.purchase_uom ?? null,
         product.units_per_pack ?? null,
+        product.track_stock ?? 1,
       ]
     );
-    addToSyncQueue('products', 'INSERT', id, { id, ...product });
+    addToSyncQueue('products', 'INSERT', id, { id, ...product, track_stock: product.track_stock ?? 1 });
     return id;
   } catch (e) {
     console.error('insertProduct error:', e);
@@ -348,6 +363,7 @@ export const insertProductsBatch = (
     uom: string;
     purchase_uom?: string | null;
     units_per_pack?: number | null;
+    track_stock?: number;
   }>
 ): string[] => {
   const insertedIds: string[] = [];
@@ -356,8 +372,8 @@ export const insertProductsBatch = (
       for (const p of products) {
         const id = genId();
         db.runSync(
-          `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO products (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, purchase_uom, units_per_pack, track_stock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             p.name,
@@ -370,9 +386,10 @@ export const insertProductsBatch = (
             p.uom,
             p.purchase_uom ?? null,
             p.units_per_pack ?? null,
+            p.track_stock ?? 1,
           ]
         );
-        addToSyncQueue('products', 'INSERT', id, { id, ...p });
+        addToSyncQueue('products', 'INSERT', id, { id, ...p, track_stock: p.track_stock ?? 1 });
         insertedIds.push(id);
       }
     });
@@ -640,9 +657,9 @@ export const insertBill = (
           [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null]
         );
 
-        // 3. Deduct stock
+        // 3. Deduct stock (clamp at 0 so stock never goes negative)
         db.runSync(
-          `UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = datetime('now') WHERE id = ?`,
+          `UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = datetime('now') WHERE id = ?`,
           [item.qty, item.product_id]
         );
 
@@ -1164,7 +1181,7 @@ export const finalizeDraft = (
   const billItemsForSync: any[] = [];
   const salesLogForSync: any[] = [];
   const totalAmount = items.reduce((sum, i) => sum + i.line_total, 0);
-  const totalItems = items.reduce((sum, i) => sum + i.qty, 0);
+  const totalItems = items.length;
 
   try {
     db.withTransactionSync(() => {

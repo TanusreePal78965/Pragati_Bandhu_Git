@@ -1,7 +1,7 @@
 import db from './sqlite';
 import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
-import { getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
+import { getOrCreateDeviceId, getStoredShopId, getHasConsent } from '../utils/storage';
 
 const MAX_ATTEMPTS = 5;
 let isFlushing = false;
@@ -31,6 +31,13 @@ export const addToSyncQueue = (
     'INSERT INTO sync_queue (table_name, operation, data_id, payload) VALUES (?, ?, ?, ?)',
     [tableName, operation, dataId, JSON.stringify(payload)]
   );
+
+  // Automatically flush queue immediately if internet is available and user has cloud consent
+  getHasConsent().then((consent) => {
+    if (consent) {
+      flushSyncQueue().catch(() => {});
+    }
+  }).catch(() => {});
 };
 
 export const getPendingSyncCount = (): number => {
@@ -122,23 +129,21 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
     }
 
     case 'shop': {
-      // Shops are created exclusively by the register-shop Edge Function (web
-      // registration flow) — the app never inserts a shop row, only updates
-      // the one it already logged into.
       const uuid = await getShopId();
       const deviceId = await getOrCreateDeviceId();
-      const { shopName, ownerName, category, whatsappNumber, phone } = payload;
+      const { shopName, ownerName, category, whatsappNumber, phone, allowOutOfStockBilling } = payload;
 
-      // Never overwrite ai_consent from local state; it may be stale.
-      // Consent changes are pushed directly from EditShopScreen via a targeted update.
-      const { error } = await supabase.from('shops').update({
-        phone: phone,
-        shop_name: shopName,
-        owner_name: ownerName,
-        business_category: category ?? null,
-        whatsapp_number: whatsappNumber ?? null,
+      const updatePayload: any = {
         active_device_id: deviceId,
-      }).eq('id', uuid);
+      };
+      if (phone !== undefined) updatePayload.phone = phone;
+      if (shopName !== undefined) updatePayload.shop_name = shopName;
+      if (ownerName !== undefined) updatePayload.owner_name = ownerName;
+      if (category !== undefined) updatePayload.business_category = category ?? null;
+      if (whatsappNumber !== undefined) updatePayload.whatsapp_number = whatsappNumber ?? null;
+      if (allowOutOfStockBilling !== undefined) updatePayload.allow_out_of_stock_billing = allowOutOfStockBilling ? true : false;
+
+      const { error } = await supabase.from('shops').update(updatePayload).eq('id', uuid);
       if (error) throw error;
       break;
     }

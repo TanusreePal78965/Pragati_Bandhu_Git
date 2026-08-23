@@ -61,6 +61,7 @@ export type StoredShopInfo = {
   isActive?: boolean;
   planExpiresAt?: string;
   planType?: string;
+  allowOutOfStockBilling?: boolean;
 };
 
 export const setShopInfo = async (info: StoredShopInfo): Promise<void> => {

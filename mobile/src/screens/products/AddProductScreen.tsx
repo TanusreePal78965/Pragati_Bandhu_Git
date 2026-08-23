@@ -11,6 +11,7 @@ import {
     Alert,
     StatusBar,
     Modal,
+    Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,11 +26,13 @@ import {
     getAllProducts,
     insertProduct,
     insertProductsBatch,
+    getShop,
     Category,
     Brand,
 } from "../../db/db";
 import UomSelector from "../../components/products/UomSelector";
 import { useAlert } from "../../context/AlertContext";
+import { getShopInfo } from "../../utils/storage";
 
 export type Mode = "single" | "batch";
 
@@ -60,6 +63,7 @@ export default function AddProductScreen() {
     const [sellingPrice, setSellingPrice] = useState("");
     const [initialStock, setInitialStock] = useState("");
     const [minThreshold, setMinThreshold] = useState("5");
+    const [trackStock, setTrackStock] = useState(true);
     const [saving, setSaving] = useState(false);
     const [hasPackSize, setHasPackSize] = useState(false);
     const [purchaseUom, setPurchaseUom] = useState("");
@@ -79,30 +83,46 @@ export default function AddProductScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            const cats = getAllCategories();
-            const brnds = getAllBrands();
-            const prods = getAllProducts();
-            setCategories(cats);
-            setBrands(brnds);
+            let cancelled = false;
+            const initDefaults = async () => {
+                const cats = getAllCategories();
+                const brnds = getAllBrands();
+                const prods = getAllProducts();
+                const shop = getShop();
+                const info = await getShopInfo();
 
-            // Auto-select the most used UOM from shop inventory
-            if (prods.length > 0) {
-                const uomCounts: Record<string, number> = {};
-                prods.forEach((p) => {
-                    if (p.uom) {
-                        uomCounts[p.uom] = (uomCounts[p.uom] || 0) + 1;
+                if (!cancelled) {
+                    setCategories(cats);
+                    setBrands(brnds);
+
+                    // Default trackStock logic:
+                    // If Global Out-of-Stock Billing is ON (in SQLite or AsyncStorage) ➔ trackStock defaults to OFF (false).
+                    // If Global Out-of-Stock Billing is OFF ➔ trackStock defaults to ON (true).
+                    const isAllowOutOfStock = (shop?.allowOutOfStockBilling === true) || (info?.allowOutOfStockBilling === true);
+                    setTrackStock(!isAllowOutOfStock);
+
+                    // Auto-select the most used UOM from shop inventory
+                    if (prods.length > 0) {
+                        const uomCounts: Record<string, number> = {};
+                        prods.forEach((p) => {
+                            if (p.uom) {
+                                uomCounts[p.uom] = (uomCounts[p.uom] || 0) + 1;
+                            }
+                        });
+                        let topUom = "Pcs";
+                        let maxCount = 0;
+                        Object.entries(uomCounts).forEach(([uom, count]) => {
+                            if (count > maxCount) {
+                                maxCount = count;
+                                topUom = uom;
+                            }
+                        });
+                        setSelectedUom(topUom);
                     }
-                });
-                let topUom = "Pcs";
-                let maxCount = 0;
-                Object.entries(uomCounts).forEach(([uom, count]) => {
-                    if (count > maxCount) {
-                        maxCount = count;
-                        topUom = uom;
-                    }
-                });
-                setSelectedUom(topUom);
-            }
+                }
+            };
+            initDefaults();
+            return () => { cancelled = true; };
         }, [])
     );
 
@@ -131,6 +151,7 @@ export default function AddProductScreen() {
                 uom: selectedUom,
                 purchase_uom: hasPackSize && purchaseUom.trim() ? purchaseUom.trim() : null,
                 units_per_pack: hasPackSize && unitsPerPack ? parseInt(unitsPerPack) || null : null,
+                track_stock: trackStock ? 1 : 0,
             });
 
             if (addAnother) {
@@ -261,9 +282,10 @@ export default function AddProductScreen() {
                 brand_id: r.brandId || selectedBrandId,
                 purchase_price: parseFloat(r.purchasePrice) || 0,
                 selling_price: parseFloat(r.sellingPrice) || 0,
-                stock_quantity: parseInt(r.stock) || 0,
+                stock_quantity: trackStock ? (parseInt(r.stock) || 0) : 0,
                 min_stock_threshold: 5,
                 uom: selectedUom || r.uom || "Pcs",
+                track_stock: trackStock ? 1 : 0,
             }));
 
             insertProductsBatch(productsToInsert);
@@ -450,37 +472,54 @@ export default function AddProductScreen() {
                                     </View>
                                 </View>
 
-                                <View style={styles.twoColumnRow}>
-                                    <View style={styles.columnFlex}>
-                                        <Text style={styles.label}>Initial Stock</Text>
-                                        <View style={styles.inputWithIcon}>
-                                            <Ionicons name="archive-outline" size={16} color="#64748b" />
-                                            <TextInput
-                                                style={styles.flexInput}
-                                                placeholder="0"
-                                                value={initialStock}
-                                                onChangeText={setInitialStock}
-                                                keyboardType="numeric"
-                                                placeholderTextColor="#9ca3af"
-                                            />
-                                        </View>
-                                    </View>
+                                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md, marginTop: spacing.xs }}>
+                                     <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                                         <Text style={styles.label}>Track Inventory / Stock</Text>
+                                         <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                             {trackStock ? "App tracks quantity & alerts low stock" : "Unlimited / Don't track stock for this product"}
+                                         </Text>
+                                     </View>
+                                     <Switch
+                                         value={trackStock}
+                                         onValueChange={setTrackStock}
+                                         trackColor={{ false: "#CBD5E1", true: colors.primary }}
+                                         thumbColor="#FFFFFF"
+                                     />
+                                 </View>
 
-                                    <View style={styles.columnFlex}>
-                                        <Text style={styles.label}>Low Alert Min</Text>
-                                        <View style={styles.inputWithIcon}>
-                                            <Ionicons name="warning-outline" size={16} color="#f59e0b" />
-                                            <TextInput
-                                                style={styles.flexInput}
-                                                placeholder="5"
-                                                value={minThreshold}
-                                                onChangeText={setMinThreshold}
-                                                keyboardType="numeric"
-                                                placeholderTextColor="#9ca3af"
-                                            />
-                                        </View>
-                                    </View>
-                                </View>
+                                 {trackStock && (
+                                     <View style={styles.twoColumnRow}>
+                                         <View style={styles.columnFlex}>
+                                             <Text style={styles.label}>Initial Stock</Text>
+                                             <View style={styles.inputWithIcon}>
+                                                 <Ionicons name="archive-outline" size={16} color="#64748b" />
+                                                 <TextInput
+                                                     style={styles.flexInput}
+                                                     placeholder="0"
+                                                     value={initialStock}
+                                                     onChangeText={setInitialStock}
+                                                     keyboardType="numeric"
+                                                     placeholderTextColor="#9ca3af"
+                                                 />
+                                             </View>
+                                         </View>
+
+                                         <View style={styles.columnFlex}>
+                                             <Text style={styles.label}>Low Alert Min</Text>
+                                             <View style={styles.inputWithIcon}>
+                                                 <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+                                                 <TextInput
+                                                     style={styles.flexInput}
+                                                     placeholder="5"
+                                                     value={minThreshold}
+                                                     onChangeText={setMinThreshold}
+                                                     keyboardType="numeric"
+                                                     placeholderTextColor="#9ca3af"
+                                                 />
+                                             </View>
+                                         </View>
+                                     </View>
+                                 )}
 
                                 <View style={{ marginTop: 2 }}>
                                     <Text style={styles.label}>Unit of Measurement (UOM) *</Text>
@@ -687,6 +726,22 @@ export default function AddProductScreen() {
                                 <View style={{ marginTop: 6 }}>
                                     <Text style={styles.label}>Unit of Measurement (UOM) *</Text>
                                     <UomSelector selectedUom={selectedUom} onSelect={setSelectedUom} />
+                                </View>
+
+                                {/* Track Stock Default Toggle */}
+                                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border }}>
+                                    <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                                        <Text style={styles.label}>Track Inventory / Stock</Text>
+                                        <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                                            App tracks quantity & alerts low stock for batch
+                                        </Text>
+                                    </View>
+                                    <Switch
+                                        value={trackStock}
+                                        onValueChange={setTrackStock}
+                                        trackColor={{ false: "#CBD5E1", true: colors.primary }}
+                                        thumbColor="#FFFFFF"
+                                    />
                                 </View>
                             </View>
 

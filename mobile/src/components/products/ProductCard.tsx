@@ -13,6 +13,7 @@ interface ProductCardProps {
     unit: string;
     price: number;
     selected?: boolean;
+    trackStock?: boolean;
     onPress: () => void;
     onEdit?: () => void;
     onUpdateStock?: () => void;
@@ -26,12 +27,13 @@ export default function ProductCard({
     unit,
     price,
     selected,
+    trackStock = true,
     onPress,
     onEdit,
     onUpdateStock,
 }: ProductCardProps) {
-    const isOut = stock === 0;
-    const isLowStock = stock > 0 && stock <= threshold;
+    const isOut = trackStock && stock === 0;
+    const isLowStock = trackStock && stock > 0 && stock <= threshold;
 
     return (
         <View style={styles.container}>
@@ -57,10 +59,12 @@ export default function ProductCard({
                     <Text
                         style={[
                             styles.stockText,
-                            isOut || isLowStock ? styles.lowStock : styles.normalStock,
+                            !trackStock ? styles.normalStock : (isOut || isLowStock ? styles.lowStock : styles.normalStock),
                         ]}
                     >
-                        {isOut
+                        {!trackStock
+                            ? "Untracked"
+                            : isOut
                             ? "Out"
                             : isLowStock
                             ? `${stock} Left`

@@ -24,6 +24,7 @@ import {
     getAllCustomers,
     getAllCategories,
     getCustomerById,
+    getShop,
     createDraft,
     upsertDraft,
     upsertDraftItems,
@@ -237,15 +238,18 @@ export default function NewBillScreen() {
         ).slice(0, 8)
         : [];
 
+    const allowOutOfStockBilling = getShop()?.allowOutOfStockBilling ?? false;
+
     const addProduct = (product: Product) => {
         const avail = availQty(product.id, product.stock_quantity);
-        if (avail <= 0) {
+        const canBypassStock = allowOutOfStockBilling || product.track_stock === 0;
+        if (!canBypassStock && avail <= 0) {
             showAlert("Out of Stock", `"${product.name}" is out of stock or fully reserved in another bill.`, undefined, "warning");
             return;
         }
         const existing = billItems.find((i) => i.product_id === product.id);
         if (existing) {
-            if (existing.qty >= avail) {
+            if (!canBypassStock && existing.qty >= avail) {
                 showAlert("Stock Limit", `Only ${avail} unit(s) of "${product.name}" available.`, undefined, "warning");
                 return;
             }
@@ -287,11 +291,12 @@ export default function NewBillScreen() {
         if (!item || !product) return;
 
         const avail = availQty(product.id, product.stock_quantity);
+        const canBypassStock = allowOutOfStockBilling || product.track_stock === 0;
         const step = item.is_pack_mode && item.units_per_pack ? item.units_per_pack : 1;
         const baseStep = delta > 0 ? step : -step;
 
         if (delta > 0) {
-            if (item.qty + step > avail) {
+            if (!canBypassStock && item.qty + step > avail) {
                 const availPacks = item.units_per_pack
                     ? Math.floor(avail / item.units_per_pack)
                     : avail;
@@ -329,7 +334,8 @@ export default function NewBillScreen() {
         const baseQty = newQty * factor;
 
         const avail = availQty(product.id, product.stock_quantity);
-        if (baseQty > avail) {
+        const canBypassStock = allowOutOfStockBilling || product.track_stock === 0;
+        if (!canBypassStock && baseQty > avail) {
             const availDisplay = item.is_pack_mode && item.units_per_pack
                 ? Math.floor(avail / item.units_per_pack)
                 : avail;
@@ -467,7 +473,7 @@ export default function NewBillScreen() {
         });
     };
 
-    const totalItems = billItems.reduce((acc, i) => acc + i.qty, 0);
+    const totalItems = billItems.length;
     const subtotal = billItems.reduce((acc, i) => acc + i.qty * i.unit_price, 0);
     const discountAmount = subtotal * (activeDiscountPercent / 100);
     const grandTotal = Math.max(0, subtotal - discountAmount);
@@ -670,11 +676,10 @@ export default function NewBillScreen() {
                         text: "OK",
                         style: "default",
                         onPress: () => {
-                            if (navigation.canGoBack()) {
-                                navigation.goBack();
-                            } else {
-                                navigation.replace("MainTabs");
-                            }
+                            navigation.reset({
+                                index: 0,
+                                routes: [{ name: "MainTabs" }],
+                            });
                         },
                     },
                 ],
@@ -814,19 +819,24 @@ export default function NewBillScreen() {
                     <View style={styles.searchResults}>
                         {searchResults.map((product) => {
                             const avail = availQty(product.id, product.stock_quantity);
+                            const canBypassStock = allowOutOfStockBilling || product.track_stock === 0;
                             return (
                                 <TouchableOpacity
                                     key={product.id}
-                                    style={[styles.searchResultItem, avail === 0 && styles.searchResultItemDisabled]}
+                                    style={[styles.searchResultItem, (!canBypassStock && avail === 0) && styles.searchResultItemDisabled]}
                                     onPress={() => addProduct(product)}
                                 >
                                     <View style={styles.searchResultInfo}>
                                         <Text style={styles.searchResultName}>{product.name}</Text>
                                         <Text style={styles.searchResultMeta}>
                                             {product.category_name ?? "No category"} ·{" "}
-                                            <Text style={avail === 0 ? styles.availQtyZero : avail <= 5 ? styles.availQtyLow : styles.availQtyOk}>
-                                                Avail: {avail}
-                                            </Text>
+                                            {product.track_stock === 0 ? (
+                                                <Text style={styles.availQtyOk}>Untracked</Text>
+                                            ) : (
+                                                <Text style={avail === 0 ? styles.availQtyZero : avail <= 5 ? styles.availQtyLow : styles.availQtyOk}>
+                                                    Avail: {avail}
+                                                </Text>
+                                            )}
                                         </Text>
                                     </View>
                                     <Text style={styles.searchResultPrice}>
@@ -1473,6 +1483,7 @@ export default function NewBillScreen() {
                         contentContainerStyle={styles.modalProductList}
                         renderItem={({ item }) => {
                             const avail = availQty(item.id, item.stock_quantity);
+                            const canBypassStock = allowOutOfStockBilling || item.track_stock === 0;
                             const selectedData = selectedModalItems[item.id] || { qty: 0, isPackMode: false };
                             const currentQty = selectedData.qty;
                             const isPack = selectedData.isPackMode;
@@ -1488,8 +1499,14 @@ export default function NewBillScreen() {
                                         <Text style={styles.modalProductName}>{item.name}</Text>
                                         <View style={styles.modalProductMeta}>
                                             <Text style={styles.modalProductPrice}>₹{displayPrice.toFixed(2)} / {displayUnitLabel}</Text>
-                                            <Text style={[styles.modalProductStock, avail <= 0 && { color: "#EF4444" }]}>
-                                                {avail > 0 ? `Stock: ${avail} ${item.uom}` : "Out of Stock"}
+                                            <Text style={[styles.modalProductStock, (avail <= 0 && !canBypassStock) && { color: "#EF4444" }]}>
+                                                {item.track_stock === 0
+                                                    ? "Untracked"
+                                                    : avail > 0
+                                                        ? `Stock: ${avail} ${item.uom}`
+                                                        : canBypassStock
+                                                            ? `Stock: ${avail} ${item.uom}`
+                                                            : "Out of Stock"}
                                             </Text>
                                         </View>
                                         {Boolean(item.units_per_pack && item.purchase_uom) && (
@@ -1535,9 +1552,9 @@ export default function NewBillScreen() {
                                                     {displayQtyCount} {displayUnitLabel}
                                                 </Text>
                                                 <TouchableOpacity
-                                                    style={[styles.modalStepperBtn, currentQty + step > avail && styles.modalStepperBtnDisabled]}
+                                                    style={[styles.modalStepperBtn, (!canBypassStock && currentQty + step > avail) && styles.modalStepperBtnDisabled]}
                                                     onPress={() => {
-                                                        if (currentQty + step > avail) {
+                                                        if (!canBypassStock && currentQty + step > avail) {
                                                             showAlert("Stock Limit", `Only ${avail} ${item.uom} available.`, undefined, "warning");
                                                             return;
                                                         }
@@ -1552,9 +1569,9 @@ export default function NewBillScreen() {
                                             </>
                                         ) : (
                                             <TouchableOpacity
-                                                style={[styles.modalAddBtn, avail <= 0 && styles.modalAddBtnDisabled]}
+                                                style={[styles.modalAddBtn, (!canBypassStock && avail <= 0) && styles.modalAddBtnDisabled]}
                                                 onPress={() => {
-                                                    if (avail <= 0) {
+                                                    if (!canBypassStock && avail <= 0) {
                                                         showAlert("Out of Stock", `"${item.name}" is out of stock.`, undefined, "warning");
                                                         return;
                                                     }

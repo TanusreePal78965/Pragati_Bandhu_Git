@@ -6,6 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     StatusBar,
+    ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,45 +16,68 @@ import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
 import ScreenHeader from "../../components/common/ScreenHeader";
-import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, getShop, getSalesByRange, Bill, Product } from "../../db/db";
+import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, getShop, updateShop, getSalesByRange, Bill, Product } from "../../db/db";
 import { toUtcDate } from "../../utils/dateUtils";
+import { useAlert } from "../../context/AlertContext";
+import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
+import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 
 import { haptics } from "../../utils/haptics";
 
 export default function HomeScreen() {
     const navigation = useNavigation<NativeStackNavigationProp<any>>();
+    const { showAlert } = useAlert();
     const [todaySales, setTodaySales] = useState({ total: 0, count: 0 });
     const [salesTrend, setSalesTrend] = useState<number | null>(null);
     const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
     const [totalProducts, setTotalProducts] = useState(0);
     const [recentBills, setRecentBills] = useState<Bill[]>([]);
     const [hasAiConsent, setHasAiConsent] = useState(false);
+    const [allowOutOfStock, setAllowOutOfStock] = useState(false);
+    const [shopInfo, setShopInfoState] = useState<StoredShopInfo | null>(null);
+    const [syncPendingCount, setSyncPendingCount] = useState(0);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     const getIsoDate = (d: Date) => d.toISOString().split("T")[0];
 
     const loadData = useCallback(() => {
-        const todayData = getTodaySales();
-        setTodaySales(todayData);
+        let cancelled = false;
+        const load = async () => {
+            const todayData = getTodaySales();
+            if (!cancelled) setTodaySales(todayData);
 
-        // Trend: compare today vs yesterday
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yDate = getIsoDate(yesterday);
-        const yesterdayData = getSalesByRange(yDate, yDate);
-        if (yesterdayData.total_sales > 0) {
-            const pct = ((todayData.total - yesterdayData.total_sales) / yesterdayData.total_sales) * 100;
-            setSalesTrend(Math.round(pct));
-        } else if (todayData.total > 0) {
-            setSalesTrend(null); // new sales with no yesterday baseline — don't show %
-        } else {
-            setSalesTrend(null);
-        }
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yDate = getIsoDate(yesterday);
+            const yesterdayData = getSalesByRange(yDate, yDate);
 
-        setLowStockItems(getLowStockProducts());
-        setTotalProducts(getAllProducts().length);
-        setRecentBills(getRecentBills(5));
-        const shop = getShop();
-        setHasAiConsent(shop?.aiConsent === true);
+            const shop = getShop();
+            const info = await getShopInfo();
+            const isOutOfStockAllowed = (shop?.allowOutOfStockBilling === true) || (info?.allowOutOfStockBilling === true);
+
+            if (isOutOfStockAllowed && !shop?.allowOutOfStockBilling) {
+                updateShop({ allowOutOfStockBilling: true });
+            }
+
+            if (!cancelled) {
+                if (yesterdayData.total_sales > 0) {
+                    const pct = ((todayData.total - yesterdayData.total_sales) / yesterdayData.total_sales) * 100;
+                    setSalesTrend(Math.round(pct));
+                } else {
+                    setSalesTrend(null);
+                }
+
+                setAllowOutOfStock(isOutOfStockAllowed);
+                setLowStockItems(getLowStockProducts(isOutOfStockAllowed));
+                setTotalProducts(getAllProducts().length);
+                setRecentBills(getRecentBills(5));
+                setHasAiConsent(shop?.aiConsent === true);
+                setShopInfoState(info);
+                setSyncPendingCount(getPendingSyncCount());
+            }
+        };
+        load();
+        return () => { cancelled = true; };
     }, []);
 
     useFocusEffect(loadData);
@@ -66,10 +90,37 @@ export default function HomeScreen() {
         return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
     };
 
+    const handleSyncNow = async () => {
+        setIsSyncing(true);
+        const beforeCount = getPendingSyncCount();
+        try {
+            await flushSyncQueue();
+        } finally {
+            const afterCount = getPendingSyncCount();
+            setSyncPendingCount(afterCount);
+            setIsSyncing(false);
+            const synced = beforeCount - afterCount;
+            if (synced > 0 && afterCount === 0) {
+                showAlert("Synced", `All ${synced} item${synced > 1 ? "s" : ""} uploaded successfully.`, undefined, "success");
+            } else if (synced > 0 && afterCount > 0) {
+                showAlert("Partially Synced", `${synced} item${synced > 1 ? "s" : ""} uploaded. ${afterCount} still pending — they will retry automatically.`, undefined, "warning");
+            } else if (beforeCount === 0) {
+                showAlert("All Caught Up", "Nothing to sync.", undefined, "info");
+            } else {
+                showAlert("Sync Failed", `${afterCount} item${afterCount > 1 ? "s" : ""} could not be uploaded. Check your connection and try again.`, undefined, "error");
+            }
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <StatusBar barStyle="dark-content" />
-            <ScreenHeader title="Dashboard" isMainTab={false} onNotificationPress={() => { }} />
+            <ScreenHeader
+                isMainTab={true}
+                shopName={shopInfo?.shopName ?? "—"}
+                syncPendingCount={shopInfo?.aiConsent ? syncPendingCount : undefined}
+                onNotificationPress={() => { }}
+            />
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled"
@@ -106,7 +157,20 @@ export default function HomeScreen() {
                         </View>
                     </View>
 
-                    {totalProducts === 0 ? (
+                    {allowOutOfStock ? (
+                        <View style={[styles.alertCard, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
+                            <Text style={[styles.alertLabel, { color: colors.primary }]}>UNLIMITED BILLING</Text>
+                            <View style={styles.alertMain}>
+                                <View>
+                                    <Text style={[styles.alertValue, { color: colors.primary }]}>
+                                        Active
+                                    </Text>
+                                    <Text style={styles.alertSub}>Out-of-stock billing enabled</Text>
+                                </View>
+                                <Ionicons name="infinite" size={26} color={colors.primary} />
+                            </View>
+                        </View>
+                    ) : totalProducts === 0 ? (
                         <View style={[styles.alertCard, { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0" }]}>
                             <Text style={[styles.alertLabel, { color: "#64748B" }]}>STOCK STATUS</Text>
                             <View style={styles.alertMain}>
@@ -160,6 +224,29 @@ export default function HomeScreen() {
                     )}
                 </View>
 
+                {/* Sync Now Button */}
+                {Boolean(shopInfo?.aiConsent) && syncPendingCount > 0 && (
+                    <TouchableOpacity
+                        style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+                        onPress={handleSyncNow}
+                        disabled={isSyncing}
+                        activeOpacity={0.8}
+                    >
+                        {isSyncing ? (
+                            <ActivityIndicator size="small" color="#B45309" />
+                        ) : (
+                            <Ionicons name="cloud-upload-outline" size={20} color="#B45309" />
+                        )}
+                        <Text style={styles.syncButtonText}>
+                            {isSyncing
+                                ? "Syncing..."
+                                : syncPendingCount > 0
+                                    ? `Sync Now (${syncPendingCount} pending)`
+                                    : "Sync Now"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
                 {/* Quick Actions */}
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
@@ -197,86 +284,78 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Low Stock / AI Reorder Section — shown to all users, branded correctly per consent */}
-                <View style={styles.aiSection}>
-                    <View style={styles.aiHeader}>
-                        <View style={styles.aiTitleRow}>
-                            {hasAiConsent ? (
-                                <>
-                                    <Ionicons name="sparkles" size={18} color={colors.primary} />
-                                    <Text style={styles.aiTitle}>AI Reorder Insights</Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Ionicons name="alert-circle-outline" size={18} color="#D97706" />
-                                    <Text style={[styles.aiTitle, { color: "#92400E" }]}>Low Stock Alerts</Text>
-                                </>
-                            )}
+                {/* Low Stock / AI Reorder Section — hidden when out-of-stock billing is active */}
+                {!allowOutOfStock && (
+                    <View style={styles.aiSection}>
+                        <View style={styles.aiHeader}>
+                            <View style={styles.aiTitleRow}>
+                                {hasAiConsent ? (
+                                    <>
+                                        <Ionicons name="sparkles" size={18} color={colors.primary} />
+                                        <Text style={styles.aiTitle}>AI Reorder Insights</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Ionicons name="alert-circle-outline" size={18} color="#D97706" />
+                                        <Text style={[styles.aiTitle, { color: "#92400E" }]}>Low Stock Alerts</Text>
+                                    </>
+                                )}
+                            </View>
                         </View>
-                    </View>
 
-                    {lowStockItems.length > 0 ? (
-                        lowStockItems.slice(0, 2).map((item) => (
-                            <View
-                                key={item.id}
-                                style={[
-                                    styles.aiCard,
-                                    !hasAiConsent && { backgroundColor: "#FFFBEB", borderLeftColor: "#D97706" },
-                                ]}
-                            >
+                        {lowStockItems.length > 0 ? (
+                            lowStockItems.slice(0, 2).map((item) => (
+                                <View
+                                    key={item.id}
+                                    style={[
+                                        styles.aiCard,
+                                        !hasAiConsent && { backgroundColor: "#FFFBEB", borderLeftColor: "#D97706" },
+                                    ]}
+                                >
+                                    <Text style={styles.aiMessage}>
+                                        "{item.name}" is low on stock ({item.stock_quantity} left, threshold: {item.min_stock_threshold}). Consider restocking soon.
+                                    </Text>
+                                    <View style={styles.aiFooter}>
+                                        <View style={[
+                                            styles.aiBadge,
+                                            item.stock_quantity === 0 && { backgroundColor: colors.error },
+                                            !hasAiConsent && item.stock_quantity > 0 && { backgroundColor: "#D97706" },
+                                        ]}>
+                                            <Text style={styles.aiBadgeText}>
+                                                {item.stock_quantity === 0 ? "OUT OF STOCK" : "LOW STOCK"}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.aiTime}>{item.uom}</Text>
+                                    </View>
+                                </View>
+                            ))
+                        ) : totalProducts === 0 ? (
+                            <View style={styles.aiCard}>
                                 <Text style={styles.aiMessage}>
-                                    "{item.name}" is low on stock ({item.stock_quantity} left, threshold: {item.min_stock_threshold}). Consider restocking soon.
+                                    Add products to your inventory to start seeing {hasAiConsent ? "AI reorder insights" : "low stock alerts"} here.
                                 </Text>
                                 <View style={styles.aiFooter}>
-                                    <View style={[
-                                        styles.aiBadge,
-                                        item.stock_quantity === 0 && { backgroundColor: colors.error },
-                                        !hasAiConsent && item.stock_quantity > 0 && { backgroundColor: "#D97706" },
-                                    ]}>
-                                        <Text style={styles.aiBadgeText}>
-                                            {item.stock_quantity === 0 ? "OUT OF STOCK" : "LOW STOCK"}
-                                        </Text>
+                                    <View style={[styles.aiBadge, { backgroundColor: "#64748B" }]}>
+                                        <Text style={styles.aiBadgeText}>NO PRODUCTS</Text>
                                     </View>
-                                    <Text style={styles.aiTime}>{item.uom}</Text>
                                 </View>
                             </View>
-                        ))
-                    ) : totalProducts === 0 ? (
-                        <View style={styles.aiCard}>
-                            <Text style={styles.aiMessage}>
-                                Add products to your inventory to start seeing {hasAiConsent ? "AI reorder insights" : "low stock alerts"} here.
-                            </Text>
-                            <View style={styles.aiFooter}>
-                                <View style={[styles.aiBadge, { backgroundColor: "#64748B" }]}>
-                                    <Text style={styles.aiBadgeText}>NO PRODUCTS</Text>
+                        ) : (
+                            <View style={styles.aiCard}>
+                                <Text style={styles.aiMessage}>
+                                    {hasAiConsent
+                                        ? "All products have sufficient stock. AI suggestions will appear here when stock runs low."
+                                        : "All products have sufficient stock. You will be alerted here when any item runs low."}
+                                </Text>
+                                <View style={styles.aiFooter}>
+                                    <View style={[styles.aiBadge, { backgroundColor: colors.success }]}>
+                                        <Text style={styles.aiBadgeText}>ALL GOOD</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
-                    ) : (
-                        <View style={styles.aiCard}>
-                            <Text style={styles.aiMessage}>
-                                {hasAiConsent
-                                    ? "All products have sufficient stock. AI suggestions will appear here when stock runs low."
-                                    : "All products have sufficient stock. You will be alerted here when any item runs low."}
-                            </Text>
-                            <View style={styles.aiFooter}>
-                                <View style={[styles.aiBadge, { backgroundColor: colors.success }]}>
-                                    <Text style={styles.aiBadgeText}>ALL GOOD</Text>
-                                </View>
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Upgrade nudge for local-only users */}
-                    {!hasAiConsent && lowStockItems.length > 0 && (
-                        <View style={styles.upgradeNudge}>
-                            <Ionicons name="information-circle-outline" size={15} color="#1d4ed8" />
-                            <Text style={styles.upgradeNudgeText}>
-                                Enable Cloud Backup in Settings to get AI-powered reorder quantity suggestions.
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                        )}
+                    </View>
+                )}
 
                 {/* Recent Activity */}
                 <View style={styles.sectionHeader}>
@@ -306,25 +385,25 @@ export default function HomeScreen() {
                                             {
                                                 backgroundColor:
                                                     isUdharClear ? "#ECFDF5"
-                                                    : isUdhar ? "#FEF3C7"
-                                                    : isUpi ? "#F5F3FF"
-                                                    : "#DCFCE7",
+                                                        : isUdhar ? "#FEF3C7"
+                                                            : isUpi ? "#F5F3FF"
+                                                                : "#DCFCE7",
                                             },
                                         ]}
                                     >
                                         <Ionicons
                                             name={
                                                 isUdharClear ? "checkmark-circle"
-                                                : isUdhar ? "wallet-outline"
-                                                : isUpi ? "phone-portrait-outline"
-                                                : "receipt-outline"
+                                                    : isUdhar ? "wallet-outline"
+                                                        : isUpi ? "phone-portrait-outline"
+                                                            : "receipt-outline"
                                             }
                                             size={20}
                                             color={
                                                 isUdharClear ? colors.success
-                                                : isUdhar ? "#D97706"
-                                                : isUpi ? "#7C3AED"
-                                                : colors.success
+                                                    : isUdhar ? "#D97706"
+                                                        : isUpi ? "#7C3AED"
+                                                            : colors.success
                                             }
                                         />
                                     </View>
@@ -333,8 +412,8 @@ export default function HomeScreen() {
                                             {isUdharClear
                                                 ? `Udhar Paid by ${bill.customer_name ?? "Customer"}`
                                                 : bill.customer_name
-                                                ? `Bill for ${bill.customer_name}`
-                                                : "Walk-in Customer"}
+                                                    ? `Bill for ${bill.customer_name}`
+                                                    : "Walk-in Customer"}
                                         </Text>
                                         <Text style={styles.activitySubtitle}>
                                             {formatTime(bill.bill_date)} ·{" "}
@@ -405,13 +484,13 @@ const styles = StyleSheet.create({
     },
     primaryActionText: { color: "#fff", fontSize: 15, fontWeight: "700" },
     secondaryActionsRow: { flexDirection: "row", gap: 8, marginTop: 6 },
-    secondaryActionCard: { 
-        flex: 1, 
-        backgroundColor: colors.surface, 
-        borderRadius: 10, 
-        padding: 8, 
-        alignItems: "center", 
-        borderWidth: 1, 
+    secondaryActionCard: {
+        flex: 1,
+        backgroundColor: colors.surface,
+        borderRadius: 10,
+        padding: 8,
+        alignItems: "center",
+        borderWidth: 1,
         borderColor: colors.border,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
@@ -450,4 +529,19 @@ const styles = StyleSheet.create({
         marginTop: 6,
     },
     upgradeNudgeText: { flex: 1, fontSize: 11, color: "#1d4ed8", lineHeight: 16 },
+    syncButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#FEF3C7",
+        borderWidth: 1,
+        borderColor: "#F59E0B",
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: spacing.md,
+        marginTop: 10,
+        gap: 8,
+    },
+    syncButtonDisabled: { opacity: 0.6 },
+    syncButtonText: { fontSize: 14, fontWeight: "700", color: "#B45309" },
 });

@@ -84,8 +84,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     if (data.shop) {
       db.runSync(
         `INSERT OR REPLACE INTO shop
-           (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, allow_out_of_stock_billing, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           data.shop.id,
           data.shop.shop_name,
@@ -95,6 +95,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           data.shop.business_category ?? null,
           data.shop.ai_consent ?? 0,
           data.shop.is_active ?? 1,
+          data.shop.allow_out_of_stock_billing ?? 0,
           data.shop.created_at ?? new Date().toISOString(),
         ]
       );
@@ -122,8 +123,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     for (const row of data.products ?? []) {
       db.runSync(
         `INSERT OR REPLACE INTO products
-           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, track_stock, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id, row.name,
           row.category_id ?? null,
@@ -133,6 +134,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           row.stock_quantity ?? 0,
           row.min_stock_threshold ?? 5,
           row.uom ?? 'Pcs',
+          row.track_stock ?? 1,
           row.updated_at ?? new Date().toISOString(),
         ]
       );

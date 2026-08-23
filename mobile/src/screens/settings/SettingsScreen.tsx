@@ -12,6 +12,7 @@ import {
     ActivityIndicator,
     Share,
     Linking,
+    Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -105,6 +106,7 @@ export default function SettingsScreen() {
     const [cloudUploadText, setCloudUploadText] = useState('Enabling…');
     const [isExporting, setIsExporting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [allowOutOfStock, setAllowOutOfStock] = useState(false);
     const [versionClicks, setVersionClicks] = useState(0);
     const [showExport, setShowExport] = useState(false);
     const navigation = useNavigation();
@@ -118,7 +120,7 @@ export default function SettingsScreen() {
                 const shopId = await getStoredShopId();
                 if (shopId) {
                     try {
-                        const { data } = await supabase.from('shops').select('is_active, plan_expires_at, plan_type').eq('id', shopId).maybeSingle();
+                        const { data } = await supabase.from('shops').select('is_active, plan_expires_at, plan_type, allow_out_of_stock_billing').eq('id', shopId).maybeSingle();
                         if (data) {
                             const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
                             if (data.is_active === false || isExpired) {
@@ -130,14 +132,18 @@ export default function SettingsScreen() {
                                     isActive: data.is_active,
                                     planExpiresAt: data.plan_expires_at,
                                     planType: data.plan_type,
+                                    allowOutOfStockBilling: data.allow_out_of_stock_billing === true,
                                 };
                                 await persistShopInfo(info);
                             }
                         }
                     } catch (_) { }
                 }
+                const sqliteShop = getShop();
+                const isAllowed = sqliteShop?.allowOutOfStockBilling ?? info?.allowOutOfStockBilling ?? false;
                 if (!cancelled) {
-                    setShopInfoState(info);
+                    setShopInfoState(info ? { ...info, allowOutOfStockBilling: isAllowed } : null);
+                    setAllowOutOfStock(isAllowed);
                     setSyncPendingCount(getPendingSyncCount());
                 }
             };
@@ -269,6 +275,22 @@ export default function SettingsScreen() {
                 },
             ],
         });
+    };
+
+    const handleToggleAllowOutOfStock = async (val: boolean) => {
+        setAllowOutOfStock(val);
+        updateShop({ allowOutOfStockBilling: val });
+        const currentInfo = await getShopInfo();
+        if (currentInfo) {
+            await persistShopInfo({ ...currentInfo, allowOutOfStockBilling: val });
+        }
+        const shopId = await getStoredShopId();
+        if (shopId) {
+            try {
+                await supabase.from('shops').update({ allow_out_of_stock_billing: val }).eq('id', shopId);
+            } catch (_) {}
+        }
+        await flushSyncQueue();
     };
 
     // ── Export Backup ──────────────────────────────────────────────────────────
@@ -624,16 +646,16 @@ export default function SettingsScreen() {
                     </View>
                 </View>
 
-                {shopInfo?.aiConsent && (
+                {Boolean(shopInfo?.aiConsent) && syncPendingCount > 0 && (
                     <TouchableOpacity
                         style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
                         onPress={handleSyncNow}
                         disabled={isSyncing}
                     >
                         {isSyncing ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
+                            <ActivityIndicator size="small" color="#B45309" />
                         ) : (
-                            <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+                            <Ionicons name="cloud-upload-outline" size={18} color="#B45309" />
                         )}
                         <Text style={styles.syncButtonText}>
                             {isSyncing
@@ -644,6 +666,34 @@ export default function SettingsScreen() {
                         </Text>
                     </TouchableOpacity>
                 )}
+
+                {/* Billing Preferences */}
+                <SectionHeader title="BILLING PREFERENCES" />
+                <TouchableOpacity
+                    style={[styles.settingsItem, { paddingVertical: 12, minHeight: 54 }]}
+                    onPress={() => handleToggleAllowOutOfStock(!allowOutOfStock)}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 12 }}>
+                        <View style={styles.iconContainer}>
+                            <Ionicons name="cart-outline" size={22} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
+                                Allow Out-of-Stock Billing
+                            </Text>
+                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                                Sell items even when stock reaches zero
+                            </Text>
+                        </View>
+                    </View>
+                    <Switch
+                        value={allowOutOfStock}
+                        onValueChange={handleToggleAllowOutOfStock}
+                        trackColor={{ false: "#CBD5E1", true: colors.primary }}
+                        thumbColor={Platform.OS === "android" ? (allowOutOfStock ? colors.primary : "#F4F3F4") : "#FFFFFF"}
+                    />
+                </TouchableOpacity>
 
                 {/* Inventory Settings */}
                 <SectionHeader title="INVENTORY SETTINGS" />
@@ -952,15 +1002,15 @@ const styles = StyleSheet.create({
         padding: 8,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: colors.primary,
-        backgroundColor: colors.primary + "0f",
+        borderColor: "#F59E0B",
+        backgroundColor: "#FEF3C7",
     },
     syncButtonDisabled: {
         opacity: 0.5,
     },
     syncButtonText: {
-        color: colors.primary,
-        fontWeight: "600",
+        color: "#B45309",
+        fontWeight: "700",
         fontSize: 13,
     },
     exportButton: {

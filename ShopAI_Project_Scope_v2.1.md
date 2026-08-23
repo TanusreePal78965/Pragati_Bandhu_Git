@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 > **Legend:** 🔲 Not Started &nbsp;|&nbsp; 🔄 In Progress &nbsp;|&nbsp; ✅ Done
 >
-> **Last updated:** August 23, 2026 — v5.3
+> **Last updated:** August 23, 2026 — v5.5
 
 ---
 
@@ -533,10 +533,10 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 3 | Brands → SQLite | ✅ | ManageBrandsScreen + AddBrandScreen wired |
 | 4 | Link categories + brands to Add Product form | ✅ | Category + brand chip selectors pull live from SQLite; **v5.1:** Arranged Category & Brand side-by-side in 2-column grid |
 | 5 | Customers → SQLite | ✅ | CustomersScreen + AddCustomerScreen wired; udhar balance tracked |
-| 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance. **v5.3:** Ordered by `datetime(bill_date) DESC, rowid DESC`; explicit `datetime('now')` default on insert; timestamp normalisation migration added |
+| 6 | Bills → SQLite | ✅ | NewBillScreen uses atomic `withTransactionSync`: inserts bill + items, deducts stock, updates udhar balance. **v5.3:** Ordered by `datetime(bill_date) DESC, rowid DESC`; explicit `datetime('now')` default on insert; timestamp normalisation migration added. **v5.4:** `totalItems` updated to count unique items (`items.length`); post-checkout navigates directly to Dashboard (`MainTabs`). |
 | 7 | Sales log → SQLite | ✅ | `sales_log` row written per product on every bill checkout |
 | 8 | Reports → SQLite | ✅ | ReportsScreen queries real `getTodaySales`, `getSalesByRange`, `getTopProducts`; also shows last 10 transactions. **v2.8:** PDF export implemented via `expo-print` + `expo-sharing`; generates a full HTML report (summary stats, top products, recent transactions) and shares via OS share sheet. Net Profit renamed from "Est. Profit"; now computed from real `purchase_price` vs `selling_price` per bill item (not hardcoded 20%). |
-| 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` (ordered by creation time descending) |
+| 9 | Dashboard → SQLite | ✅ | HomeScreen: today's sales, low-stock count, recent bills from real SQLite queries via `useFocusEffect` (ordered by creation time descending). **v5.4:** Added top header sync badge (`syncPendingCount`) and amber/yellow Sync Now button. **v5.5:** Hidden Sync Now button when `syncPendingCount === 0`. |
 | 10 | Low stock detection (local) | ✅ | `getLowStockProducts()` computes `stock < min_threshold` on device; shown as attention card on HomeScreen |
 
 ---
@@ -547,7 +547,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 |---|---|---|---|
 | 11 | `authService.ts` | ✅ | **Migrated to custom Edge Functions.** `sendOtp` → calls `send-otp` Edge Function (generates OTP, stores plain + hash in `otp_tokens`, calls Fast2SMS). `verifyOtp` → calls `verify-otp` Edge Function (validates OTP, creates/gets Supabase user, signs JWT, returns session); session stored via `supabase.auth.setSession()`. `getStoredAuth` → `supabase.auth.getSession()`. `logout` → `supabase.auth.signOut()`. **v2.5:** Auto-restore trigger added — on fresh install with valid session + cloud consent + empty SQLite, `restoreFromCloud()` fires automatically in background. |
 | 12 | `client.js` — axios client | ✅ | **Commented out** — no longer used. Replaced by `mobile/src/lib/supabase.ts` (Supabase client singleton with AsyncStorage session persistence and auto token refresh). |
-| 13 | `syncQueue.ts` — flush logic | ✅ | **Migrated to direct Supabase calls.** `ROUTE_MAP` + axios removed; each table dispatched via `supabase.from(table).upsert()` / `.delete()`; bills upsert three tables sequentially (bills → bill_items → sales_log); max 5 retry attempts unchanged. RLS enforces shop isolation automatically. **v2.5 bug fixes:** (a) `isFlushing` mutex added — prevents concurrent flush from NetInfo + AppState firing simultaneously; (b) `sales_log` added as standalone `syncUpsert` case so individual entries can be queued outside compound bill payload. |
+| 13 | `syncQueue.ts` — flush logic | ✅ | **Migrated to direct Supabase calls.** `ROUTE_MAP` + axios removed; each table dispatched via `supabase.from(table).upsert()` / `.delete()`; bills upsert three tables sequentially (bills → bill_items → sales_log); max 5 retry attempts unchanged. RLS enforces shop isolation automatically. **v2.5 bug fixes:** (a) `isFlushing` mutex added; (b) `sales_log` added as standalone `syncUpsert` case. **v5.5:** Added instant background auto-sync trigger inside `addToSyncQueue` so any newly enqueued item syncs to cloud immediately when online. |
 | 14 | `syncService.ts` — listeners | ✅ | **Migrated.** `checkShopStatus()` now queries `supabase.from('shops').select('is_active').single()` directly instead of `GET /api/shops/me`. All other logic unchanged (AppState + NetInfo listeners, consent gate). **v2.5 bug fixes:** (a) `stopSyncService()` called at top of `startSyncService()` — prevents AppState/NetInfo listener leaks on double-start; (b) explicit `.eq('id', phone)` filter added to `checkShopStatus` — no longer relies solely on RLS for scoping; (c) missing `await` added to both `startSyncService()` call sites in `AuthContext`; (d) `completeSetup()` now calls `startSyncService()` — sync was never started after first-time shop creation. |
 | 15 | `@supabase/supabase-js` added | ✅ | Installed via `npx expo install @supabase/supabase-js` |
 | 15a | Sync correctness audit — critical bugs fixed | ✅ | **v2.5.** Full audit of SQLite→Supabase data consistency. Four critical/high bugs fixed in `db.ts`: (1) `updateCustomerUdhar` was sending `{udhar_delta}` — a non-existent Supabase column — causing all udhar balance syncs to fail silently and exhaust retry attempts. Fixed: re-reads full customer row and queues absolute balance. (2) `insertBill` with `payment_mode='udhar'` updated local SQLite balance but never queued a customer sync — remote `udhar_balance` was permanently stuck at customer creation value. Fixed: re-reads customer row after transaction and enqueues `customers UPDATE`. (3) `updateProduct` queued only the changed fields (partial payload); `addToSyncQueue` deduplication removes the prior INSERT entry — on first sync after offline edit, Supabase upserted with defaults (₹0 prices, null category). Fixed: re-reads full product row before queuing. (4) `queueAllLocalData()` added — reads every SQLite row and re-enqueues as upserts; used by Enable Cloud Backup and Import Backup flows to ensure Supabase stays in sync. |
@@ -949,6 +949,18 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.28 Supabase Primary Region Migration (`PragatiDBIndia`) (v5.5)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 163 | New Region Database Setup | ✅ | Created new primary region database `PragatiDBIndia` (`mhtqufyaxpunhenqropn`) and applied all 15 database schema migrations (`000_base_schema.sql` through `20260710000000_add_pack_columns.sql`) cleanly. |
+| 164 | Data Migration | ✅ | Transferred and verified all **11 shop records** from old database instance to `PragatiDBIndia`. |
+| 165 | Edge Functions Deployment | ✅ | Deployed `login`, `payments`, and `register-shop` functions to `mhtqufyaxpunhenqropn` and configured `FIREBASE_PROJECT_ID=pragati-bandhu` secret. |
+| 166 | Application Environment Sync | ✅ | Updated `mobile/.env.local`, `mobile/eas.json` (preview + prod), `web/.env`, `.mcp.json`, `.github/workflows/deploy-web.yml`, and `supabase/.temp/` to point exclusively to `mhtqufyaxpunhenqropn`. Removed all legacy database references. |
+| 167 | Sync Queue & Admin Auth Fixes | ✅ | Created `20260710000000_add_pack_columns.sql` to add `purchase_uom`, `units_per_pack`, and `display_qty` to PostgreSQL, resolving `PGRST204` sync queue errors. Added `Authorization: Bearer ${SUPABASE_ANON_KEY}` to `AdminLogin.tsx`. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -1011,6 +1023,19 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v5.5 — August 23, 2026
+
+**Instant Auto-Sync & Sync Button Visibility Polish**
+- **Instant Background Auto-Sync**: Updated `addToSyncQueue` in `syncQueue.ts` to trigger `flushSyncQueue()` in the background immediately whenever a new item (bill, product, customer, udhar edit) is enqueued, enabling real-time cloud synchronization whenever internet is available.
+- **Conditional Sync Now Button**: Updated `HomeScreen.tsx` and `SettingsScreen.tsx` so the **Sync Now** button is conditionally hidden when `syncPendingCount === 0` (nothing pending to sync).
+
+### v5.4 — August 23, 2026
+
+**Unique Item Count Fix, Checkout Navigation & Dashboard Sync UI**
+- **Unique Product Count in Bills**: Updated `totalItems` calculation in `db.ts` (`saveBill`) and `NewBillScreen.tsx` from summing product quantities (`sum + qty`) to counting unique items (`items.length`).
+- **Dashboard Navigation Post-Checkout**: Updated `NewBillScreen.tsx` so after a successful bill checkout OK button press, the app always resets navigation stack (`navigation.reset`) directly to the Dashboard screen (`MainTabs`).
+- **Dashboard Sync Status & Button**: Added `syncPendingCount` badge to `ScreenHeader` and added a prominent amber/yellow **Sync Now (X pending)** button (`#FEF3C7` background, `#F59E0B` border, `#B45309` text) on `HomeScreen.tsx` (Dashboard) and updated `SettingsScreen.tsx` to match.
 
 ### v5.3 — August 23, 2026
 
@@ -1346,7 +1371,16 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 **Digital Receipts & PDF Sharing (`BillDetailScreen.tsx`)**
 - **New Feature: PDF Receipt Generation.** Added `expo-print` to generate professional, styled receipts from HTML.
 - **Header Branding:** Receipts automatically pull Shop Name, Owner Name, and Phone from settings to appear at the header.
-- **Native Sharing:** Integrated with `expo-sharing` to allow one-tap sharing to WhatsApp, Email, or Files via the OS share sheet.
+### v5.8 — August 23, 2026
+
+**Remote Supabase Migration, 4-Layer Out-of-Stock Persistence & Batch Defaults**
+- **Supabase Cloud Migration**: Deployed migration `20260823143000_add_out_of_stock_billing_and_track_stock.sql` adding `allow_out_of_stock_billing` to `public.shops` and `track_stock` to `public.products` with column-level RLS grants to remote Supabase via `npx supabase db push`.
+- **4-Layer Persistence Engine**: Aligned React State, SQLite, AsyncStorage (`storage.ts`), and Supabase Cloud (`authService.ts`, `syncQueue.ts`, `syncService.ts`). Updated `INSERT OR REPLACE INTO shop` query and `getShop()` boolean parsing (`== 1 || === true || === 'true'`) to prevent setting resets.
+- **Dashboard & Notification Alert Bypass**: Added self-healing dual-check on `HomeScreen.tsx` (`(shop?.allowOutOfStockBilling === true) || (info?.allowOutOfStockBilling === true)`). Evaluated `allowOutOfStock` first in summary banner to display **`UNLIMITED BILLING Active`** status card (`∞` icon) and hide duplicate `Low Stock Alerts` section (`{!allowOutOfStock && ...}`).
+- **Batch Onboarding & Search Styling**: Added *"Track Inventory / Stock"* switch toggle to `COMMON DEFAULTS` in `AddProductScreen.tsx` (Multiple Products tab), defaulting state to `!isAllowOutOfStock`. Updated Catalog Modal in `NewBillScreen.tsx` to check `canBypassStock` and product search dropdown to render green **`Untracked`** label (`#16A34A`) for non-inventory products.
+
+---
+
 ### v5.0 — August 22, 2026
 
 **Mobile App Dense POS Layout & Screen Compacting Redesign**
@@ -1509,6 +1543,38 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Multi-Product Catalog Selection Screen**: Added `[ 📦 Catalog ]` button opening a full-screen product selection modal with category chips, live search, `+`/`-` quantity steppers, unit/pack toggles, and live subtotal checkout.
 - **Repeat Order Feature**: Added `[ 🔄 Repeat Order ]` button in `BillDetailScreen` to clone historical receipt items into a new draft and open `NewBillScreen`.
 
+### v5.8 — August 23, 2026
+
+- **Supabase Cloud Schema Migration**:
+  - Created migration `20260823143000_add_out_of_stock_billing_and_track_stock.sql` adding `allow_out_of_stock_billing` on `public.shops` and `track_stock` on `public.products` with column-level RLS privileges.
+  - Successfully applied migration to remote Supabase DB using `npx supabase db push`.
+- **4-Layer Persistence & Multi-Device Sync**:
+  - **`storage.ts` & `authService.ts`**: Added `allowOutOfStockBilling` to `StoredShopInfo` and updated `INSERT OR REPLACE INTO shop` query so auth session verification preserves local settings without reset.
+  - **`db.ts` & `syncQueue.ts`**: Fixed boolean parsing in `getShop()` (`== 1 || === true || === 'true'`) and added `allow_out_of_stock_billing` to shop sync payload.
+  - **`SettingsScreen.tsx`**: Added direct targeted Supabase update (`supabase.from('shops').update({ allow_out_of_stock_billing: val })`) and layout flex repair.
+- **Dashboard & Notification Alert Bypassing**:
+  - **`HomeScreen.tsx`**: Added self-healing dual check (`getShop()` + `getShopInfo()`) on load. Evaluated `allowOutOfStock` first in summary banner to render a clean **`UNLIMITED BILLING Active`** status card (`∞` icon) and completely hide duplicate `Low Stock Alerts` section.
+- **Batch Onboarding Defaults & Search Result Styling**:
+  - **`AddProductScreen.tsx`**: Added *"Track Inventory / Stock"* switch toggle to `COMMON DEFAULTS` in Multiple Products tab, defaulting `trackStock` initial state to `!isAllowOutOfStock`.
+  - **`NewBillScreen.tsx`**: Updated Catalog Modal to check `canBypassStock`, enabling adding untracked and out-of-stock items. Updated search result dropdown to display green **`Untracked`** label (`#16A34A`) for non-inventory products instead of `Avail: 0`.
+
+### v5.7 — August 23, 2026
+
+- **Out-of-Stock Billing & Per-Product Stock Tracking**:
+  - **Global Shop Setting**: Added *"Allow Out-of-Stock Billing"* switch in `SettingsScreen.tsx` under a new `BILLING PREFERENCES` section, allowing shopkeepers to sell products when stock quantity reaches zero.
+  - **Per-Product Track Stock Toggle**: Added *"Track Inventory / Stock"* switch (default: ON) to `AddProductScreen.tsx` and `EditProductScreen.tsx`, letting shopkeepers mark specific products (like services, tea, or loose items) as untracked.
+  - **No Negative Stock Rule**: Updated `insertBill()` in `db.ts` to clamp stock deduction at 0 (`MAX(0, stock_quantity - ?)`), ensuring stock counts never drop below 0 while all sales logs and receipts remain 100% accurate.
+  - **Implementation Audit & Fixes**:
+    1. Filtered untracked products (`track_stock = 0`) out of `getLowStockProducts()` in `db.ts` to prevent false low-stock cards on Dashboard.
+    2. Updated `backup.ts` to preserve `allow_out_of_stock_billing` and `track_stock` during JSON backup export/import.
+    3. Added `trackStock` prop to `ProductCard.tsx` to display `"Untracked"` label for non-inventory products on `ProductsScreen.tsx`.
+
+### v5.6 — August 23, 2026
+
+- **Compact Add Customer Screen**: Refactored `AddCustomerScreen.tsx` to follow standard compact layout matching `EditCustomerScreen.tsx` and other form screens. Replaced custom manual header with standard `ScreenHeader`, reduced input heights (56px → 44px), input border radii (12px → 8px), field gaps (20px → 12px), info banner padding, and save button height (56px → 48px).
+
+---
+
 ### v5.5 — August 23, 2026
 
 - **Supabase Region Migration to `PragatiDBIndia` (`mhtqufyaxpunhenqropn`)**:
@@ -1520,5 +1586,5 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 ---
 
 *Document prepared: April 2026 | Last updated: August 23, 2026*
-*Version: 5.5 — Reflects Supabase Region Migration to PragatiDBIndia (mhtqufyaxpunhenqropn), Edge Functions Deployment, and App Configuration Update*
+*Version: 5.8 — Remote Supabase Migration, 4-Layer Out-of-Stock Sync & Batch Defaults*
 

@@ -9,16 +9,16 @@ import {
     KeyboardAvoidingView,
     Platform,
     StatusBar,
-    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
+import ScreenHeader from "../../components/common/ScreenHeader";
 import { insertCustomer } from "../../db/db";
 import { useAlert } from "../../context/AlertContext";
+import { haptics } from "../../utils/haptics";
 
 export default function AddCustomerScreen() {
     const navigation = useNavigation();
@@ -32,6 +32,7 @@ export default function AddCustomerScreen() {
     const handleSave = () => {
         if (!name.trim()) return;
         setSaving(true);
+        haptics.success();
         try {
             insertCustomer({
                 name: name.trim(),
@@ -48,17 +49,9 @@ export default function AddCustomerScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={["top", "bottom", "left", "right"]}>
+        <SafeAreaView style={styles.container} edges={["top"]}>
             <StatusBar barStyle="dark-content" />
-
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Add New Customer</Text>
-                </View>
-            </View>
+            <ScreenHeader title="Add New Customer" showBack={true} />
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -71,7 +64,7 @@ export default function AddCustomerScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     <View style={styles.infoBox}>
-                        <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+                        <Ionicons name="information-circle-outline" size={18} color="#1E40AF" />
                         <Text style={styles.infoText}>
                             Add your customers to track their Udhar (Outstanding balance) and transaction history.
                         </Text>
@@ -81,10 +74,11 @@ export default function AddCustomerScreen() {
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Customer Full Name *</Text>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="person-outline" size={20} color={colors.secondary} style={styles.inputIcon} />
+                                <Ionicons name="person-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Enter full name"
+                                    placeholderTextColor="#94A3B8"
                                     value={name}
                                     onChangeText={setName}
                                 />
@@ -94,10 +88,11 @@ export default function AddCustomerScreen() {
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Phone Number</Text>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="call-outline" size={20} color={colors.secondary} style={styles.inputIcon} />
+                                <Ionicons name="call-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Enter 10-digit number"
+                                    placeholderTextColor="#94A3B8"
                                     keyboardType="phone-pad"
                                     maxLength={10}
                                     value={phone}
@@ -113,6 +108,7 @@ export default function AddCustomerScreen() {
                                 <TextInput
                                     style={styles.input}
                                     placeholder="0.00"
+                                    placeholderTextColor="#94A3B8"
                                     keyboardType="numeric"
                                     value={initialBalance}
                                     onChangeText={setInitialBalance}
@@ -123,13 +119,14 @@ export default function AddCustomerScreen() {
 
                         <View style={styles.inputContainer}>
                             <Text style={styles.label}>Address (Optional)</Text>
-                            <View style={[styles.inputWrapper, { alignItems: "flex-start", paddingTop: 16, paddingBottom: 16, height: "auto" }]}>
-                                <Ionicons name="location-outline" size={20} color={colors.secondary} style={[styles.inputIcon, { marginTop: 2 }]} />
+                            <View style={[styles.inputWrapper, styles.addressWrapper]}>
+                                <Ionicons name="location-outline" size={18} color={colors.textSecondary} style={[styles.inputIcon, { marginTop: 2 }]} />
                                 <TextInput
-                                    style={[styles.input, { height: 80, textAlignVertical: "top", paddingTop: 0 }]}
+                                    style={[styles.input, styles.addressInput]}
                                     placeholder="Enter street name, colony..."
+                                    placeholderTextColor="#94A3B8"
                                     multiline
-                                    numberOfLines={3}
+                                    numberOfLines={2}
                                     value={address}
                                     onChangeText={setAddress}
                                 />
@@ -156,66 +153,61 @@ export default function AddCustomerScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: spacing.sm,
-        height: 60,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    headerLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    backButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-    headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
     content: { flex: 1 },
     scrollContent: { padding: spacing.md },
     infoBox: {
         flexDirection: "row",
-        backgroundColor: "rgba(59, 130, 246, 0.08)",
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-        gap: 12,
+        backgroundColor: "#EFF6FF",
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        marginBottom: spacing.md,
+        gap: 8,
         alignItems: "center",
         borderWidth: 1,
-        borderColor: "rgba(59, 130, 246, 0.2)",
+        borderColor: "#DBEAFE",
     },
-    infoText: { flex: 1, fontSize: 13, color: "#1E40AF", lineHeight: 18 },
-    form: { gap: 20 },
-    inputContainer: { gap: 8 },
-    label: { fontSize: 14, fontWeight: "600", color: colors.text, marginLeft: 4 },
+    infoText: { flex: 1, fontSize: 12, color: "#1E40AF", lineHeight: 16 },
+    form: { gap: 12 },
+    inputContainer: { gap: 4 },
+    label: { fontSize: 13, fontWeight: "600", color: colors.text },
     inputWrapper: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: colors.surface,
-        borderRadius: 12,
+        backgroundColor: "#F8FAFC",
+        borderRadius: 8,
         paddingHorizontal: 12,
-        height: 56,
+        height: 44,
         borderWidth: 1,
         borderColor: colors.border,
     },
-    inputIcon: { marginRight: 10 },
-    currencyPrefix: { fontSize: 18, fontWeight: "600", color: colors.text, marginRight: 8 },
-    input: { flex: 1, fontSize: 16, color: colors.text },
-    inputHelp: { fontSize: 12, color: colors.textSecondary, marginLeft: 4 },
-    footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
+    inputIcon: { marginRight: 8 },
+    currencyPrefix: { fontSize: 15, fontWeight: "600", color: colors.text, marginRight: 6 },
+    input: { flex: 1, fontSize: 15, color: colors.text, paddingVertical: 0 },
+    addressWrapper: {
+        alignItems: "flex-start",
+        paddingVertical: 8,
+        height: 64,
+    },
+    addressInput: {
+        height: 48,
+        textAlignVertical: "top",
+    },
+    inputHelp: { fontSize: 11, color: colors.textSecondary, marginTop: 2, marginLeft: 2 },
+    footer: {
+        padding: spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        backgroundColor: colors.surface,
+    },
     saveButton: {
         backgroundColor: colors.primary,
-        height: 56,
-        borderRadius: 16,
+        height: 48,
+        borderRadius: 10,
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 5,
     },
-    saveButtonDisabled: { backgroundColor: "#CBD5E1", shadowOpacity: 0, elevation: 0 },
-    saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+    saveButtonDisabled: { backgroundColor: "#CBD5E1" },
+    saveButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
+

@@ -9,6 +9,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     StatusBar,
+    Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +51,7 @@ export default function EditProductScreen() {
     const [minThreshold, setMinThreshold] = useState(
         product?.min_stock_threshold != null ? String(product.min_stock_threshold) : "5"
     );
+    const [trackStock, setTrackStock] = useState(product?.track_stock !== 0);
     const [hasPackSize, setHasPackSize] = useState(!!product?.purchase_uom);
     const [purchaseUom, setPurchaseUom] = useState(product?.purchase_uom ?? "");
     const [unitsPerPack, setUnitsPerPack] = useState(
@@ -142,6 +144,7 @@ export default function EditProductScreen() {
                 uom: selectedUom,
                 purchase_uom: hasPackSize && purchaseUom.trim() ? purchaseUom.trim() : null,
                 units_per_pack: hasPackSize && unitsPerPack ? parseInt(unitsPerPack) || null : null,
+                track_stock: trackStock ? 1 : 0,
             });
             showAlert({
                 title: "Updated!",
@@ -244,37 +247,54 @@ export default function EditProductScreen() {
                             </View>
                         </View>
 
-                        <View style={styles.twoColumnRow}>
-                            <View style={styles.columnFlex}>
-                                <Text style={styles.label}>Current Stock</Text>
-                                <View style={styles.inputWithIcon}>
-                                    <Ionicons name="archive-outline" size={16} color="#64748b" />
-                                    <TextInput
-                                        style={styles.flexInput}
-                                        placeholder="0"
-                                        value={stockQuantity}
-                                        onChangeText={setStockQuantity}
-                                        keyboardType="numeric"
-                                        placeholderTextColor="#9ca3af"
-                                    />
-                                </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md, marginTop: spacing.xs }}>
+                            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                                <Text style={styles.label}>Track Inventory / Stock</Text>
+                                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                                    {trackStock ? "App tracks quantity & alerts low stock" : "Unlimited / Don't track stock for this product"}
+                                </Text>
                             </View>
-
-                            <View style={styles.columnFlex}>
-                                <Text style={styles.label}>Low Alert Min</Text>
-                                <View style={styles.inputWithIcon}>
-                                    <Ionicons name="warning-outline" size={16} color="#f59e0b" />
-                                    <TextInput
-                                        style={styles.flexInput}
-                                        placeholder="5"
-                                        value={minThreshold}
-                                        onChangeText={setMinThreshold}
-                                        keyboardType="numeric"
-                                        placeholderTextColor="#9ca3af"
-                                    />
-                                </View>
-                            </View>
+                            <Switch
+                                value={trackStock}
+                                onValueChange={setTrackStock}
+                                trackColor={{ false: "#CBD5E1", true: colors.primary }}
+                                thumbColor="#FFFFFF"
+                            />
                         </View>
+
+                        {trackStock && (
+                            <View style={styles.twoColumnRow}>
+                                <View style={styles.columnFlex}>
+                                    <Text style={styles.label}>Current Stock</Text>
+                                    <View style={styles.inputWithIcon}>
+                                        <Ionicons name="archive-outline" size={16} color="#64748b" />
+                                        <TextInput
+                                            style={styles.flexInput}
+                                            placeholder="0"
+                                            value={stockQuantity}
+                                            onChangeText={setStockQuantity}
+                                            keyboardType="numeric"
+                                            placeholderTextColor="#9ca3af"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.columnFlex}>
+                                    <Text style={styles.label}>Low Alert Min</Text>
+                                    <View style={styles.inputWithIcon}>
+                                        <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+                                        <TextInput
+                                            style={styles.flexInput}
+                                            placeholder="5"
+                                            value={minThreshold}
+                                            onChangeText={setMinThreshold}
+                                            keyboardType="numeric"
+                                            placeholderTextColor="#9ca3af"
+                                        />
+                                    </View>
+                                </View>
+                            </View>
+                        )}
 
                         <View style={{ marginTop: 2 }}>
                             <Text style={styles.label}>Unit of Measurement (UOM) *</Text>

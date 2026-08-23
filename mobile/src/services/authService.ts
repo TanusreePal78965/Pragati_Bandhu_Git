@@ -116,7 +116,7 @@ export const getStoredAuth = async (): Promise<{
     try {
       const { data } = await supabase
         .from('shops')
-        .select('shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active')
+        .select('shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, allow_out_of_stock_billing')
         .eq('id', shopId)
         .single();
 
@@ -129,6 +129,7 @@ export const getStoredAuth = async (): Promise<{
           whatsappNumber: data.whatsapp_number ?? '',
           aiConsent: data.ai_consent ?? false,
           isActive: data.is_active ?? true,
+          allowOutOfStockBilling: data.allow_out_of_stock_billing ?? false,
         };
 
         await setShopInfo(recovered);
@@ -136,8 +137,8 @@ export const getStoredAuth = async (): Promise<{
 
         db.runSync(
           `INSERT OR REPLACE INTO shop
-             (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, allow_out_of_stock_billing)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             shopId,
             data.shop_name,
@@ -147,6 +148,7 @@ export const getStoredAuth = async (): Promise<{
             data.business_category ?? null,
             data.ai_consent ? 1 : 0,
             data.is_active ? 1 : 0,
+            data.allow_out_of_stock_billing ? 1 : 0,
           ]
         );
 

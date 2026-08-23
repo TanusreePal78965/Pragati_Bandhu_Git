@@ -39,7 +39,7 @@ const checkShopStatus = async (
 
     const { data } = await supabase
       .from('shops')
-      .select('is_active, active_device_id, ai_consent, plan_expires_at, plan_type')
+      .select('is_active, active_device_id, ai_consent, plan_expires_at, plan_type, allow_out_of_stock_billing')
       .eq('id', userId)
       .single();
 
@@ -52,7 +52,8 @@ const checkShopStatus = async (
         ...info, 
         isActive: data.is_active,
         planExpiresAt: data.plan_expires_at,
-        planType: data.plan_type
+        planType: data.plan_type,
+        allowOutOfStockBilling: data.allow_out_of_stock_billing === true,
       });
     }
 

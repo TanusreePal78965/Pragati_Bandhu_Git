@@ -303,6 +303,7 @@ export default function ProductsScreen() {
                         unit={item.uom}
                         price={item.selling_price}
                         selected={selectedItems.includes(item.id)}
+                        trackStock={item.track_stock !== 0}
                         onPress={() => toggleSelection(item.id)}
                         onEdit={() => navigation.navigate("EditProduct", { product: item })}
                         onUpdateStock={() => {

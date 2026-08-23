@@ -54,6 +54,7 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       stock_quantity INTEGER DEFAULT 0,
       min_stock_threshold INTEGER DEFAULT 5,
       uom TEXT DEFAULT 'Pcs',
+      track_stock INTEGER DEFAULT 1,
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -165,12 +166,15 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       business_category TEXT,
       ai_consent INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
+      allow_out_of_stock_billing INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
 
   // Additive migrations — safe to run on every open (ALTER TABLE fails silently if column exists)
   try { database.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
+  try { database.runSync('ALTER TABLE shop ADD COLUMN allow_out_of_stock_billing INTEGER DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE products ADD COLUMN track_stock INTEGER DEFAULT 1'); } catch (_) {}
   try { database.runSync('ALTER TABLE products ADD COLUMN purchase_uom TEXT DEFAULT NULL'); } catch (_) {}
   try { database.runSync('ALTER TABLE products ADD COLUMN units_per_pack INTEGER DEFAULT NULL'); } catch (_) {}
   try { database.runSync('ALTER TABLE bill_items ADD COLUMN display_qty TEXT DEFAULT NULL'); } catch (_) {}
