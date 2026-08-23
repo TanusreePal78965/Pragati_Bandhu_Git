@@ -1299,15 +1299,17 @@ export const resetShopTestData = (): void => {
     db.withTransactionSync(() => {
       db.runSync(`DELETE FROM bill_items`);
       db.runSync(`DELETE FROM sales_log`);
+      db.runSync(`DELETE FROM purchase_log`);
+      db.runSync(`DELETE FROM suggestions_cache`);
       db.runSync(`DELETE FROM bills`);
       db.runSync(`DELETE FROM draft_bill_items`);
       db.runSync(`DELETE FROM draft_bills`);
-      db.runSync(`DELETE FROM udhar_payments`);
+      try { db.runSync(`DELETE FROM udhar_payments`); } catch (_) {}
       db.runSync(`DELETE FROM products`);
       db.runSync(`DELETE FROM categories`);
       db.runSync(`DELETE FROM brands`);
       db.runSync(`DELETE FROM customers`);
-      db.runSync(`DELETE FROM notifications`);
+      try { db.runSync(`DELETE FROM notifications`); } catch (_) {}
       db.runSync(`DELETE FROM sync_queue`);
     });
   } catch (e) {

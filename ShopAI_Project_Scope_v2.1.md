@@ -1546,9 +1546,9 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 ### v5.10 — August 23, 2026
 
 - **Clear Test Data / Start Fresh Action Feature**:
-  - **Supabase Edge Function Endpoint (`payments/index.ts`)**: Added `POST /admin/shops/:id/reset-data` endpoint to delete all operational test data (`bills`, `bill_items`, `draft_bills`, `udhar_payments`, `products`, `categories`, `brands`, `customers`, `notifications`) for a target shop while leaving the `shops` profile row intact.
-  - **Admin Web Portal (`AdminShops.tsx`)**: Added **"Clear Test Data"** button to the action dropdown menu for each shop in `/admin/shops`, featuring a double-confirmation prompt.
-  - **Mobile Database & Settings (`db.ts`, `SettingsScreen.tsx`)**: Added `resetShopTestData()` helper in SQLite database layer and added **"Start Fresh (Reset Test Data)"** button under `DATA & BACKUP` in mobile app Settings.
+  - **Supabase Edge Function Endpoint (`payments/index.ts`)**: Added `POST /admin/shops/:id/reset-data` endpoint to delete all operational test data (`bills`, `bill_items`, `draft_bills`, `udhar_payments`, `purchase_log`, `sales_log`, `products`, `categories`, `brands`, `customers`, `notifications`) for a target shop while leaving the `shops` profile row intact.
+  - **Admin Web Portal (`AdminShops.tsx`)**: Added **"Clear Test Data"** button to the action dropdown menu for each shop in `/admin/shops`, featuring a double-confirmation prompt and smart upward position handling.
+  - **Mobile Database & Settings (`db.ts`, `SettingsScreen.tsx`)**: Added `resetShopTestData()` helper in SQLite database layer (clearing `purchase_log`, `sales_log`, `suggestions_cache`, `bills`, `products`, `customers`, `udhar_payments`, `sync_queue`) and added **"Start Fresh (Reset Test Data)"** button under `DATA & BACKUP` in mobile app Settings.
 
 ---
 

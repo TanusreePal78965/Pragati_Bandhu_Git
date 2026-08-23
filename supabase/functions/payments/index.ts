@@ -304,6 +304,8 @@ Deno.serve(async (req) => {
       await supabase.from('bills').delete().eq('shop_id', shopId)
       await supabase.from('draft_bills').delete().eq('shop_id', shopId)
       await supabase.from('udhar_payments').delete().eq('shop_id', shopId)
+      await supabase.from('purchase_log').delete().eq('shop_id', shopId)
+      await supabase.from('sales_log').delete().eq('shop_id', shopId)
       await supabase.from('products').delete().eq('shop_id', shopId)
       await supabase.from('categories').delete().eq('shop_id', shopId)
       await supabase.from('brands').delete().eq('shop_id', shopId)
