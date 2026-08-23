@@ -827,7 +827,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 | 106 | `AuthContext.tsx` — auth-lock deadlock fix | ✅ | **Root cause of "Google Sign-In hangs forever, no picker, no error."** `onAuthStateChange` fires while supabase-js still holds its internal auth lock; the `SIGNED_IN` handler awaited `getStoredAuth()` → `getSession()` directly inside that callback, re-entering the same lock and deadlocking the `setSession()` call that triggered the event. Fixed per Supabase's documented pattern: deferred the handler body with `setTimeout(fn, 0)`. Diagnosed via live `adb logcat` + temporary instrumentation (since removed) — confirmed via log trace that execution stopped immediately after `res.json()` and never reached `setSession()`'s resolution. |
 | 107 | Stale native `google-services.json` | ✅ | `mobile/android/app/google-services.json` (baked into the native project at prebuild) was missing the OAuth client entry matching the actual debug-keystore SHA-1 — root-cause of an *earlier* silent picker failure, separate from #106. Re-synced from `mobile/google-services.json` and rebuilt. |
 | 108 | Live DB — `shops.id` phone→UUID migration applied | ✅ | `20260701115044_migrate_to_uuid.sql` existed locally but was **never applied to the live database** — confirmed via `supabase migration list --linked`. Live `shops.id` was still 10-digit-phone `TEXT` with RLS `id = right(auth.jwt()->>'phone', 10)`. Google-only Firebase tokens carry no `phone_number` claim, so every RLS check silently evaluated to `false` for Google users — **all shop data reads/writes were blocked, and `ShopSetupScreen` couldn't even create a row.** Fixed two bugs in the migration itself (missing `DROP POLICY` before `DROP COLUMN` on 9 tables; wrong `login_events` policy shape + no handling for orphaned rows) and applied it: `shops.id` is now `auth.users.id` UUID, all RLS policies rewritten to `auth.uid()`. Verified live afterward — 7 shops / 10 products / 6 customers / 15 bills intact, 2 stale orphaned `login_events` rows dropped. |
-| 109 | `exchange-token` deployed to production | ✅ | Deployed to the live `PragatiDB` project (`xjumfscbazjwhcgmhsyl`) after the above fixes. |
+| 109 | `exchange-token` deployed to production | ✅ | Deployed to the live `PragatiDBIndia` project (`mhtqufyaxpunhenqropn`) after the above fixes. |
 
 ---
 
@@ -1509,14 +1509,16 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 - **Multi-Product Catalog Selection Screen**: Added `[ 📦 Catalog ]` button opening a full-screen product selection modal with category chips, live search, `+`/`-` quantity steppers, unit/pack toggles, and live subtotal checkout.
 - **Repeat Order Feature**: Added `[ 🔄 Repeat Order ]` button in `BillDetailScreen` to clone historical receipt items into a new draft and open `NewBillScreen`.
 
-### v5.4 — August 23, 2026
+### v5.5 — August 23, 2026
 
-- **Robust Date Parsing & Formatting Helper (`dateUtils.ts`)**: Upgraded `toUtcDate()` to safely parse SQLite timestamps (`YYYY-MM-DD HH:MM:SS`), ISO strings, numeric timestamps, and fallback safely without returning `NaN`/`Invalid Date` or throwing errors on null/undefined values. Added `formatDate()` and `formatDateTime()` helpers.
-- **Customer List Date Display Fix (`CustomersScreen.tsx`)**: Replaced fragile inline string manipulation with `formatDate()` in `CustomersScreen.tsx` to fix the "Invalid Date" bug on customer rows.
-- **Restock Purchase History Date Fix (`EditProductScreen.tsx`, `db.ts`)**: Replaced inline formatting with central `formatDateTime()` in `EditProductScreen.tsx` purchase/restock history list. Updated `insertPurchaseLog()` in `db.ts` to explicitly insert `created_at` timestamp.
+- **Supabase Region Migration to `PragatiDBIndia` (`mhtqufyaxpunhenqropn`)**:
+  - Migrated backend project to a new primary region database instance `PragatiDBIndia` (`mhtqufyaxpunhenqropn`).
+  - Executed all 14 database schema migrations (`000_base_schema.sql` through `20260708091530_fix_shops_column_privileges.sql`) creating all tables, UUID schema relations, indexes, and permissive RLS column privileges.
+  - Deployed all 3 Supabase Edge Functions (`login`, `payments`, `register-shop`) to the new primary region instance.
+  - Updated mobile application environment configurations (`mobile/.env.local` and `mobile/eas.json`) with new Supabase project URL and anon API key.
 
 ---
 
 *Document prepared: April 2026 | Last updated: August 23, 2026*
-*Version: 5.4 — Reflects Robust Date Parsing & Formatting Helper, Customer & Restock Date Display Fixes, Single Product Quick Restock Action, Keyboard-Aware Compact Stock Modal, and Custom Alert Modal Component*
+*Version: 5.5 — Reflects Supabase Region Migration to PragatiDBIndia (mhtqufyaxpunhenqropn), Edge Functions Deployment, and App Configuration Update*
 

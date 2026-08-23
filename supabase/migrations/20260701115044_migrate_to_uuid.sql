@@ -34,8 +34,13 @@ DROP POLICY IF EXISTS "owner_access" ON public.bills;
 DROP POLICY IF EXISTS "owner_access" ON public.sales_log;
 DROP POLICY IF EXISTS "owner_access" ON public.purchase_log;
 DROP POLICY IF EXISTS "owner_access" ON public.bill_items;
-DROP POLICY IF EXISTS "owner_insert" ON public.login_events;
-DROP POLICY IF EXISTS "owner_read" ON public.login_events;
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'login_events') THEN
+    DROP POLICY IF EXISTS "owner_insert" ON public.login_events;
+    DROP POLICY IF EXISTS "owner_read" ON public.login_events;
+  END IF;
+END $$;
 
 -- 2. Add temporary new_id column to shops referencing auth.users(id)
 ALTER TABLE public.shops ADD COLUMN new_id UUID REFERENCES auth.users(id);
