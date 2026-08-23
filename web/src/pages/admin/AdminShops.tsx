@@ -182,7 +182,7 @@ export default function AdminShops() {
 
       {error && <div style={{ marginBottom: '1rem', color: '#ef4444', background: '#fef2f2', padding: '0.75rem', borderRadius: 6 }}>{error}</div>}
 
-      <div className="admin-table-container">
+      <div className="admin-table-container" style={{ minHeight: '350px', paddingBottom: '160px' }}>
         <table className="admin-table">
           <thead>
             <tr>
@@ -208,7 +208,7 @@ export default function AdminShops() {
                 </td>
               </tr>
             ) : (
-              filteredShops.map(shop => {
+              filteredShops.map((shop) => {
                 const isExpired = shop.plan_expires_at ? new Date(shop.plan_expires_at) < new Date() : true;
                 return (
                   <tr key={shop.id}>
@@ -248,9 +248,10 @@ export default function AdminShops() {
                       
                       {activeMenu === shop.id && (
                         <div ref={menuRef} style={{
-                          position: 'absolute', right: '2.5rem', top: '1rem', background: '#fff',
-                          border: '1px solid #e2e8f0', borderRadius: '6px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          zIndex: 50, minWidth: '170px', textAlign: 'left', overflow: 'hidden'
+                          position: 'absolute', right: '0.5rem', top: '2.2rem',
+                          background: '#fff',
+                          border: '1px solid #cbd5e1', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                          zIndex: 100, minWidth: '180px', textAlign: 'left', overflow: 'hidden'
                         }}>
                           <button 
                             onClick={() => handleViewDetails(shop.id)}
