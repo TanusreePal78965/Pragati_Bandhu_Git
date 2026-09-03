@@ -3,6 +3,7 @@ import { createBottomTabNavigator, BottomTabBarProps } from "@react-navigation/b
 import { Ionicons } from "@expo/vector-icons";
 import { View, StyleSheet, Platform, Text, TouchableOpacity, Animated, LayoutChangeEvent, Vibration } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
 
 import HomeScreen from "../screens/home/HomeScreen";
@@ -122,6 +123,7 @@ function TabButton({ route, isFocused, options, onPress, onLongPress }: TabButto
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     const [barWidth, setBarWidth] = useState(0);
+    const insets = useSafeAreaInsets();
     const slideAnim = useRef(new Animated.Value(state.index)).current;
 
     useEffect(() => {
@@ -146,7 +148,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     });
 
     return (
-        <View style={styles.tabBarContainer}>
+        <View style={[styles.tabBarContainer, { bottom: (Platform.OS === "ios" ? 24 : 12) + insets.bottom }]}>
             <View style={styles.pillBar} onLayout={handleLayout}>
                 {barWidth > 0 && tabWidth > 0 && (
                     <Animated.View
@@ -240,7 +242,6 @@ export default function BottomTabNavigator() {
 const styles = StyleSheet.create({
     tabBarContainer: {
         position: "absolute",
-        bottom: Platform.OS === "ios" ? 24 : 12,
         left: 10,
         right: 10,
         alignItems: "center",

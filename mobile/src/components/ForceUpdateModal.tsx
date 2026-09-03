@@ -19,6 +19,10 @@ interface Props {
   title?: string;
   message?: string;
   storeUrl?: string;
+  currentVersion?: string;
+  expectedVersion?: string;
+  currentVersionCode?: number;
+  expectedVersionCode?: number;
 }
 
 export function ForceUpdateModal({
@@ -26,6 +30,10 @@ export function ForceUpdateModal({
   title = 'Update Required',
   message = 'A mandatory update is required to continue using Pragati Bandhu.',
   storeUrl,
+  currentVersion,
+  expectedVersion,
+  currentVersionCode,
+  expectedVersionCode,
 }: Props) {
   // Lock Android Hardware Back Press when modal is visible
   useEffect(() => {
@@ -59,6 +67,21 @@ export function ForceUpdateModal({
 
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+
+          {(currentVersion || expectedVersion) && (
+            <View style={styles.versionContainer}>
+              {currentVersion && (
+                <Text style={styles.versionText}>
+                  Current Version: <Text style={styles.versionValue}>{currentVersion} {currentVersionCode ? `(${currentVersionCode})` : ''}</Text>
+                </Text>
+              )}
+              {expectedVersion && (
+                <Text style={styles.versionText}>
+                  Expected Version: <Text style={styles.versionValue}>{expectedVersion} {expectedVersionCode ? `(${expectedVersionCode})` : ''}</Text>
+                </Text>
+              )}
+            </View>
+          )}
 
           <TouchableOpacity style={styles.button} onPress={handleUpdate} activeOpacity={0.8}>
             <Ionicons name="download-outline" size={22} color="#ffffff" style={{ marginRight: 8 }} />
@@ -109,7 +132,26 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 20,
+  },
+  versionContainer: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    width: '100%',
     marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  versionText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  versionValue: {
+    fontWeight: '600',
+    color: colors.text,
   },
   button: {
     width: '100%',

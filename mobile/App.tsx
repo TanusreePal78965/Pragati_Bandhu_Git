@@ -28,6 +28,10 @@ function AppContent() {
     updateTitle,
     updateMessage,
     storeUrl,
+    currentVersion,
+    expectedVersion,
+    currentVersionCode,
+    expectedVersionCode,
     checkVersion,
     dismissSoftUpdate,
   } = useVersion();
@@ -62,6 +66,10 @@ function AppContent() {
         title={updateTitle}
         message={updateMessage}
         storeUrl={storeUrl}
+        currentVersion={currentVersion}
+        expectedVersion={expectedVersion}
+        currentVersionCode={currentVersionCode}
+        expectedVersionCode={expectedVersionCode}
       />
       <SoftUpdateModal
         visible={!isMaintenance && !isForceUpdate && isSoftUpdate}

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { getAppVersionCode } from '../lib/version';
+import { getAppVersionCode, getAppVersion } from '../lib/version';
 
 interface VersionState {
   isForceUpdate: boolean;
@@ -11,10 +11,14 @@ interface VersionState {
   updateTitle: string;
   updateMessage: string;
   storeUrl: string;
+  currentVersion: string;
+  expectedVersion: string;
+  currentVersionCode: number;
+  expectedVersionCode: number;
   checkVersion: () => Promise<void>;
   dismissSoftUpdate: () => void;
   setMaintenance: (active: boolean, message?: string) => void;
-  setForceUpdate: (active: boolean, title?: string, message?: string, storeUrl?: string) => void;
+  setForceUpdate: (active: boolean, title?: string, message?: string, storeUrl?: string, currentVersion?: string, expectedVersion?: string, currentVersionCode?: number, expectedVersionCode?: number) => void;
 }
 
 const VersionContext = createContext<VersionState>({} as VersionState);
@@ -27,17 +31,25 @@ export function VersionProvider({ children }: { children: React.ReactNode }) {
   const [updateTitle, setUpdateTitle] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
   const [storeUrl, setStoreUrl] = useState('');
+  const [currentVersion, setCurrentVersion] = useState('');
+  const [expectedVersion, setExpectedVersion] = useState('');
+  const [currentVersionCode, setCurrentVersionCode] = useState(0);
+  const [expectedVersionCode, setExpectedVersionCode] = useState(0);
 
   const setMaintenance = useCallback((active: boolean, message = '') => {
     setIsMaintenance(active);
     if (message) setMaintenanceMessage(message);
   }, []);
 
-  const setForceUpdate = useCallback((active: boolean, title = '', message = '', url = '') => {
+  const setForceUpdate = useCallback((active: boolean, title = '', message = '', url = '', current = '', expected = '', currentCode = 0, expectedCode = 0) => {
     setIsForceUpdate(active);
     if (title) setUpdateTitle(title);
     if (message) setUpdateMessage(message);
     if (url) setStoreUrl(url);
+    if (current) setCurrentVersion(current);
+    if (expected) setExpectedVersion(expected);
+    if (currentCode > 0) setCurrentVersionCode(currentCode);
+    if (expectedCode > 0) setExpectedVersionCode(expectedCode);
   }, []);
 
   const dismissSoftUpdate = useCallback(() => {
@@ -86,6 +98,10 @@ export function VersionProvider({ children }: { children: React.ReactNode }) {
         setUpdateTitle(map['app_force_update_title'] || 'Update Required');
         setUpdateMessage(map['app_force_update_message'] || 'Please update your app to continue.');
         setStoreUrl(targetStoreUrl);
+        setCurrentVersion(getAppVersion());
+        setExpectedVersion(map['app_min_version'] || '1.0.0');
+        setCurrentVersionCode(currentCode);
+        setExpectedVersionCode(minVersionCode);
         return;
       } else {
         setIsForceUpdate(false);
@@ -113,6 +129,10 @@ export function VersionProvider({ children }: { children: React.ReactNode }) {
         updateTitle,
         updateMessage,
         storeUrl,
+        currentVersion,
+        expectedVersion,
+        currentVersionCode,
+        expectedVersionCode,
         checkVersion,
         dismissSoftUpdate,
         setMaintenance,
