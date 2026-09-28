@@ -41,11 +41,10 @@ enable_signup = true
 enable_confirmations = true
 # Handled by send-sms Edge Function hook — not configured here
 
-[functions.register-shop]
+[functions.register]
 enabled = true
 verify_jwt = false  # called pre-login from the web registration page, no session yet
-import_map = "./functions/register-shop/deno.json"
-entrypoint = "./functions/register-shop/index.ts"
+entrypoint = "./functions/register/index.ts"
 
 [functions.login]
 enabled = true
