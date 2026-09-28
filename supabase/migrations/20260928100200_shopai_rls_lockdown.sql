@@ -71,3 +71,7 @@ create policy owner_reads_own_payments on public.payments for select to authenti
 drop policy if exists "Admin write app_settings" on public.app_settings;
 revoke insert, update, delete, truncate on public.app_settings from anon, authenticated;
 grant select on public.app_settings to anon, authenticated;
+
+-- 6. anon: no table access anywhere in public except the pre-login version check.
+revoke all on all tables in schema public from anon;
+grant select on public.app_settings to anon;

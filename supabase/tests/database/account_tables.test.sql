@@ -1,11 +1,12 @@
 -- supabase/tests/database/account_tables.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(10);
 
 select has_column('public', 'shops', 'auth_user_id', 'shops.auth_user_id exists');
 select hasnt_column('public', 'shops', 'plan_expires_at', 'legacy plan_expires_at dropped');
 select hasnt_column('public', 'shops', 'password_hash', 'legacy password_hash dropped');
+select hasnt_column('public', 'shops', 'plan_type', 'legacy plan_type dropped');
 select has_table('public', 'app_subscriptions', 'app_subscriptions exists');
 select has_table('public', 'app_sessions', 'app_sessions exists');
 select has_column('public', 'payments', 'app', 'payments.app exists');
