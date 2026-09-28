@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth';
 import { getFirebaseAuth } from './lib/firebase';
@@ -52,6 +52,11 @@ function RegistrationPage() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => () => {
+    (window as any).recaptchaVerifier?.clear();
+    delete (window as any).recaptchaVerifier;
+  }, []);
 
   const handleSelectPlan = (plan: PlanType) => {
     setSelectedPlan(plan);

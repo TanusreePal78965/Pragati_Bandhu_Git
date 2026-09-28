@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth';
 import { getFirebaseAuth } from '../lib/firebase';
 import '../App.css';
@@ -18,6 +18,11 @@ export default function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false);
 
   const clean = phone.replace(/\D/g, '');
+
+  useEffect(() => () => {
+    (window as any).recaptchaVerifier?.clear();
+    delete (window as any).recaptchaVerifier;
+  }, []);
 
   const sendOtp = async () => {
     setError('');
