@@ -11,6 +11,7 @@ import TermsOfService from './pages/TermsOfService';
 import AppFeatures from './pages/AppFeatures';
 import HelpCenter from './pages/HelpCenter';
 import RenewPlan from './pages/RenewPlan';
+import ForgotPassword from './pages/ForgotPassword';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -71,16 +72,15 @@ function RegistrationPage() {
     }
     setIsLoading(true);
     try {
-      // Check if phone number is already registered
-      const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?phone=eq.%2B91${clean}&select=id`, {
-        method: 'GET',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
+      // Check if phone number is already registered for ShopAI
+      const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/register/check-phone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ phone: `+91${clean}` }),
       });
       const checkBody = await checkRes.json();
-      if (checkBody && checkBody.length > 0) {
+      if (!checkRes.ok) throw new Error(checkBody.error ?? 'Could not check phone number');
+      if (checkBody.apps?.includes('shopai')) {
         setError('This phone number is already registered');
         setIsLoading(false);
         return;
@@ -133,7 +133,7 @@ function RegistrationPage() {
     }
     setIsLoading(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/register-shop`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,6 +148,7 @@ function RegistrationPage() {
           businessCategory,
           whatsappNumber,
           plan: selectedPlan,
+          apps: ['shopai'],
         }),
       });
       const body = await res.json();
@@ -408,6 +409,7 @@ export default function App() {
           <Route path="/features" element={<AppFeatures />} />
           <Route path="/help" element={<HelpCenter />} />
           <Route path="/renew" element={<RenewPlan />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
         </Route>
         
         {/* Admin Routes */}

@@ -104,15 +104,15 @@ export default function AdminSettings() {
     });
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_settings`, {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/payments/admin/settings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          Prefer: 'resolution=merge-duplicates',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ settings: payload.map(({ key, value }: { key: string; value: string }) => ({ key, value })) }),
       });
 
       if (!res.ok) {
