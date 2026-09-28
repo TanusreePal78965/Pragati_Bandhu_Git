@@ -45,26 +45,42 @@ const storeShopRecordLocally = async (shop: ShopRecord): Promise<void> => {
 
 /**
  * Log in with a 10-digit phone number and password via the `login` Edge
- * Function. There is no Supabase Auth session here — a successful login just
- * returns the shop row, which is trusted and stored locally. Data access is
- * scoped entirely by the app querying its own shop_id (see permissive RLS
- * migration); there is no server-verified session backing this.
+ * Function. It returns a Supabase Auth session scoped to ShopAI (JWT claims
+ * app='shopai', shop_id); RLS enforces shop isolation on every request.
  */
 export const login = async (phone: string, password: string): Promise<ShopRecord> => {
   const e164Phone = `+91${phone}`;
+  const deviceId = await getOrCreateDeviceId();
   const res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ phone: e164Phone, password }),
+    body: JSON.stringify({ phone: e164Phone, password, app: 'shopai', deviceId }),
   });
 
   const body = await res.json();
+  if (body.error === 'password_reset_required') {
+    throw new Error('Please set a new password first: open pragatibandhu website → Forgot password.');
+  }
+  if (body.error === 'not_subscribed') {
+    throw new Error('This number is not registered for ShopAI. Please register on the Pragati Bandhu website.');
+  }
   if (!res.ok) throw new Error(body.error ?? 'Login failed');
 
-  const shop: ShopRecord = body.shop;
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token: body.session.access_token,
+    refresh_token: body.session.refresh_token,
+  });
+  if (sessionError) throw new Error('Could not start a secure session. Please try again.');
+
+  // Plan info now comes from the per-app subscription, not the shops row.
+  const shop: ShopRecord = {
+    ...body.shop,
+    plan_type: body.subscription?.plan_type ?? null,
+    plan_expires_at: body.subscription?.expires_at ?? null,
+  };
 
   if (shop.is_active === false) {
     throw new Error('Your shop has been deactivated by the administrator. You cannot access the app until it is reactivated.');
@@ -74,7 +90,6 @@ export const login = async (phone: string, password: string): Promise<ShopRecord
   await storeShopRecordLocally(shop);
   openUserDatabase(shop.id);
 
-  const deviceId = await getOrCreateDeviceId();
   supabase.from('login_events').insert({ shop_id: shop.id, device_id: deviceId }).then(
     () => {},
     () => {}
@@ -102,6 +117,15 @@ export const getStoredAuth = async (): Promise<{
 }> => {
   const shopId = await getStoredShopId();
   if (!shopId) {
+    return { isAuthenticated: false, phone: null, uuid: null };
+  }
+
+  // Builds before Phase 0 stored only a shop id (no Supabase session). Without a
+  // session every request fails RLS, so send the user back to login once.
+  // A network error while refreshing returns `error` — keep them signed in offline.
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (!sessionData.session && !sessionError) {
+    await clearAllUserData();
     return { isAuthenticated: false, phone: null, uuid: null };
   }
 
@@ -187,6 +211,8 @@ export const getStoredAuth = async (): Promise<{
  * for when they log back in.
  */
 export const logout = async (): Promise<void> => {
+  // scope 'local' ends only this device's ShopAI session; Chukta stays signed in.
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
   closeUserDatabase();
   await clearAllUserData();
 };

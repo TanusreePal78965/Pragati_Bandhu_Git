@@ -33,6 +33,7 @@ import { exportAsSql, queueAllLocalData, updateShop, getShop, resetShopTestData 
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
 import { restoreFromCloud, deleteFromCloud } from "../../services/restoreService";
 import { startSyncService } from "../../services/syncService";
+import { fetchShopStatus, isPlanExpired } from "../../services/subscription";
 import { useAlert } from "../../context/AlertContext";
 
 const SectionHeader = ({ title }: { title: string }) => (
@@ -120,19 +121,18 @@ export default function SettingsScreen() {
                 const shopId = await getStoredShopId();
                 if (shopId) {
                     try {
-                        const { data } = await supabase.from('shops').select('is_active, plan_expires_at, plan_type, allow_out_of_stock_billing').eq('id', shopId).maybeSingle();
-                        if (data) {
-                            const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
-                            if (data.is_active === false || isExpired) {
+                        const status = await fetchShopStatus(shopId);
+                        if (status) {
+                            if (!status.isActive || isPlanExpired(status.planExpiresAt)) {
                                 setShopActive(false);
                             }
                             if (info) {
                                 info = {
                                     ...info,
-                                    isActive: data.is_active,
-                                    planExpiresAt: data.plan_expires_at,
-                                    planType: data.plan_type,
-                                    allowOutOfStockBilling: data.allow_out_of_stock_billing === true,
+                                    isActive: status.isActive,
+                                    planExpiresAt: status.planExpiresAt ?? undefined,
+                                    planType: status.planType ?? undefined,
+                                    allowOutOfStockBilling: status.allowOutOfStockBilling,
                                 };
                                 await persistShopInfo(info);
                             }

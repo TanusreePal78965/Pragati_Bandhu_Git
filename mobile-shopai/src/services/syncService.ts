@@ -4,6 +4,7 @@ import { flushSyncQueue } from '../db/syncQueue';
 import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { supabase } from '../lib/supabase';
 import { restoreFromCloud } from './restoreService';
+import { fetchShopStatus, isPlanExpired } from './subscription';
 
 // Minimum ms between background pulls — avoids hammering Supabase on rapid app switches
 const PULL_INTERVAL_MS = 2 * 60 * 1000;
@@ -37,37 +38,31 @@ const checkShopStatus = async (
     const userId = await getStoredShopId();
     if (!userId) return;
 
-    const { data } = await supabase
-      .from('shops')
-      .select('is_active, active_device_id, ai_consent, plan_expires_at, plan_type, allow_out_of_stock_billing')
-      .eq('id', userId)
-      .single();
+    const status = await fetchShopStatus(userId);
+    if (!status) return;
 
-    if (!data) return;
-    
     // Always sync latest shop info (plan info, etc.) to local storage
     const info = await getShopInfo();
     if (info) {
-      await setShopInfo({ 
-        ...info, 
-        isActive: data.is_active,
-        planExpiresAt: data.plan_expires_at,
-        planType: data.plan_type,
-        allowOutOfStockBilling: data.allow_out_of_stock_billing === true,
+      await setShopInfo({
+        ...info,
+        isActive: status.isActive,
+        planExpiresAt: status.planExpiresAt ?? undefined,
+        planType: status.planType ?? undefined,
+        allowOutOfStockBilling: status.allowOutOfStockBilling,
       });
     }
 
     // Admin deactivation or plan expiry — applies to all users
-    const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
-    if (data.is_active === false || isExpired) {
+    if (!status.isActive || isPlanExpired(status.planExpiresAt)) {
       onDeactivated();
       return;
     }
 
     // Device conflict — only for online (aiConsent) users.
-    if (data.ai_consent) {
+    if (status.aiConsent) {
       const thisDeviceId = await getOrCreateDeviceId();
-      if (!data.active_device_id) {
+      if (!status.activeDeviceId) {
         // No device claimed yet (new shop or just cleared) — stamp this device.
         const updateActiveDevice = async () => {
           try {
@@ -75,7 +70,7 @@ const checkShopStatus = async (
           } catch (_) {}
         };
         updateActiveDevice();
-      } else if (data.active_device_id !== thisDeviceId) {
+      } else if (status.activeDeviceId !== thisDeviceId) {
         // Another device holds the session — block access.
         onDeviceConflict();
         return;

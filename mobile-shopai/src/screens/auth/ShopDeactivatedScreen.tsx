@@ -16,7 +16,7 @@ import { typography } from "../../theme/typography";
 import PrimaryButton from "../../components/common/PrimaryButton";
 import { useAuth } from "../../context/AuthContext";
 import { getShopInfo, setShopInfo, getStoredShopId } from "../../utils/storage";
-import { supabase } from "../../lib/supabase";
+import { fetchShopStatus, isPlanExpired } from "../../services/subscription";
 
 export default function ShopDeactivatedScreen() {
     const { logout, phone, setShopActive } = useAuth();
@@ -39,18 +39,13 @@ export default function ShopDeactivatedScreen() {
         try {
             const shopId = await getStoredShopId();
             if (shopId) {
-                const { data } = await supabase
-                    .from("shops")
-                    .select("is_active, plan_expires_at, plan_type")
-                    .eq("id", shopId)
-                    .maybeSingle();
+                const status = await fetchShopStatus(shopId);
 
-                if (data) {
-                    const isExpired = data.plan_expires_at ? new Date(data.plan_expires_at) < new Date() : false;
-                    const isActive = data.is_active !== false && !isExpired;
+                if (status) {
+                    const isActive = status.isActive && !isPlanExpired(status.planExpiresAt);
 
-                    if (data.plan_expires_at) {
-                        setPlanExpiresAt(data.plan_expires_at);
+                    if (status.planExpiresAt) {
+                        setPlanExpiresAt(status.planExpiresAt);
                     }
 
                     const info = await getShopInfo();
@@ -58,8 +53,8 @@ export default function ShopDeactivatedScreen() {
                         await setShopInfo({
                             ...info,
                             isActive,
-                            planExpiresAt: data.plan_expires_at,
-                            planType: data.plan_type,
+                            planExpiresAt: status.planExpiresAt ?? undefined,
+                            planType: status.planType ?? undefined,
                         });
                     }
 
