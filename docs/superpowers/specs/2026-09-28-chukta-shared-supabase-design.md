@@ -7,6 +7,12 @@
 - Chukta Phase 1 plan: `2026-09-28-worker-pay-advance-wage-diary-phase1.md` (to be amended per §7)
 - Current auth/RLS: `supabase/migrations/20260708090742_password_login_permissive_rls.sql`, `supabase/functions/login`, `supabase/functions/register-shop`
 
+> **Revision (2026-09-28, after planning):** ShopAI has no real users, so the Phase 0 plan (`docs/superpowers/plans/2026-09-28-phase0-shared-account-auth.md`) overrides this spec in four places:
+> 1. **No lazy migration (§4.1, §4.3).** Existing shop rows are kept but can't log in (`password_reset_required`) until the owner resets the password through the OTP flow.
+> 2. **Single deploy (§9).** No grace period, no forced update, no Stage A/B.
+> 3. **Legacy columns dropped (§4.2).** `shops.plan_type`, `plan_expires_at` and `password_hash` are dropped, with no mirror; ShopAI reads `app_subscriptions`. `register-shop` is deleted.
+> 4. **Auth identity (§4.1).** Auth users sign in with a synthetic email `s-<shop_id>@<AUTH_EMAIL_DOMAIN>`, not `auth.users.phone`, so no SMS provider is needed. Users still type phone + password.
+
 ---
 
 ## 1. Goal
