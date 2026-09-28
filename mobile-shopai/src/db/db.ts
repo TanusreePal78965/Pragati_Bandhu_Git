@@ -59,8 +59,12 @@ export const updateShop = (data: Partial<Omit<ShopInfo, 'id' | 'isActive'>>): vo
 
     // Exclude aiConsent — consent is pushed directly from EditShopScreen to avoid
     // stale local values overwriting Supabase.
-    const { aiConsent: _omit, ...syncData } = data;
-    addToSyncQueue('shop', 'UPDATE', row.id, { ...syncData, phone: row.phone });
+    // Exclude phone too — it's the login identifier and RLS no longer grants
+    // authenticated UPDATE on shops.phone (callers may spread getShop(), which
+    // includes phone); including it in the SET list would fail the whole
+    // UPDATE with 42501.
+    const { aiConsent: _omit, phone: _omitPhone, ...syncData } = data;
+    addToSyncQueue('shop', 'UPDATE', row.id, syncData);
   } catch (e) {
     console.error('updateShop error:', e);
   }

@@ -85,7 +85,10 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       }
     };
 
-    const shopData      = await safeQuery(supabase.from('shops').select('*').eq('id', uuid).single() as any, 'shops');
+    // Select exactly the columns granted to `authenticated` under the RLS
+    // lockdown — select('*') would pull is_superadmin/auth_user_id and fail
+    // the whole query with 42501.
+    const shopData      = await safeQuery(supabase.from('shops').select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, active_device_id, created_at, last_synced_at, allow_out_of_stock_billing').eq('id', uuid).single() as any, 'shops');
     const categoriesData = await safeQuery(supabase.from('categories').select('*').eq('shop_id', uuid) as any, 'categories');
     const brandsData     = await safeQuery(supabase.from('brands').select('*').eq('shop_id', uuid) as any, 'brands');
     const productsData   = await safeQuery(supabase.from('products').select('*').eq('shop_id', uuid) as any, 'products');
@@ -164,7 +167,8 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
 // ── Delete ────────────────────────────────────────────────────────────────────
 
 /**
- * Deletes all rows for this shop from every Supabase table.
+ * Deletes this shop's data from every ShopAI-owned Supabase table (the shops
+ * row itself is left alone — it's shared account data, not this app's data).
  * Order matters — children before parents to avoid FK violations.
  *
  * C7: Continues on partial failure and reports per-table errors rather than
@@ -222,9 +226,9 @@ export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
     const { error: catErr } = await supabase.from('categories').delete().eq('shop_id', uuid);
     if (catErr) tableErrors['categories'] = catErr.message;
 
-    // 8. shops row
-    const { error: shErr } = await supabase.from('shops').delete().eq('id', uuid);
-    if (shErr) tableErrors['shops'] = shErr.message;
+    // The shops row itself is account data managed server-side (shared across
+    // apps) — authenticated has no DELETE on shops, and it's not this app's
+    // data to delete. Only the shop's per-app tables above are cleared.
 
     if (Object.keys(tableErrors).length > 0) {
       const failed = Object.keys(tableErrors).join(', ');

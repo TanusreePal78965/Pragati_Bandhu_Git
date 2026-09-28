@@ -123,8 +123,14 @@ export const getStoredAuth = async (): Promise<{
   // Builds before Phase 0 stored only a shop id (no Supabase session). Without a
   // session every request fails RLS, so send the user back to login once.
   // A network error while refreshing returns `error` — keep them signed in offline.
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (!sessionData.session && !sessionError) {
+  // Offline, getSession() retries the token refresh with backoff and can take
+  // ~25-30s to give up — race it against a 3s timeout and treat a timeout the
+  // same as "keep the user signed in" (null result skips the check below).
+  const sessionCheck = await Promise.race([
+    supabase.auth.getSession(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+  ]);
+  if (sessionCheck && !sessionCheck.data.session && !sessionCheck.error) {
     await clearAllUserData();
     return { isAuthenticated: false, phone: null, uuid: null };
   }

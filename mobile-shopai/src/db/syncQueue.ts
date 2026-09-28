@@ -131,12 +131,14 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
     case 'shop': {
       const uuid = await getShopId();
       const deviceId = await getOrCreateDeviceId();
-      const { shopName, ownerName, category, whatsappNumber, phone, allowOutOfStockBilling } = payload;
+      // phone is intentionally ignored — it's the login identifier and RLS no
+      // longer grants authenticated UPDATE on shops.phone. This also drops
+      // any `phone` field left over in queued entries from older app versions.
+      const { shopName, ownerName, category, whatsappNumber, allowOutOfStockBilling } = payload;
 
       const updatePayload: any = {
         active_device_id: deviceId,
       };
-      if (phone !== undefined) updatePayload.phone = phone;
       if (shopName !== undefined) updatePayload.shop_name = shopName;
       if (ownerName !== undefined) updatePayload.owner_name = ownerName;
       if (category !== undefined) updatePayload.business_category = category ?? null;
@@ -182,9 +184,13 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
 }
 
 async function syncDelete(tableName: string, dataId: string): Promise<void> {
-  const table = tableName === 'shop' ? 'shops' : tableName;
+  if (tableName === 'shop') {
+    // No-op: the shops row is account data managed server-side; authenticated
+    // has no DELETE on shops under the RLS lockdown.
+    return;
+  }
   const { error } = await supabase
-    .from(table)
+    .from(tableName)
     .delete()
     .eq('id', dataId);
   if (error) throw error;
