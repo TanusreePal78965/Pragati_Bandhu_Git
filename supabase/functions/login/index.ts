@@ -51,6 +51,6 @@ Deno.serve(async (req) => {
     return json(result.status, result.body)
   } catch (err) {
     console.error('login error:', err)
-    return json(500, { error: err instanceof Error ? err.message : 'Internal error' })
+    return json(500, { error: 'Internal error' })
   }
 })

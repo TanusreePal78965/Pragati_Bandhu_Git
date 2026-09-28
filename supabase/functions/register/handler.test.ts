@@ -31,6 +31,13 @@ Deno.test('400 when password shorter than 6', async () => {
   assertEquals((await handleRegister({ ...base, password: '123' }, deps)).status, 400)
 })
 
+Deno.test('400 when plan is not monthly or yearly', async () => {
+  const { deps } = makeDeps()
+  const res = await handleRegister({ ...base, plan: 'weekly' }, deps)
+  assertEquals(res.status, 400)
+  assertEquals(res.body, { error: 'plan must be monthly or yearly' })
+})
+
 Deno.test('new phone: creates shop, auth user and subscriptions (default shopai)', async () => {
   const { deps, log } = makeDeps()
   const res = await handleRegister({ ...base, plan: 'yearly' }, deps)

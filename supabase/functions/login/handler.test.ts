@@ -72,3 +72,18 @@ Deno.test('no subscription for app: 403 not_subscribed and session revoked', asy
   assertEquals(res.body, { error: 'not_subscribed', app: 'chukta' })
   assertEquals(log, ['revoke'])
 })
+
+Deno.test('inactive subscription for app: 403 not_subscribed and session revoked', async () => {
+  const { deps, log } = makeDeps({ getSubscription: async (_s, app) => ({ app, plan_type: 'monthly', is_active: false, expires_at: null }) })
+  const res = await handleLogin({ phone: '+91', password: 'right', app: 'shopai' }, deps)
+  assertEquals(res.status, 403)
+  assertEquals(res.body, { error: 'not_subscribed', app: 'shopai' })
+  assertEquals(log, ['revoke'])
+})
+
+Deno.test('phone with surrounding spaces is trimmed before lookup', async () => {
+  let received = ''
+  const { deps } = makeDeps({ findShopByPhone: async (phone) => { received = phone; return { ...baseShop } } })
+  await handleLogin({ phone: '  +919800000001  ', password: 'right' }, deps)
+  assertEquals(received, '+919800000001')
+})

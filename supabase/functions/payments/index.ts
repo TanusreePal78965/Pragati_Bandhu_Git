@@ -33,15 +33,19 @@ async function verifyFirebaseToken(idToken: string) {
   return payload.phone_number as string
 }
 
-const ADMIN_JWT_SECRET = Deno.env.get('ADMIN_JWT_SECRET') || 'super_secret_fallback_key_12345'
-const adminSecretKey = new TextEncoder().encode(ADMIN_JWT_SECRET)
+function adminSecretKey() {
+  const secret = Deno.env.get('ADMIN_JWT_SECRET')
+  if (!secret) throw new Error('Admin auth not configured')
+  return new TextEncoder().encode(secret)
+}
 
 async function verifyAdminToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, adminSecretKey)
+    const { payload } = await jwtVerify(token, adminSecretKey())
     if (payload.role !== 'superadmin') throw new Error('Invalid role')
     return true
   } catch (e) {
+    if (e instanceof Error && e.message === 'Admin auth not configured') throw e
     throw new Error('Unauthorized admin token')
   }
 }
@@ -105,9 +109,12 @@ Deno.serve(async (req) => {
     // === ADMIN: LOGIN ===
     if (path === '/admin/login' && req.method === 'POST') {
       const { username, password } = await req.json()
-      const validUser = Deno.env.get('ADMIN_USERNAME') || 'admin'
-      const validPass = Deno.env.get('ADMIN_PASSWORD') || 'admin123'
-      
+      const validUser = Deno.env.get('ADMIN_USERNAME')
+      const validPass = Deno.env.get('ADMIN_PASSWORD')
+      if (!validUser || !validPass || !Deno.env.get('ADMIN_JWT_SECRET')) {
+        return new Response(JSON.stringify({ error: 'Admin auth not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
       if (username !== validUser || password !== validPass) {
         return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -116,7 +123,7 @@ Deno.serve(async (req) => {
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('24h')
-        .sign(adminSecretKey)
+        .sign(adminSecretKey())
 
       return new Response(JSON.stringify({ token }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }

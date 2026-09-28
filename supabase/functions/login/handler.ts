@@ -18,7 +18,7 @@ export async function handleLogin(
   input: { phone?: unknown; password?: unknown; app?: unknown; deviceId?: unknown },
   deps: LoginDeps,
 ): Promise<HandlerResult> {
-  const phone = typeof input.phone === 'string' ? input.phone : ''
+  const phone = typeof input.phone === 'string' ? input.phone.trim() : ''
   const password = typeof input.password === 'string' ? input.password : ''
   if (!phone || !password) return { status: 400, body: { error: 'phone and password are required' } }
 
@@ -37,7 +37,7 @@ export async function handleLogin(
   if (!first) return INVALID
 
   const subscription = await deps.getSubscription(shop.id, app)
-  if (!subscription) {
+  if (!subscription || !subscription.is_active) {
     await deps.revoke(first.access_token)
     return { status: 403, body: { error: 'not_subscribed', app } }
   }

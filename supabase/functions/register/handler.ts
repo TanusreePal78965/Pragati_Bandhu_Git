@@ -20,13 +20,16 @@ export interface RegisterDeps {
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+const PLANS = ['monthly', 'yearly']
 
 export async function handleRegister(input: Record<string, unknown>, deps: RegisterDeps): Promise<HandlerResult> {
   const idToken = str(input.idToken)
   const phone = str(input.phone)
   const password = typeof input.password === 'string' ? input.password : ''
   const apps = parseApps(input.apps, ['shopai'])
-  const plan = str(input.plan) || 'monthly'
+  const rawPlan = str(input.plan)
+  if (rawPlan && !PLANS.includes(rawPlan)) return { status: 400, body: { error: 'plan must be monthly or yearly' } }
+  const plan = rawPlan || 'monthly'
 
   if (!idToken || !phone || !password) return { status: 400, body: { error: 'idToken, phone and password are required' } }
   if (password.length < 6) return { status: 400, body: { error: 'Password must be at least 6 characters' } }
