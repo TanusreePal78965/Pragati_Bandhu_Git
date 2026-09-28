@@ -50,7 +50,6 @@ entrypoint = "./functions/register-shop/index.ts"
 [functions.login]
 enabled = true
 verify_jwt = false  # phone+password login has no session/JWT to verify
-import_map = "./functions/login/deno.json"
 entrypoint = "./functions/login/index.ts"
 
 [auth.hook.custom_access_token]
