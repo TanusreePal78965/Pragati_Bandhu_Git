@@ -72,3 +72,6 @@ skills-lock.json
 # Claude Code project memory (machine-specific)
 .claude/
 
+
+# Superpowers SDD scratch
+.superpowers/
