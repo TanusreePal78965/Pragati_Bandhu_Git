@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { login as loginService, getStoredAuth, logout as logoutService } from '../services/authService';
 import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
@@ -44,6 +44,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAutoRestoring, setIsAutoRestoring] = useState(false);
   const [phone, setPhone] = useState<string | null>(null);
   const [uuid, setUuid] = useState<string | null>(null);
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  isAuthenticatedRef.current = isAuthenticated;
+  const loggingOutRef = useRef(false);
+
+  // Revoked/expired sessions (e.g. password reset elsewhere, admin-forced logout)
+  // surface as a SIGNED_OUT auth event — react by clearing local state the same
+  // way an explicit logout would. Guard against recursion since logout() itself
+  // triggers SIGNED_OUT.
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' && isAuthenticatedRef.current && !loggingOutRef.current) {
+        void logout();
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   // C11: Subscribe to auto-restore lifecycle events emitted by authService.
   // Must be registered BEFORE the auth check effect runs so the 'start' event
@@ -96,13 +112,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    stopSyncService();
-    await logoutService();
-    setIsAuthenticated(false);
-    setIsShopActive(true);
-    setIsDeviceConflict(false);
-    setPhone(null);
-    setUuid(null);
+    loggingOutRef.current = true;
+    try {
+      stopSyncService();
+      await logoutService();
+      setIsAuthenticated(false);
+      setIsShopActive(true);
+      setIsDeviceConflict(false);
+      setPhone(null);
+      setUuid(null);
+    } finally {
+      loggingOutRef.current = false;
+    }
   };
 
   const setShopActive = (active: boolean) => {

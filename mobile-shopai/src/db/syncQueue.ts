@@ -62,6 +62,9 @@ export const flushSyncQueue = async () => {
   isFlushing = true;
 
   try {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return;
+
     const state = await NetInfo.fetch();
     if (!state.isConnected) return;
 

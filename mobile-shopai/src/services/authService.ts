@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearAllUserData,
   getShopInfo,
@@ -83,6 +85,7 @@ export const login = async (phone: string, password: string): Promise<ShopRecord
   };
 
   if (shop.is_active === false) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     throw new Error('Your shop has been deactivated by the administrator. You cannot access the app until it is reactivated.');
   }
 
@@ -130,7 +133,7 @@ export const getStoredAuth = async (): Promise<{
     supabase.auth.getSession(),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
   ]);
-  if (sessionCheck && !sessionCheck.data.session && !sessionCheck.error) {
+  if (sessionCheck && !sessionCheck.data.session && (!sessionCheck.error || !isAuthRetryableFetchError(sessionCheck.error))) {
     await clearAllUserData();
     return { isAuthenticated: false, phone: null, uuid: null };
   }
@@ -219,6 +222,9 @@ export const getStoredAuth = async (): Promise<{
 export const logout = async (): Promise<void> => {
   // scope 'local' ends only this device's ShopAI session; Chukta stays signed in.
   await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  // An offline signOut can leave the refresh token persisted — remove it directly
+  // so a later offline getStoredAuth() doesn't see a stale session.
+  await AsyncStorage.removeItem(`sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`).catch(() => {});
   closeUserDatabase();
   await clearAllUserData();
 };
