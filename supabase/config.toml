@@ -54,3 +54,8 @@ entrypoint = "./functions/login/index.ts"
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+[functions.reset-password]
+enabled = true
+verify_jwt = false  # caller proves phone ownership with a Firebase OTP token
+entrypoint = "./functions/reset-password/index.ts"
