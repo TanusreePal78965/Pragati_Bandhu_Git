@@ -2,7 +2,7 @@
 -- Custom Access Token Hook: stamp app + shop_id into every access token (spec §4.4).
 
 create or replace function public.custom_access_token_hook(event jsonb) returns jsonb
-language plpgsql stable as $$
+language plpgsql stable set search_path = '' as $$
 declare
   claims jsonb := event -> 'claims';
   v_app  text;
@@ -39,7 +39,7 @@ create policy "auth admin reads shops" on public.shops
 
 -- Revoke every session of a user (password reset, forced logout).
 create or replace function public.revoke_user_sessions(p_user_id uuid) returns void
-language sql security definer set search_path = public, auth as $$
+language sql security definer set search_path = '' as $$
   delete from auth.sessions where user_id = p_user_id;
   delete from public.app_sessions where user_id = p_user_id;
 $$;

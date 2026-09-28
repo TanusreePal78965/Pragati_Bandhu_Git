@@ -1,7 +1,7 @@
 -- supabase/tests/database/shopai_rls_lockdown.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(16);
 
 insert into public.shops (id, shop_name, owner_name, phone) values
   ('a0000000-0000-0000-0000-00000000000a', 'A', 'OA', '+919800000101'),
@@ -47,8 +47,16 @@ reset role;
 select is(
   (select count(*)::int from pg_tables t
     where t.schemaname = 'public' and t.tablename <> 'app_settings'
-      and has_table_privilege('anon', format('public.%I', t.tablename), 'SELECT,INSERT,UPDATE,DELETE')),
+      and (has_table_privilege('anon', format('public.%I', t.tablename), 'SELECT,INSERT,UPDATE,DELETE')
+        or has_any_column_privilege('anon', format('public.%I', t.tablename), 'SELECT,INSERT,UPDATE'))),
   0, 'anon has no privileges on any public table except app_settings');
+select is(
+  (select count(*)::int from pg_policies p
+    where p.schemaname = 'public'
+      and (p.qual = 'true' or p.with_check = 'true')
+      and not (p.tablename = 'app_settings' and p.cmd = 'SELECT')
+      and not ('supabase_auth_admin'::name = any(p.roles))),
+  0, 'no permissive (true) policies left outside app_settings read and auth-admin hook policies');
 set local role anon;
 select throws_ok($$ select 1 from public.categories $$, '42501', null, 'anon has no table access');
 select lives_ok($$ select key from public.app_settings limit 1 $$, 'anon can still read app_settings (version check)');

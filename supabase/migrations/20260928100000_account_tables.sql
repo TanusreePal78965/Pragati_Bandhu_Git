@@ -6,10 +6,10 @@ alter table public.shops add column if not exists auth_user_id uuid unique refer
 
 -- 2. JWT claim helpers used by every app-scoped RLS policy.
 create or replace function public.jwt_app() returns text
-language sql stable as $$ select nullif(auth.jwt() ->> 'app', '') $$;
+language sql stable set search_path = '' as $$ select nullif(auth.jwt() ->> 'app', '') $$;
 
 create or replace function public.jwt_shop_id() returns uuid
-language sql stable as $$ select nullif(auth.jwt() ->> 'shop_id', '')::uuid $$;
+language sql stable set search_path = '' as $$ select nullif(auth.jwt() ->> 'shop_id', '')::uuid $$;
 
 -- 3. Per-app entitlement.
 create table if not exists public.app_subscriptions (

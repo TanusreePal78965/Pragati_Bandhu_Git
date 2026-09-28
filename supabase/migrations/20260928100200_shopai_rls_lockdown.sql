@@ -75,3 +75,6 @@ grant select on public.app_settings to anon, authenticated;
 -- 6. anon: no table access anywhere in public except the pre-login version check.
 revoke all on all tables in schema public from anon;
 grant select on public.app_settings to anon;
+
+-- 7. Future public tables must not inherit anon access by default.
+alter default privileges for role postgres in schema public revoke all on tables from anon;

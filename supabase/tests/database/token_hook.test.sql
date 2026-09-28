@@ -1,7 +1,7 @@
 -- supabase/tests/database/token_hook.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 insert into auth.users (id, email) values ('aaaaaaaa-0000-0000-0000-000000000001', 'hook-test@accounts.pragatibandhu.internal');
 insert into public.shops (id, shop_name, owner_name, phone, auth_user_id)
@@ -37,9 +37,11 @@ select is(
   )) -> 'claims' ->> 'role',
   'authenticated', 'existing claims preserved');
 
+insert into auth.sessions (id, user_id) values ('eeeeeeee-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001');
 select public.revoke_user_sessions('aaaaaaaa-0000-0000-0000-000000000001');
 select is((select count(*)::int from public.app_sessions where user_id = 'aaaaaaaa-0000-0000-0000-000000000001'),
           0, 'revoke_user_sessions clears app_sessions');
+select is((select count(*)::int from auth.sessions where user_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 0, 'revoke_user_sessions deletes auth.sessions');
 
 select table_privs_are('public', 'app_sessions', 'supabase_auth_admin', array['SELECT'], 'auth admin can only SELECT app_sessions');
 select column_privs_are('public', 'shops', 'auth_user_id', 'supabase_auth_admin', array['SELECT'], 'auth admin can read shops.auth_user_id');
