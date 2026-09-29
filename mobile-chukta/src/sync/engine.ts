@@ -1,0 +1,140 @@
+import type { SqlDb } from '../db/sqlDb';
+import { pullAll, type RemoteReader } from './pull';
+import { flushPush, type RemoteWriter } from './push';
+
+export type SyncStatus = { running: boolean; lastSyncedAt: string | null; lastError: string | null; pending: number; dead: number };
+export const IDLE_STATUS: SyncStatus = { running: false, lastSyncedAt: null, lastError: null, pending: 0, dead: 0 };
+
+export type SyncEngineDeps = {
+  db: SqlDb;
+  remote: RemoteWriter & RemoteReader;
+  hasSession(): Promise<boolean>;
+  now?: () => Date;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+};
+
+export type SyncEngine = {
+  run(): Promise<void>;
+  runSoon(): void;
+  getStatus(): SyncStatus;
+  subscribe(fn: (s: SyncStatus) => void): () => void;
+  dispose(): void;
+};
+
+const BACKOFF_BASE_MS = 5_000;
+const BACKOFF_MAX_MS = 300_000;
+const DEBOUNCE_MS = 2_000;
+
+export function backoffDelay(failures: number): number {
+  return Math.min(BACKOFF_BASE_MS * 2 ** Math.max(0, failures - 1), BACKOFF_MAX_MS);
+}
+
+export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
+  const now = deps.now ?? (() => new Date());
+  const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const clearTimer = deps.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const listeners = new Set<(s: SyncStatus) => void>();
+  let status: SyncStatus = { ...IDLE_STATUS };
+  let inflight: Promise<void> | null = null;
+  let again = false;
+  let failures = 0;
+  let timer: unknown = null;
+  let disposed = false;
+
+  const emit = (patch: Partial<SyncStatus>) => {
+    status = { ...status, ...patch };
+    for (const l of listeners) l(status);
+  };
+
+  function schedule(ms: number) {
+    if (disposed) return;
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(() => {
+      timer = null;
+      void run();
+    }, ms);
+  }
+
+  async function counts(): Promise<{ pending: number; dead: number }> {
+    const r = await deps.db.getFirstAsync<{ pending: number | null; dead: number | null }>(
+      "select sum(status = 'pending') as pending, sum(status = 'dead') as dead from sync_queue");
+    return { pending: r?.pending ?? 0, dead: r?.dead ?? 0 };
+  }
+
+  async function headError(): Promise<string | null> {
+    const r = await deps.db.getFirstAsync<{ last_error: string | null }>(
+      "select last_error from sync_queue where status = 'pending' order by seq limit 1");
+    return r?.last_error ?? null;
+  }
+
+  async function pass(): Promise<void> {
+    if (!(await deps.hasSession())) {
+      emit(await counts());
+      return;
+    }
+    let error: string | null = null;
+    let stalled = false;
+    try {
+      const push = await flushPush(deps.db, deps.remote, deps.hasSession);
+      stalled = push.stopped;
+      await pullAll(deps.db, deps.remote);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      stalled = true;
+    }
+    const c = await counts();
+    if (stalled) {
+      failures++;
+      schedule(backoffDelay(failures));
+      emit({ ...c, lastError: error ?? (await headError()) ?? 'sync stalled' });
+    } else {
+      failures = 0;
+      emit({ ...c, lastError: null, lastSyncedAt: now().toISOString() });
+    }
+  }
+
+  function run(): Promise<void> {
+    if (disposed) return Promise.resolve();
+    if (inflight) {
+      again = true;
+      return inflight;
+    }
+    if (timer !== null) {
+      clearTimer(timer);
+      timer = null;
+    }
+    emit({ running: true });
+    inflight = (async () => {
+      try {
+        do {
+          again = false;
+          await pass();
+        } while (again && !disposed);
+      } finally {
+        inflight = null;
+        emit({ running: false });
+      }
+    })();
+    return inflight;
+  }
+
+  return {
+    run,
+    runSoon() {
+      if (failures > 0 && timer !== null) return;
+      schedule(DEBOUNCE_MS);
+    },
+    getStatus: () => status,
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    dispose() {
+      disposed = true;
+      if (timer !== null) clearTimer(timer);
+      timer = null;
+      listeners.clear();
+    },
+  };
+}
