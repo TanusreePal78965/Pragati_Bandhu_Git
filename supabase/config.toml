@@ -69,3 +69,8 @@ entrypoint = "./functions/payments/index.ts"
 enabled = true
 verify_jwt = false  # the function validates the owner's token itself (auth.getUser) and reads app/app_role/shop_id claims
 entrypoint = "./functions/chukta-staff/index.ts"
+
+[functions.chukta-login-staff]
+enabled = true
+verify_jwt = false  # pre-login; staff prove identity with owner phone + PIN
+entrypoint = "./functions/chukta-login-staff/index.ts"
