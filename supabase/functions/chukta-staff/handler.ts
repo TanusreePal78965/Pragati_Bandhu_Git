@@ -16,19 +16,19 @@ export type StaffPatch = {
   pin_hash?: string
   pin_salt?: string
   is_active?: boolean
-  failed_attempts?: number
-  locked_until?: null
 }
 
 export interface StaffDeps {
   getCaller(jwt: string): Promise<Caller | null>
   getPropertyShop(propertyId: string): Promise<string | null>
-  listActiveStaff(propertyId: string): Promise<StaffRecord[]>
+  /** Active staff of all active properties of the shop. */
+  listActiveShopStaff(shopId: string): Promise<StaffRecord[]>
   getStaff(staffId: string): Promise<StaffRecord | null>
   createAuthUser(email: string, password: string): Promise<string>
   insertStaff(row: Omit<StaffRecord, 'is_active'>): Promise<void>
   updateStaff(id: string, patch: StaffPatch): Promise<void>
   revokeSessions(authUserId: string): Promise<void>
+  deleteAuthUser(authUserId: string): Promise<void>
   newId(): string
 }
 
@@ -59,12 +59,17 @@ export async function handleStaff(
     const shop = await deps.getPropertyShop(propertyId)
     if (!shop) return fail(404, 'property_not_found')
     if (shop !== caller.shopId) return fail(403, 'forbidden')
-    if (await pinTaken(input.pin, await deps.listActiveStaff(propertyId))) return fail(409, 'pin_in_use')
+    if (await pinTaken(input.pin, await deps.listActiveShopStaff(caller.shopId))) return fail(409, 'pin_in_use')
 
     const id = deps.newId()
     const authUserId = await deps.createAuthUser(staffAuthEmail(id), randomPassword())
     const { hash, salt } = await hashPin(input.pin)
-    await deps.insertStaff({ id, property_id: propertyId, name, auth_user_id: authUserId, pin_hash: hash, pin_salt: salt })
+    try {
+      await deps.insertStaff({ id, property_id: propertyId, name, auth_user_id: authUserId, pin_hash: hash, pin_salt: salt })
+    } catch (err) {
+      await deps.deleteAuthUser(authUserId).catch(() => {})
+      throw err
+    }
     return { status: 200, body: { staff: { id, property_id: propertyId, name, is_active: true } } }
   }
 
@@ -73,6 +78,8 @@ export async function handleStaff(
   const staff = await deps.getStaff(staffId)
   if (!staff) return fail(404, 'staff_not_found')
   if ((await deps.getPropertyShop(staff.property_id)) !== caller.shopId) return fail(403, 'forbidden')
+
+  if (input.isActive === true && !staff.is_active && !isValidPin(input.pin)) return fail(400, 'pin_required_to_reactivate')
 
   const patch: StaffPatch = {}
   let revoke = false
@@ -83,9 +90,9 @@ export async function handleStaff(
   }
   if (input.pin !== undefined) {
     if (!isValidPin(input.pin)) return fail(400, 'pin must be 4-6 digits')
-    if (await pinTaken(input.pin, await deps.listActiveStaff(staff.property_id), staff.id)) return fail(409, 'pin_in_use')
+    if (await pinTaken(input.pin, await deps.listActiveShopStaff(caller.shopId), staff.id)) return fail(409, 'pin_in_use')
     const { hash, salt } = await hashPin(input.pin)
-    Object.assign(patch, { pin_hash: hash, pin_salt: salt, failed_attempts: 0, locked_until: null })
+    Object.assign(patch, { pin_hash: hash, pin_salt: salt })
     revoke = true
   }
   if (input.isActive !== undefined) {

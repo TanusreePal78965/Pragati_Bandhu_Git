@@ -13,9 +13,18 @@ const deps: StaffLoginDeps = {
     if (error) throw error
     return data?.id ?? null
   },
+  async reserveAttempt(shopId) {
+    const { data, error } = await admin.schema('chukta').rpc('reserve_pin_attempt', { p_shop_id: shopId })
+    if (error) throw error
+    return data as 'ok' | 'locked'
+  },
+  async clearAttempts(shopId) {
+    const { error } = await admin.schema('chukta').rpc('clear_pin_attempts', { p_shop_id: shopId })
+    if (error) throw error
+  },
   async listStaffForShop(shopId) {
     const { data, error } = await admin.schema('chukta').from('staff_users')
-      .select('id, name, property_id, auth_user_id, pin_hash, pin_salt, locked_until, properties!inner(name, shop_id, is_active)')
+      .select('id, name, property_id, auth_user_id, pin_hash, pin_salt, properties!inner(name, shop_id, is_active)')
       .eq('is_active', true)
       .eq('properties.shop_id', shopId)
       .eq('properties.is_active', true)
@@ -25,17 +34,8 @@ const deps: StaffLoginDeps = {
       return {
         id: r.id as string, name: r.name as string, property_id: r.property_id as string, property_name: p.name,
         auth_user_id: r.auth_user_id as string, pin_hash: r.pin_hash as string, pin_salt: r.pin_salt as string,
-        locked_until: (r.locked_until as string | null) ?? null,
       }
     })
-  },
-  async recordFailures(ids) {
-    const { error } = await admin.schema('chukta').rpc('record_pin_failure', { p_staff_ids: ids })
-    if (error) throw error
-  },
-  async resetFailures(id) {
-    const { error } = await admin.schema('chukta').from('staff_users').update({ failed_attempts: 0, locked_until: null }).eq('id', id)
-    if (error) throw error
   },
   async createSession(authUserId) {
     const { data: u, error: uErr } = await admin.auth.admin.getUserById(authUserId)
@@ -56,13 +56,15 @@ const deps: StaffLoginDeps = {
     if (error || !data.session) throw error ?? new Error('refresh returned no session')
     return data.session as unknown as Session
   },
-  now: () => new Date(),
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+  if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
   try {
-    const result = await handleStaffLogin(await req.json(), deps)
+    const body = await req.json().catch(() => null)
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'invalid_json' })
+    const result = await handleStaffLogin(body, deps)
     return json(result.status, result.body)
   } catch (err) {
     console.error('chukta-login-staff error:', err)

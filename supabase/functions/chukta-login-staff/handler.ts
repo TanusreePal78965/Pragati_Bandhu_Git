@@ -9,19 +9,17 @@ export type StaffCandidate = {
   auth_user_id: string
   pin_hash: string
   pin_salt: string
-  locked_until: string | null
 }
 
 export interface StaffLoginDeps {
   findShopIdByPhone(phone: string): Promise<string | null>
-  /** Active staff of the shop's active properties. */
+  /** Atomically reserves one attempt for the shop before any PIN work: 'ok' | 'locked'. */
+  reserveAttempt(shopId: string): Promise<'ok' | 'locked'>
+  clearAttempts(shopId: string): Promise<void>
   listStaffForShop(shopId: string): Promise<StaffCandidate[]>
-  recordFailures(staffIds: string[]): Promise<void>
-  resetFailures(staffId: string): Promise<void>
   createSession(authUserId: string): Promise<Session>
   recordSession(sessionId: string, userId: string, deviceId: string | null): Promise<void>
   refresh(refreshToken: string): Promise<Session>
-  now(): Date
 }
 
 const WRONG_PIN: HandlerResult = { status: 401, body: { error: 'wrong_pin' } }
@@ -38,23 +36,18 @@ export async function handleStaffLogin(
   const shopId = await deps.findShopIdByPhone(ownerPhone)
   if (!shopId) return WRONG_PIN
 
-  const now = deps.now().getTime()
-  const staff = await deps.listStaffForShop(shopId)
-  const unlocked = staff.filter((s) => !s.locked_until || new Date(s.locked_until).getTime() <= now)
-  if (staff.length > 0 && unlocked.length === 0) return { status: 429, body: { error: 'too_many_attempts' } }
+  if ((await deps.reserveAttempt(shopId)) === 'locked') return { status: 429, body: { error: 'too_many_attempts' } }
 
+  const staff = await deps.listStaffForShop(shopId)
   const matches: StaffCandidate[] = []
-  for (const s of unlocked) {
+  for (const s of staff) {
     if (await verifyPin(pin, s.pin_hash, s.pin_salt)) matches.push(s)
   }
-  if (matches.length === 0) {
-    if (unlocked.length > 0) await deps.recordFailures(unlocked.map((s) => s.id))
-    return WRONG_PIN
-  }
+  if (matches.length === 0) return WRONG_PIN
   if (matches.length > 1) return { status: 409, body: { error: 'ambiguous_pin' } }
 
   const match = matches[0]
-  await deps.resetFailures(match.id)
+  await deps.clearAttempts(shopId)
   const first = await deps.createSession(match.auth_user_id)
   const sessionId = decodeJwtPayload(first.access_token).session_id
   if (typeof sessionId !== 'string') throw new Error('session_id claim missing from access token')

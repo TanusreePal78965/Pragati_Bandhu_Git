@@ -25,10 +25,14 @@ const deps: StaffDeps = {
     if (error) throw error
     return data?.shop_id ?? null
   },
-  async listActiveStaff(propertyId) {
-    const { data, error } = await chukta().from('staff_users').select(STAFF_COLUMNS).eq('property_id', propertyId).eq('is_active', true)
+  async listActiveShopStaff(shopId) {
+    const { data, error } = await chukta().from('staff_users')
+      .select('id, property_id, name, auth_user_id, pin_hash, pin_salt, is_active, properties!inner(shop_id, is_active)')
+      .eq('is_active', true)
+      .eq('properties.shop_id', shopId)
+      .eq('properties.is_active', true)
     if (error) throw error
-    return data ?? []
+    return (data ?? []).map(({ properties: _properties, ...row }) => row)
   },
   async getStaff(staffId) {
     const { data, error } = await chukta().from('staff_users').select(STAFF_COLUMNS).eq('id', staffId).maybeSingle()
@@ -52,17 +56,24 @@ const deps: StaffDeps = {
     const { error } = await admin.rpc('revoke_user_sessions', { p_user_id: authUserId })
     if (error) throw error
   },
+  async deleteAuthUser(authUserId) {
+    const { error } = await admin.auth.admin.deleteUser(authUserId)
+    if (error) throw error
+  },
   newId: () => crypto.randomUUID(),
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+  if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
   try {
     const path = new URL(req.url).pathname
     const action = path.endsWith('/create') ? 'create' : path.endsWith('/update') ? 'update' : null
-    if (!action || req.method !== 'POST') return json(404, { error: 'not_found' })
+    if (!action) return json(404, { error: 'not_found' })
+    const body = await req.json().catch(() => null)
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'invalid_json' })
     const jwt = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? null
-    const result = await handleStaff(action, jwt, await req.json(), deps)
+    const result = await handleStaff(action, jwt, body, deps)
     return json(result.status, result.body)
   } catch (err) {
     console.error('chukta-staff error:', err)

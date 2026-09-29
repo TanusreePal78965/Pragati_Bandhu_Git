@@ -14,12 +14,13 @@ function makeDeps(over: Partial<StaffDeps> = {}) {
   const deps: StaffDeps = {
     getCaller: async () => owner,
     getPropertyShop: async (pid) => (pid === 'p1' ? 'shop1' : pid === 'p2' ? 'shop2' : null),
-    listActiveStaff: async () => [],
+    listActiveShopStaff: async () => [],
     getStaff: async () => null,
     createAuthUser: async (email) => { log.push(`auth:${email}`); return 'auth-new' },
     insertStaff: async (row) => { log.push(`insert:${row.id}:${row.name}:${row.auth_user_id}`) },
     updateStaff: async (id, patch) => { log.push(`update:${id}:${Object.keys(patch).sort().join(',')}`) },
     revokeSessions: async (uid) => { log.push(`revoke:${uid}`) },
+    deleteAuthUser: async (id) => { log.push(`deleteAuth:${id}`) },
     newId: () => 'st1',
     ...over,
   }
@@ -48,11 +49,17 @@ Deno.test('create: 400 on bad name or pin', async () => {
 
 Deno.test('create: 409 when an active staff member already uses the pin', async () => {
   const existing = await staffRow('s0', '1234')
-  const { deps, log } = makeDeps({ listActiveStaff: async () => [existing] })
+  const { deps, log } = makeDeps({ listActiveShopStaff: async () => [existing] })
   const res = await handleStaff('create', 'jwt', { propertyId: 'p1', name: 'A', pin: '1234' }, deps)
   assertEquals(res.status, 409)
   assertEquals(res.body.error, 'pin_in_use')
   assertEquals(log, [])
+})
+
+Deno.test('create: pin must be unique across the whole shop', async () => {
+  const other = await staffRow('s0', '1234', { property_id: 'p-other-of-shop1' })
+  const { deps } = makeDeps({ listActiveShopStaff: async () => [other] })
+  assertEquals((await handleStaff('create', 'jwt', { propertyId: 'p1', name: 'A', pin: '1234' }, deps)).status, 409)
 })
 
 Deno.test('create: creates hidden auth user and staff row', async () => {
@@ -63,14 +70,22 @@ Deno.test('create: creates hidden auth user and staff row', async () => {
   assertEquals(res.body.staff, { id: 'st1', property_id: 'p1', name: 'Manager', is_active: true })
 })
 
+Deno.test('create: insert failure deletes the orphan auth user', async () => {
+  const { deps, log } = makeDeps({ insertStaff: async () => { throw new Error('db down') } })
+  let threw = false
+  try { await handleStaff('create', 'jwt', { propertyId: 'p1', name: 'A', pin: '4821' }, deps) } catch { threw = true }
+  assertEquals(threw, true)
+  assertEquals(log, ['auth:st-st1@accounts.pragatibandhu.internal', 'deleteAuth:auth-new'])
+})
+
 Deno.test('update: pin change checks uniqueness excluding self, resets lockout and revokes sessions', async () => {
   const self = await staffRow('s1', '1111')
   const other = await staffRow('s2', '2222')
-  const { deps, log } = makeDeps({ getStaff: async () => self, listActiveStaff: async () => [self, other] })
+  const { deps, log } = makeDeps({ getStaff: async () => self, listActiveShopStaff: async () => [self, other] })
   assertEquals((await handleStaff('update', 'jwt', { staffId: 's1', pin: '2222' }, deps)).status, 409)
   const res = await handleStaff('update', 'jwt', { staffId: 's1', pin: '1111' }, deps)
   assertEquals(res.status, 200)
-  assertEquals(log, ['update:s1:failed_attempts,locked_until,pin_hash,pin_salt', 'revoke:auth-s1'])
+  assertEquals(log, ['update:s1:pin_hash,pin_salt', 'revoke:auth-s1'])
 })
 
 Deno.test('update: deactivation revokes sessions; rename does not', async () => {
@@ -89,4 +104,15 @@ Deno.test('update: 404 unknown staff, 403 staff of another shop', async () => {
   const foreign = await staffRow('s9', '9999', { property_id: 'p2' })
   const f = makeDeps({ getStaff: async () => foreign })
   assertEquals((await handleStaff('update', 'jwt', { staffId: 's9', name: 'X' }, f.deps)).status, 403)
+})
+
+Deno.test('update: reactivation requires a new unique pin', async () => {
+  const inactive = await staffRow('s1', '1111', { is_active: false })
+  const { deps, log } = makeDeps({ getStaff: async () => inactive })
+  const res = await handleStaff('update', 'jwt', { staffId: 's1', isActive: true }, deps)
+  assertEquals(res.status, 400)
+  assertEquals(res.body.error, 'pin_required_to_reactivate')
+  const ok = await handleStaff('update', 'jwt', { staffId: 's1', isActive: true, pin: '5555' }, deps)
+  assertEquals(ok.status, 200)
+  assertEquals(log, ['update:s1:is_active,pin_hash,pin_salt', 'revoke:auth-s1'])
 })
