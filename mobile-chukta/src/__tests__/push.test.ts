@@ -1,6 +1,6 @@
 import { openTestDb } from '../db/testing/betterSqliteDb';
 import { migrate } from '../db/schema';
-import { flushPush, isPermanent, listDead, type PushItem, type RemoteError, type RemoteWriter } from '../sync/push';
+import { countsTowardCap, flushPush, isPermanent, listDead, MAX_SERVER_ATTEMPTS, type PushItem, type RemoteError, type RemoteWriter } from '../sync/push';
 
 async function dbWith(items: [string, string, ('insert' | 'update')?][]) {
   const db = openTestDb();
@@ -91,4 +91,43 @@ test('dead-lettered update clears the table cursor so the next pull restores it;
   expect(r).toEqual({ pushed: 0, dead: 2, stopped: false });
   expect(await db.getFirstAsync("select 1 from sync_cursor where table_name = 'workers'")).toBeNull();
   expect(await db.getFirstAsync("select 1 from sync_cursor where table_name = 'properties'")).not.toBeNull();
+});
+
+test('R3: only PGRST106 and PGRST200-205 (not 204) and PGRST0xx are retryable; other PGRST codes are permanent', () => {
+  expect(isPermanent({ status: 406, code: 'PGRST106', message: '' })).toBe(false);
+  for (const code of ['PGRST200', 'PGRST201', 'PGRST202', 'PGRST203', 'PGRST205']) {
+    expect(isPermanent({ status: 400, code, message: '' })).toBe(false);
+  }
+  expect(isPermanent({ status: 503, code: 'PGRST000', message: '' })).toBe(false);
+  expect(isPermanent({ status: 400, code: 'PGRST204', message: '' })).toBe(true);
+  expect(isPermanent({ status: 400, code: 'PGRST100', message: '' })).toBe(true);
+  expect(isPermanent({ status: 500, code: null, message: '' })).toBe(false);
+});
+
+test('countsTowardCap: server-side transient errors count, network and 401 never do', () => {
+  expect(countsTowardCap({ status: 503, code: null, message: '' })).toBe(true);
+  expect(countsTowardCap({ status: 429, code: null, message: '' })).toBe(true);
+  expect(countsTowardCap({ status: 406, code: 'PGRST106', message: '' })).toBe(true);
+  expect(countsTowardCap({ status: null, code: null, message: 'Network request failed' })).toBe(false);
+  expect(countsTowardCap({ status: 0, code: null, message: '' })).toBe(false);
+  expect(countsTowardCap({ status: 401, code: null, message: '' })).toBe(false);
+  expect(countsTowardCap({ status: 400, code: '23514', message: '' })).toBe(false); // permanent, not "capped"
+});
+
+test('a server error on the last allowed attempt dead-letters the row and the flush continues', async () => {
+  const db = await dbWith([['workers', 'w1', 'update'], ['workers', 'w2']]);
+  await db.runAsync("update sync_queue set attempts = ? where row_id = 'w1'", [MAX_SERVER_ATTEMPTS - 1]);
+  await db.runAsync("insert or replace into sync_cursor (table_name, cursor) values ('workers', ?)", [JSON.stringify({ ts: 't', id: 'x' })]);
+  const r = await flushPush(db, remote((_, id) => (id === 'w1' ? { status: 503, code: null, message: 'down' } : null)), async () => true);
+  expect(r).toEqual({ pushed: 1, dead: 1, stopped: false });
+  expect((await listDead(db)).map((d) => d.row_id)).toEqual(['w1']);
+  expect(await db.getFirstAsync("select 1 from sync_cursor where table_name = 'workers'")).toBeNull();
+});
+
+test('network errors never dead-letter, however many attempts', async () => {
+  const db = await dbWith([['workers', 'w1']]);
+  await db.runAsync("update sync_queue set attempts = 500 where row_id = 'w1'");
+  const r = await flushPush(db, remote(() => ({ status: null, code: null, message: 'Network request failed' })), async () => true);
+  expect(r.stopped).toBe(true);
+  expect(await pending(db)).toEqual(['w1']);
 });
