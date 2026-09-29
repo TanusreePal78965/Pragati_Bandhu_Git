@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_access.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(22);
 
 -- fixtures (as postgres)
 insert into auth.users (id, email) values
@@ -23,6 +23,9 @@ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_pai
   ('d5000000-0000-0000-0000-00000000000a', 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-02', 'd0000000-0000-0000-0000-00000000000a', 'owner');
 insert into public.app_sessions (session_id, user_id, app) values
   ('d6000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000051', 'chukta');
+insert into auth.users (id, email) values ('d0000000-0000-0000-0000-000000000052', 'staff-2@test.internal');
+insert into chukta.staff_users (id, property_id, name, auth_user_id, pin_hash, pin_salt, is_active) values
+  ('d3000000-0000-0000-0000-000000000002', 'd2000000-0000-0000-0000-00000000000a', 'Old', 'd0000000-0000-0000-0000-000000000052', 'h', 's', false);
 
 -- hook: staff claims
 select is(
@@ -33,6 +36,10 @@ select is(
   public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000051',
     'claims', jsonb_build_object('session_id', 'd6000000-0000-0000-0000-000000000001', 'role', 'authenticated'))) -> 'claims' ->> 'property_id',
   'd2000000-0000-0000-0000-00000000000a', 'hook adds property_id for staff');
+select ok(
+  (public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000052',
+    'claims', jsonb_build_object('role', 'authenticated'))) -> 'claims' ->> 'app_role') is null,
+  'inactive staff gets no staff claims');
 
 -- owner A
 set local role authenticated;
@@ -48,12 +55,18 @@ select throws_ok($$ insert into chukta.workers (id, property_id, name, pay_basis
 select throws_ok($$ delete from chukta.workers where id = 'd4000000-0000-0000-0000-00000000000a' $$, '42501', null, 'owner cannot delete');
 select lives_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, voids_id, created_by_role)
   values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-03', 'd5000000-0000-0000-0000-00000000000a', 'owner') $$, 'owner can void');
+select throws_ok($$ update chukta.workers set property_id = 'd2000000-0000-0000-0000-00000000000b' where id = 'd4000000-0000-0000-0000-00000000000a' $$,
+  '42501', null, 'owner cannot move a worker to another property');
+select throws_ok($$ update chukta.workers set created_by = 'd0000000-0000-0000-0000-00000000000b' where id = 'd4000000-0000-0000-0000-00000000000a' $$,
+  '42501', null, 'audit columns are not updatable');
 
 -- staff of PA
 select set_config('request.jwt.claims', json_build_object('sub', 'd0000000-0000-0000-0000-000000000051', 'role', 'authenticated',
   'app', 'chukta', 'app_role', 'staff', 'property_id', 'd2000000-0000-0000-0000-00000000000a')::text, true);
 select is((select count(*)::int from chukta.properties), 1, 'staff sees only own property');
 select is((select count(*)::int from chukta.workers where property_id = 'd2000000-0000-0000-0000-00000000000b'), 0, 'staff sees no other property workers');
+select ok((select count(*) from chukta.workers where property_id = 'd2000000-0000-0000-0000-00000000000a') >= 1,
+  'staff sees own property workers');
 select lives_ok($$ insert into chukta.attendance_entries (id, property_id, worker_id, date, status, created_by_role)
   values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', '2026-09-04', 'absent', 'staff') $$, 'staff marks attendance');
 select throws_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, voids_id, created_by_role)
@@ -70,6 +83,10 @@ select is((select count(*)::int from chukta.workers), 0, 'shopai token sees no c
 reset role;
 set local role anon;
 select throws_ok($$ select 1 from chukta.workers $$, '42501', null, 'anon has no access');
+reset role;
+set local role authenticated;
+select throws_ok($$ select chukta.record_pin_failure(array['d3000000-0000-0000-0000-000000000001'::uuid]) $$,
+  '42501', null, 'clients cannot call record_pin_failure');
 
 select * from finish();
 rollback;

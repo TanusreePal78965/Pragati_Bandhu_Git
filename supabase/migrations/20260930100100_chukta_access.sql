@@ -27,13 +27,18 @@ language sql stable set search_path = '' as $$ select p_created_by = auth.uid() 
 revoke all on schema chukta from anon;
 revoke all on all tables in schema chukta from anon, authenticated;
 grant usage on schema chukta to authenticated, service_role, supabase_auth_admin;
-grant select, insert, update on chukta.properties, chukta.workers to authenticated;
+grant select, insert on chukta.properties, chukta.workers to authenticated;
+grant update (name, address, is_active, default_pay_basis, default_attendance_mode, shift_hours, weekly_off, monthly_divisor)
+  on chukta.properties to authenticated;
+grant update (name, phone, pay_basis, rate_paise, joining_date, status, left_date, attendance_mode, shift_hours,
+  weekly_off_override, weekly_off, monthly_divisor) on chukta.workers to authenticated;
 grant select, insert on chukta.attendance_entries, chukta.advance_entries, chukta.wage_payments to authenticated;
 grant select (id, property_id, name, auth_user_id, is_active, created_at, server_updated_at) on chukta.staff_users to authenticated;
 grant all on all tables in schema chukta to service_role;
 grant execute on function chukta.jwt_role(), chukta.is_owner_of(uuid), chukta.is_staff_of(uuid),
   chukta.is_member_of(uuid), chukta.is_own_write(uuid, text) to authenticated;
 alter default privileges for role postgres in schema chukta revoke all on tables from anon;
+alter default privileges for role postgres in schema chukta revoke execute on functions from public;
 
 -- 3. RLS.
 alter table chukta.properties enable row level security;
@@ -126,3 +131,11 @@ language sql security definer set search_path = '' as $$
 $$;
 revoke execute on function chukta.record_pin_failure(uuid[]) from public, anon, authenticated;
 grant execute on function chukta.record_pin_failure(uuid[]) to service_role;
+
+-- 6. Pull-sync cursor indexes.
+create index if not exists idx_chukta_properties_sync on chukta.properties(server_updated_at, id);
+create index if not exists idx_chukta_staff_sync on chukta.staff_users(server_updated_at, id);
+create index if not exists idx_chukta_workers_sync on chukta.workers(server_updated_at, id);
+create index if not exists idx_chukta_attendance_sync on chukta.attendance_entries(server_updated_at, id);
+create index if not exists idx_chukta_advance_sync on chukta.advance_entries(server_updated_at, id);
+create index if not exists idx_chukta_payments_sync on chukta.wage_payments(server_updated_at, id);
