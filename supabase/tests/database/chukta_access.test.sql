@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_access.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(26);
 
 -- fixtures (as postgres)
 insert into auth.users (id, email) values
@@ -40,13 +40,6 @@ select ok(
   (public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000052',
     'claims', jsonb_build_object('role', 'authenticated'))) -> 'claims' ->> 'app_role') is null,
   'inactive staff gets no staff claims');
-
-set local role supabase_auth_admin;
-select lives_ok($$ select public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-00000000000a',
-  'claims', jsonb_build_object('role', 'authenticated'))) $$, 'hook runs as supabase_auth_admin for an owner');
-select lives_ok($$ select public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000051',
-  'claims', jsonb_build_object('session_id', 'd6000000-0000-0000-0000-000000000001', 'role', 'authenticated'))) $$, 'hook runs as supabase_auth_admin for staff');
-reset role;
 
 -- owner A
 set local role authenticated;

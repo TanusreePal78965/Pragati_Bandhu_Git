@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_schema.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(13);
 
 select has_schema('chukta', 'chukta schema exists');
 select has_table('chukta', 'properties', 'properties');
@@ -45,6 +45,11 @@ select throws_ok(
 update chukta.workers set server_updated_at = '2000-01-01', name = 'Ram K' where id = 'c3000000-0000-0000-0000-000000000001';
 select ok((select server_updated_at > '2001-01-01' from chukta.workers where id = 'c3000000-0000-0000-0000-000000000001'),
   'trigger stamps server_updated_at on update');
+
+select lives_ok(
+  $$ insert into chukta.attendance_entries (id, property_id, worker_id, date, status, created_by, created_by_role)
+     values (gen_random_uuid(), 'c2000000-0000-0000-0000-000000000001', 'c3000000-0000-0000-0000-000000000001', '2026-09-04', 'absent', 'c9000000-0000-0000-0000-000000000009', 'owner') $$,
+  'valid attendance insert passes the consistency trigger');
 
 select * from finish();
 rollback;
