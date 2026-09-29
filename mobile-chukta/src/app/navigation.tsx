@@ -8,6 +8,9 @@ import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { TodayScreen } from '../screens/TodayScreen';
+import { WorkerDetailScreen } from '../screens/WorkerDetailScreen';
+import { WorkerFormScreen } from '../screens/WorkerFormScreen';
+import { WorkersScreen } from '../screens/WorkersScreen';
 import { colors } from '../ui/theme';
 import type { RootStackParamList, TabParamList } from './routes';
 import { useSession } from './session';
@@ -23,6 +26,7 @@ function Tabs() {
   return (
     <Tab.Navigator screenOptions={{ tabBarActiveTintColor: colors.primary }}>
       <Tab.Screen name="Today" component={TodayScreen} options={{ title: t('tabs.today'), tabBarIcon: icon('calendar-outline') }} />
+      <Tab.Screen name="Workers" component={WorkersScreen} options={{ title: t('tabs.workers'), tabBarIcon: icon('people-outline') }} />
       {/* TABS */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
@@ -39,6 +43,8 @@ export function SessionNavigator() {
         <Stack.Screen name="Language" component={LanguageRoute} options={{ title: t('language.title') }} />
         <Stack.Screen name="Properties" component={PropertiesScreen} options={{ title: t('properties.title') }} />
         <Stack.Screen name="PropertyForm" component={PropertyFormScreen} />
+        <Stack.Screen name="WorkerDetail" component={WorkerDetailScreen} />
+        <Stack.Screen name="WorkerForm" component={WorkerFormScreen} />
         {/* ROUTES */}
       </Stack.Navigator>
     </NavigationContainer>
