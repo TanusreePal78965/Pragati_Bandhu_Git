@@ -1,25 +1,98 @@
 {
-  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry" },
+  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry", "loading": "Loading…", "confirm": "Confirm", "edit": "Edit", "add": "Add", "needsInternet": "Needs internet." },
   "language": { "title": "Choose language", "en": "English", "bn": "বাংলা", "hi": "हिन्दी" },
+  "months": {
+    "long": { "m1": "January", "m2": "February", "m3": "March", "m4": "April", "m5": "May", "m6": "June", "m7": "July", "m8": "August", "m9": "September", "m10": "October", "m11": "November", "m12": "December" },
+    "short": { "m1": "Jan", "m2": "Feb", "m3": "Mar", "m4": "Apr", "m5": "May", "m6": "Jun", "m7": "Jul", "m8": "Aug", "m9": "Sep", "m10": "Oct", "m11": "Nov", "m12": "Dec" }
+  },
+  "weekdays": { "d0": "Sun", "d1": "Mon", "d2": "Tue", "d3": "Wed", "d4": "Thu", "d5": "Fri", "d6": "Sat", "none": "None" },
   "auth": {
+    "login": {
+      "title": "Log in", "owner": "Owner", "staff": "Staff", "phone": "Mobile number", "password": "Password",
+      "ownerPhone": "Owner's mobile number", "pin": "PIN", "submit": "Log in", "forgot": "Forgot password?",
+      "register": "New to Chukta? Register on the website", "sessionEnded": "You were logged out. Please log in again."
+    },
     "error": {
       "invalidCredentials": "Wrong phone number or password.",
       "passwordResetRequired": "Please set a new password first on the Pragati Bandhu website (Forgot password).",
       "notSubscribed": "This number is not registered for Chukta. Register on the website under Chukta.",
       "wrongPin": "Wrong PIN.",
-      "tooManyAttempts": "Too many wrong PINs. Staff login is paused for a while — try later or ask the owner.",
+      "tooManyAttempts": "Too many wrong PINs. Staff login is paused — ask the owner to unlock it in Settings, or try later.",
       "ambiguousPin": "This PIN is used at two places. Ask the owner to change it.",
       "staffNotSubscribed": "The owner's Chukta account is not active.",
       "network": "No internet. Please try again.",
       "unknown": "Something went wrong. Please try again."
     }
   },
+  "tabs": { "today": "Today", "workers": "Workers", "advances": "Advances", "settings": "Settings" },
+  "properties": {
+    "title": "Properties", "add": "Add property", "edit": "Property settings", "name": "Property name", "address": "Address (optional)",
+    "archived": "Archived", "archive": "Archive property", "archiveConfirm": "Staff of this property will be logged out and lose access. Continue?",
+    "restore": "Restore", "restoreNote": "After restoring, set a new PIN for each staff member before they can log in again.",
+    "empty": "Add your first property to start.", "defaults": "Settings for workers", "switch": "Switch property",
+    "nameRequired": "Enter a property name.", "waitingForSync": "Loading your properties…", "choose": "Choose a property"
+  },
+  "fields": { "payBasis": "Pay basis", "attendanceMode": "Attendance", "shiftHours": "Shift hours", "weeklyOff": "Weekly off", "monthlyDivisor": "Monthly salary per day", "shiftInvalid": "Shift hours must be more than 0 and at most 24." },
+  "payBasis": { "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly" },
+  "rateLabel": { "hourly": "Rate per hour (₹)", "daily": "Rate per day (₹)", "weekly": "Rate per week (₹)", "monthly": "Salary per month (₹)" },
+  "rateSuffix": { "hourly": "/hour", "daily": "/day", "weekly": "/week", "monthly": "/month" },
+  "attendanceMode": { "day": "By day", "hours": "By hours" },
+  "divisor": { "calendar": "Days in the month", "26": "26 working days", "30": "30 days" },
+  "today": {
+    "title": "Attendance", "hint": "Everyone is present unless you mark otherwise.", "present": "Present", "halfDay": "Half day", "absent": "Absent",
+    "hours": "Hours", "hoursValue": "{{hours}} h", "hoursPrompt": "Hours worked", "hoursInvalid": "Enter hours between 0 and 24.",
+    "weeklyOff": "Weekly off", "selected": "{{count}} selected", "markSelected": "Mark selected as", "clearSelection": "Clear",
+    "noWorkers": "No workers yet. Add workers in the Workers tab.", "selectHint": "Long-press to select several workers."
+  },
+  "workers": { "add": "Add worker", "due": "Wage due", "advance": "Advance", "overpaid": "Overpaid", "showLeft": "Show workers who left", "left": "Left", "empty": "No workers yet. Add one." },
+  "worker": {
+    "due": "Wage due", "earned": "Earned", "paid": "Paid", "advance": "Advance outstanding", "howCalculated": "How this is calculated",
+    "calendar": "Attendance", "history": "Money entries", "correct": "Correct",
+    "correctConfirm": "This entry will be cancelled and removed from the totals. Continue?", "correction": "Correction", "cancelled": "Cancelled",
+    "noHistory": "No money entries yet.", "joined": "Joined {{date}}", "leftOn": "Left {{date}}", "prevMonth": "Previous month", "nextMonth": "Next month",
+    "notFound": "Worker not found."
+  },
+  "entryType": { "advance": "Advance", "repayment": "Repayment", "writeoff": "Write-off", "payment": "Wage payment" },
+  "mode": { "cash": "Cash", "upi": "UPI", "bank": "Bank" },
+  "workerForm": {
+    "titleNew": "Add worker", "titleEdit": "Edit worker", "name": "Name", "phone": "Phone (optional)", "joiningDate": "Joining date",
+    "overrides": "Different from property settings", "useDefault": "Property setting", "ownWeeklyOff": "Own weekly off",
+    "hasLeft": "Worker has left", "leftDate": "Last working day",
+    "nameRequired": "Enter a name.", "rateInvalid": "Enter an amount above ₹0.", "phoneInvalid": "Enter a 10-digit mobile number.",
+    "leftBeforeJoin": "Last working day can't be before joining."
+  },
+  "money": { "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.", "amountInvalid": "Enter an amount above ₹0." },
+  "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding." },
+  "settings": {
+    "property": "Property", "staff": "Staff", "addStaff": "Add staff", "staffHelp": "Staff log in with your mobile number ({{phone}}) and their own PIN.",
+    "unlock": "Unlock staff login", "unlocked": "Staff login unlocked.", "language": "Language", "sync": "Sync",
+    "pending": "{{count}} waiting to sync", "lastSync": "Last synced {{time}}", "neverSynced": "Not synced yet", "syncing": "Syncing…",
+    "syncNow": "Sync now", "issues": "{{count}} entries didn't sync", "logout": "Log out",
+    "logoutConfirm": "{{count}} entries on this phone haven't synced yet. They will sync when you log in again on this phone. Log out?",
+    "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}"
+  },
+  "staff": {
+    "titleNew": "Add staff", "titleEdit": "Edit staff", "name": "Name", "pin": "PIN (4–6 digits)", "pinConfirm": "Repeat PIN",
+    "newPin": "New PIN (leave empty to keep)", "active": "Can log in", "inactive": "Deactivated",
+    "error": {
+      "nameRequired": "Enter a name.", "pinInvalid": "PIN must be 4–6 digits.", "pinMismatch": "PINs don't match.",
+      "pinInUse": "Another staff member already uses this PIN.", "reactivateNeedsPin": "Set a new PIN to reactivate.",
+      "network": "No internet. Staff changes need internet.", "sessionExpired": "Please log in again.", "unknown": "Could not save. Please try again."
+    }
+  },
+  "syncIssues": {
+    "title": "Entries that didn't sync", "explain": "The server rejected these changes. Retry after fixing the cause, or discard them from this phone.",
+    "retry": "Retry", "discard": "Discard", "discardConfirm": "Discarded entries are removed from this phone. Continue?", "count": "{{count}} entries",
+    "empty": "Everything is synced."
+  },
+  "tables": { "properties": "Property", "staff_users": "Staff", "workers": "Worker", "attendance_entries": "Attendance", "advance_entries": "Advance", "wage_payments": "Payment" },
   "ledger": {
     "explain": {
       "hourly": "{{hours}} hours × {{rate}}",
       "daily": "{{days}} days × {{rate}}",
       "weekly": "{{days}} days × {{rate}} ÷ 7",
-      "monthly": "{{month}}: {{base}} − {{deductionDays}} days × {{perDay}}"
+      "monthly": "{{month}}: {{base}} − {{deductionDays}} days × {{perDay}}",
+      "monthlyPartial": "{{month}} ({{eligibleDays}} days): {{base}} − {{deductionDays}} days × {{perDay}}"
     }
   }
 }
