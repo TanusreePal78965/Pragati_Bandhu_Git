@@ -29,3 +29,7 @@ export async function listProperties(db: SqlDb): Promise<Property[]> {
 export async function getProperty(db: SqlDb, id: string): Promise<Property | null> {
   return db.getFirstAsync<Property>('select * from properties where id = ?', [id]);
 }
+
+export async function listAllProperties(db: SqlDb): Promise<Property[]> {
+  return db.getAllAsync<Property>('select * from properties order by is_active desc, name');
+}

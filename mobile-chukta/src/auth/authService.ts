@@ -3,7 +3,7 @@ import type { Identity } from './identity';
 export type AuthErrorKey =
   | 'auth.error.invalidCredentials' | 'auth.error.passwordResetRequired' | 'auth.error.notSubscribed'
   | 'auth.error.wrongPin' | 'auth.error.tooManyAttempts' | 'auth.error.ambiguousPin'
-  | 'auth.error.network' | 'auth.error.unknown';
+  | 'auth.error.staffNotSubscribed' | 'auth.error.network' | 'auth.error.unknown';
 
 export class AuthError extends Error {
   constructor(public key: AuthErrorKey) {
@@ -31,6 +31,7 @@ const STAFF_ERRORS: Record<string, AuthErrorKey> = {
   wrong_pin: 'auth.error.wrongPin',
   too_many_attempts: 'auth.error.tooManyAttempts',
   ambiguous_pin: 'auth.error.ambiguousPin',
+  not_subscribed: 'auth.error.staffNotSubscribed',
 };
 
 export function createAuthService(deps: AuthDeps, timeoutMs = 3000) {

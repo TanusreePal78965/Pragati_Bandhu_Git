@@ -95,3 +95,8 @@ test('logout signs out locally, clears stored session and identity', async () =>
   await createAuthService(d).logout();
   expect(log).toEqual(['signOut', 'clearStored', 'save:null']);
 });
+
+test('staff login: owner shop not subscribed maps to auth.error.staffNotSubscribed', async () => {
+  const { d } = deps({ post: async () => ({ status: 403, body: { error: 'not_subscribed' } }) });
+  await expect(createAuthService(d).loginStaff('9800000001', '4821')).rejects.toMatchObject({ key: 'auth.error.staffNotSubscribed' });
+});

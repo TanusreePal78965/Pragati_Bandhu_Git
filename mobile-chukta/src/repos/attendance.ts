@@ -23,3 +23,8 @@ export async function listAttendance(db: SqlDb, workerId: string, from: string, 
   return db.getAllAsync<AttendanceEntry>(
     'select * from attendance_entries where worker_id = ? and date between ? and ? order by created_at, id', [workerId, from, to]);
 }
+
+export async function listAttendanceForDate(db: SqlDb, propertyId: string, date: string): Promise<AttendanceEntry[]> {
+  return db.getAllAsync<AttendanceEntry>(
+    'select * from attendance_entries where property_id = ? and date = ? order by created_at, id', [propertyId, date]);
+}

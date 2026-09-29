@@ -9,6 +9,7 @@
       "wrongPin": "Wrong PIN.",
       "tooManyAttempts": "Too many wrong PINs. Staff login is paused for a while — try later or ask the owner.",
       "ambiguousPin": "This PIN is used at two places. Ask the owner to change it.",
+      "staffNotSubscribed": "The owner's Chukta account is not active.",
       "network": "No internet. Please try again.",
       "unknown": "Something went wrong. Please try again."
     }
