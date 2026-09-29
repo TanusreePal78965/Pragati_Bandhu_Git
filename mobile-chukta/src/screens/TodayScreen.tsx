@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { sessionToday, useLocalData, useSession } from '../app/session';
+import { effectiveAttendance } from '../domain/attendance';
 import type { AttendanceStatus, Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendanceForDate, markAttendance } from '../repos/attendance';
@@ -36,20 +37,37 @@ function TodayBody({ property }: { property: Property }) {
     async (s) => buildTodayRows(await listWorkers(s.db, property.id, true), property, await listAttendanceForDate(s.db, property.id, date), date),
     [property, date],
   );
+  const writing = useRef(false);
 
   async function mark(workerIds: string[], status: AttendanceStatus, hours?: number) {
-    let wrote = false;
-    for (const id of workerIds) {
-      const row = rows?.find((r) => r.worker.id === id);
-      if (!row || row.isOff) continue;
-      const cur = row.entry;
-      const same = cur ? cur.status === status && (status !== 'hours' || cur.hours === hours) : status === 'present';
-      if (same) continue;
-      await markAttendance(session.repo, { propertyId: property.id, workerId: id, date, status, hours });
-      wrote = true;
+    if (writing.current) return;
+    writing.current = true;
+    try {
+      // Read fresh from SQLite (not the `rows` closure) so a same-status write during a
+      // still-in-flight write, or a stale render, can't slip past the dedupe check.
+      const fresh = await listAttendanceForDate(session.db, property.id, date);
+      const byWorker = new Map<string, typeof fresh>();
+      for (const e of fresh) {
+        const list = byWorker.get(e.worker_id) ?? [];
+        list.push(e);
+        byWorker.set(e.worker_id, list);
+      }
+      let wrote = false;
+      for (const id of workerIds) {
+        const row = rows?.find((r) => r.worker.id === id);
+        if (!row || row.isOff) continue;
+        const list = byWorker.get(id);
+        const cur = list ? effectiveAttendance(list).get(date) ?? null : null;
+        const same = cur ? cur.status === status && (status !== 'hours' || cur.hours === hours) : status === 'present';
+        if (same) continue;
+        await markAttendance(session.repo, { propertyId: property.id, workerId: id, date, status, hours });
+        wrote = true;
+      }
+      setSelected(new Set());
+      if (wrote) session.afterWrite();
+    } finally {
+      writing.current = false;
     }
-    setSelected(new Set());
-    if (wrote) session.afterWrite();
   }
 
   const toggle = (id: string) => {
@@ -74,7 +92,7 @@ function TodayBody({ property }: { property: Property }) {
         </Card>
       ) : null}
       {rows.map((row) => (
-        <AttendanceRow key={row.worker.id} row={row} selected={selected.has(row.worker.id)} onToggle={() => toggle(row.worker.id)}
+        <AttendanceRow key={`${date}:${row.worker.id}`} row={row} selected={selected.has(row.worker.id)} onToggle={() => toggle(row.worker.id)}
           onMark={(st, h) => void mark([row.worker.id], st, h)} />
       ))}
     </Screen>
@@ -88,6 +106,15 @@ function AttendanceRow({ row, selected, onToggle, onMark }: {
   const id = row.worker.id;
   const [hoursText, setHoursText] = useState(row.entry?.status === 'hours' ? String(row.entry.hours) : '');
   const [hoursError, setHoursError] = useState(false);
+  // Resyncs from the entry rather than relying only on the initializer above: `rows` in
+  // TodayBody keeps its previous (wrong-date) value until the reload for a new `date`
+  // resolves, so the key-based remount below can still mount with a stale entry for one
+  // render. This effect corrects the field once the real entry for the current row arrives.
+  useEffect(() => {
+    setHoursText(row.entry?.status === 'hours' ? String(row.entry.hours) : '');
+    setHoursError(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.entry?.status, row.entry?.hours]);
   const current: AttendanceStatus | null = row.entry ? row.entry.status : 'present';
   const hoursMode = row.settings.attendanceMode === 'hours';
   const subtitle = row.isOff

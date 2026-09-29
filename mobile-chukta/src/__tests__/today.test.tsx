@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
 import { upsertLocal } from '../repos/write';
 import { TodayScreen } from '../screens/TodayScreen';
@@ -31,7 +31,7 @@ test('pressing the status the day already has writes nothing', async () => {
   const s = await seeded();
   renderScreen('Tabs', TodayScreen, s);
   fireEvent.press(await screen.findByTestId('status-w1-present'));
-  await new Promise((r) => setTimeout(r, 20));
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
   expect(await rowsFor(s, 'w1')).toEqual([]);
 });
 
@@ -72,4 +72,25 @@ test('shows the effective status (latest entry wins) after a reload', async () =
   await upsertLocal(s.db, 'attendance_entries', att('2026-09-07', 'half_day', { worker_id: 'w1', created_at: '2026-09-07T09:00:00Z' }));
   renderScreen('Tabs', TodayScreen, s);
   await waitFor(() => expect(screen.getByTestId('status-w1-half_day').props.accessibilityState.selected).toBe(true));
+});
+
+test('the hours field does not carry a stale value across a date change', async () => {
+  const s = await seeded();
+  await upsertLocal(s.db, 'attendance_entries', att('2026-09-07', 'hours', { worker_id: 'w2', hours: 5.5 }));
+  renderScreen('Tabs', TodayScreen, s);
+  await waitFor(() => expect(screen.getByTestId('hours-w2').props.value).toBe('5.5'));
+  fireEvent.press(screen.getByTestId('today-date'));
+  fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 5));
+  await waitFor(() => expect(screen.getByTestId('hours-w2').props.value).toBe(''));
+});
+
+test('double-pressing the same status before the write settles writes only one entry', async () => {
+  const s = await seeded();
+  renderScreen('Tabs', TodayScreen, s);
+  const btn = await screen.findByTestId('status-w1-absent');
+  fireEvent.press(btn);
+  fireEvent.press(btn);
+  await waitFor(async () => expect(await rowsFor(s, 'w1')).toHaveLength(1));
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  expect((await rowsFor(s, 'w1')).map((r) => r.status)).toEqual(['absent']);
 });
