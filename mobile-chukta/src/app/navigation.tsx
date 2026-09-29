@@ -7,6 +7,7 @@ import { LanguageRoute } from '../screens/LanguageScreen';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { TodayScreen } from '../screens/TodayScreen';
 import { colors } from '../ui/theme';
 import type { RootStackParamList, TabParamList } from './routes';
 import { useSession } from './session';
@@ -21,6 +22,7 @@ function Tabs() {
   const t = useT();
   return (
     <Tab.Navigator screenOptions={{ tabBarActiveTintColor: colors.primary }}>
+      <Tab.Screen name="Today" component={TodayScreen} options={{ title: t('tabs.today'), tabBarIcon: icon('calendar-outline') }} />
       {/* TABS */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
