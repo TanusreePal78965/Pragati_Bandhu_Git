@@ -82,3 +82,6 @@ skills-lock.json
 
 # Superpowers SDD scratch
 .superpowers/
+
+# Supabase CLI per-machine state
+supabase/.temp/
