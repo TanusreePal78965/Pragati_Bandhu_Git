@@ -112,10 +112,10 @@ A trigger rejects a `voids_id` that points at a row in another property or at a 
 - `paidPaise` (Σ non-voided payments);
 - `wageDuePaise = earned − paid` (may be negative, meaning overpaid);
 - `advanceOutstandingPaise = Σ advance − Σ repayment − Σ writeoff` (non-voided);
-- `explanation`: localized plain-words lines, e.g. "5.5 days × ₹500", "September: ₹30,000 − 1 day × ₹1,000 (÷30)".
+- `explanation`: localized plain-words lines, e.g. "4.5 days × ₹500", "September: ₹30,000 − 1 day × ₹1,000 (÷30)".
 
 **Required test cases:**
-- The worked example (daily ₹500, Sunday off, Sep 1–7, one absence and one 4-of-8-hour day → ₹2,750).
+- The worked example (daily ₹500, Sunday off, Sep 1–7, one absence and one 4-of-8-hour day → ₹2,250).
 - A full month with no absences = exactly the salary, for each divisor.
 - Joining mid-month.
 - Leaving mid-month.
