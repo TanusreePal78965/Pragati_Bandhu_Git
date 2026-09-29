@@ -23,7 +23,10 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
   const [propertyId, setPropertyIdState] = useState<string | null>(identity.kind === 'staff' ? identity.propertyId : null);
   const [version, setVersion] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(IDLE_STATUS);
-  const loggingOut = useRef(false);
+  // True once the session is ending for any reason (user logout or a revoked SIGNED_OUT), so a later
+  // SIGNED_OUT — e.g. the one auth-js always emits from signOut({ scope: 'local' }) during a revoked
+  // logout — can never fire onLoggedOut a second time while this provider is still mounted.
+  const ending = useRef(false);
   const onLoggedOutRef = useRef(onLoggedOut);
   onLoggedOutRef.current = onLoggedOut;
 
@@ -51,7 +54,10 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
       cleanups.push(() => appState.remove());
       // A revoked session (staff deactivated, PIN changed, property archived) fails its next refresh → SIGNED_OUT.
       const { data } = supabase.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT' && !loggingOut.current) onLoggedOutRef.current('revoked');
+        if (event === 'SIGNED_OUT' && !ending.current) {
+          ending.current = true;
+          onLoggedOutRef.current('revoked');
+        }
       });
       cleanups.push(() => data.subscription.unsubscribe());
       setReady({ db, engine: e });
@@ -88,7 +94,7 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
         engine.runSoon();
       },
       logout: async () => {
-        loggingOut.current = true;
+        ending.current = true;
         await authService.logout();
         onLoggedOutRef.current('user');
       },
