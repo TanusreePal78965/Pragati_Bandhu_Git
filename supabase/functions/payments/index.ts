@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10'
 import { jwtVerify, createRemoteJWKSet, SignJWT } from 'https://deno.land/x/jose@v5.2.4/index.ts'
 import { parseApp } from '../_shared/account.ts'
 import { extendExpiry } from './expiry.ts'
+import { type ChuktaCountRow, withChuktaCounts } from './chuktaCounts.ts'
 
 const SHOP_ADMIN_COLUMNS =
   'id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, active_device_id, created_at, last_synced_at, allow_out_of_stock_billing, auth_user_id'
@@ -208,8 +209,10 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false })
 
       if (error) throw error
+      const { data: counts, error: countsError } = await supabase.rpc('admin_chukta_counts')
+      if (countsError) throw countsError
 
-      return new Response(JSON.stringify(shops), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(withChuktaCounts((shops ?? []) as { id: string }[], (counts ?? []) as ChuktaCountRow[])), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // === ADMIN: SHOP DETAILS & METRICS ===
