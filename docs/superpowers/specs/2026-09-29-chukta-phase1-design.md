@@ -56,7 +56,8 @@ The columns below are on every table unless noted: `id uuid pk` (generated on th
 | Table | Columns (beyond common) | Rules |
 |---|---|---|
 | `properties` | `shop_id uuid → public.shops`, `name`, `address`, `is_active bool`, **defaults:** `default_pay_basis`, `default_attendance_mode ('day','hours')`, `shift_hours numeric(4,2) default 8`, `weekly_off smallint null (0=Sun..6=Sat; null = none) default 0`, `monthly_divisor ('calendar','26','30') default 'calendar'` | No `property_id`, `created_by_role` or `created_by` columns (the owner creates it). Archived, never deleted |
-| `staff_users` | `name`, `auth_user_id uuid unique → auth.users`, `pin_hash`, `pin_salt`, `failed_attempts int default 0`, `locked_until timestamptz`, `is_active bool` | `pin_hash`, `pin_salt`, `failed_attempts` and `locked_until` are never granted to clients. Staff are created and edited only by the edge function |
+| `staff_users` | `name`, `auth_user_id uuid unique → auth.users`, `pin_hash`, `pin_salt`, `is_active bool` | `pin_hash` and `pin_salt` are never granted to clients. Staff are created and edited only by the edge function |
+| `shop_pin_throttle` | `shop_id pk, window_start, attempts, lockouts, locked_until` | Service role only. Per-shop staff-login throttle |
 | `workers` | `name`, `phone`, `pay_basis ('hourly','daily','weekly','monthly')`, `rate_paise bigint > 0`, `joining_date date`, `status ('active','left')`, `left_date date`, **overrides (null = use property default):** `attendance_mode`, `shift_hours`, `weekly_off_override bool default false` + `weekly_off smallint null`, `monthly_divisor` | `pay_basis='hourly'` forces `attendance_mode='hours'`. Archived (`status='left'`), never deleted |
 | `attendance_entries` | `worker_id`, `date date`, `status ('absent','half_day','present','hours')`, `hours numeric(4,2) null`, `note` | Only ever added to. Effective status per `(worker_id, date)` = the row with the greatest `(created_at, id)`. `status='hours'` requires `hours` between 0 and 24 |
 | `advance_entries` | `worker_id`, `type ('advance','repayment','writeoff')`, `amount_paise bigint > 0`, `date`, `mode ('cash','upi','bank') null`, `note`, `voids_id uuid null → advance_entries(id)` | `note` is required when `type='writeoff'`. A voiding row copies `type`/`amount_paise` from the target, and the target is then excluded from all sums |
@@ -129,8 +130,8 @@ A trigger rejects a `voids_id` that points at a row in another property or at a 
 | Function | Caller | Behaviour |
 |---|---|---|
 | `login` (Phase 0) | Owner app | `app: 'chukta'`. Chukta handles `not_subscribed` and `password_reset_required` |
-| `chukta-staff` | Owner (token `app='chukta'`, owner role) | `POST create {propertyId, name, pin}`: checks the property belongs to the caller's shop and the PIN is 4–6 digits and unique among the property's active staff; creates the auth user `st-<staffId>@<AUTH_EMAIL_DOMAIN>` (random password, never stored); stores the PBKDF2 PIN hash. `POST update {staffId, name?, pin?, isActive?}`: changing the PIN or deactivating revokes all of that staff member's sessions (`revoke_user_sessions`) |
-| `chukta-login-staff` | Staff app (pre-login) | `{ownerPhone, pin, deviceId}` → finds the shop by phone, then the active staff of all its active properties; the PIN must match exactly one staff member who is not locked. On a mismatch, increments `failed_attempts` for every candidate that is not locked (5 → `locked_until = now()+15 min`) and returns a generic 401. On a match: resets the counter, runs `admin.generateLink({type:'magiclink', email})` and redeems it via `verifyOtp({type:'magiclink', token_hash})` for a session (no email is sent), inserts `app_sessions(app='chukta')`, refreshes once for the claims, and returns `{session, staff:{id,name}, property:{id,name}}` |
+| `chukta-staff` | Owner (token `app='chukta'`, owner role) | `POST create {propertyId, name, pin}`: checks the property belongs to the caller's shop. PIN is 4–6 digits, unique among the shop's active staff (all properties). Reactivating a staff member requires a new PIN. Creates the auth user `st-<staffId>@<AUTH_EMAIL_DOMAIN>` (random password, never stored); stores the PBKDF2 PIN hash. `POST update {staffId, name?, pin?, isActive?}`: changing the PIN or deactivating revokes all of that staff member's sessions (`revoke_user_sessions`) |
+| `chukta-login-staff` | Staff app (pre-login) | `{ownerPhone, pin, deviceId}` → finds the shop by phone, then the active staff of all its active properties; the PIN must match exactly one staff member. Atomically reserves an attempt for the shop (`chukta.reserve_pin_attempt`) **before** any PIN work: 10 attempts per 15 minutes per shop; the 11th locks staff login for that shop for 15 min × 2^(n−1) (max 16 h). Success clears it (`chukta.clear_pin_attempts`). Locked → 429 `too_many_attempts`. On a match: runs `admin.generateLink({type:'magiclink', email})` and redeems it via `verifyOtp({type:'magiclink', token_hash})` for a session (no email is sent), inserts `app_sessions(app='chukta')`, refreshes once for the claims, and returns `{session, staff:{id,name}, property:{id,name}}` |
 
 `verify_jwt=false` for `chukta-login-staff`. `chukta-staff` verifies the caller's token inside the function, using `auth.getUser(jwt)` and the claims.
 
@@ -187,7 +188,7 @@ A trigger rejects a `voids_id` that points at a row in another property or at a 
 |---|---|
 | Owner not subscribed to Chukta | Login screen: "Register for Chukta at `<site>/chukta`" |
 | Pre-Phase-0 account | Login screen: link to Forgot password |
-| Wrong staff PIN / locked | Generic "Wrong PIN" / "Too many attempts, try in 15 min" |
+| Wrong staff PIN / locked | Generic "Wrong PIN"; after 10 wrong tries in 15 min the shop's staff login locks (escalating); the owner is unaffected |
 | Staff deactivated or PIN changed | Their sessions are revoked; the next refresh fails → back to login |
 | Push permanent failure | The row is marked dead and listed in Settings, never silently dropped |
 | Two devices mark the same day | Both rows are kept; the latest `(created_at, id)` wins; the history shows both |
@@ -200,7 +201,7 @@ A trigger rejects a `voids_id` that points at a row in another property or at a 
   - staff cannot void, update money rows or delete;
   - hook staff claims;
   - grants hide `pin_hash`.
-- **Deno:** the `chukta-staff` and `chukta-login-staff` handlers (PIN hashing, lockout, uniqueness, ownership checks, revoke on change).
+- **Deno:** the `chukta-staff` and `chukta-login-staff` handlers (PIN hashing, per-shop throttle, uniqueness, ownership checks, revoke on change).
 - **Jest:** `calculateWorkerLedger` (all section 6 cases), the effective-attendance resolver, the sync queue (order, dead-letter, no-session skip), pull merge and cursor, and the i18n key parity check (every key present in en/bn/hi).
 - **Manual end to end:** an owner phone and a staff phone on the same property, offline entry on both, reconnect, both see all entries; staff deactivation logs the staff member out.
 
