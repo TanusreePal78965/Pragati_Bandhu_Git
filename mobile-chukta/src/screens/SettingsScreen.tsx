@@ -5,6 +5,7 @@ import { useSession } from '../app/session';
 import { useT } from '../i18n/useT';
 import { Button, Muted, Row, Screen, Section } from '../ui/components';
 import { formatTime } from '../utils/format';
+import { PropertySection } from './settings/PropertySection';
 
 export function SettingsScreen() {
   const t = useT();
@@ -31,6 +32,7 @@ export function SettingsScreen() {
   return (
     <Screen>
       <Muted>{t('settings.loggedInAs', { name: who })}</Muted>
+      <PropertySection />
       {/* SECTIONS */}
       <Section title={t('settings.sync')}>
         <Muted testID="sync-line">{syncLine}</Muted>
