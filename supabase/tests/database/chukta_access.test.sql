@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_access.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 -- fixtures (as postgres)
 insert into auth.users (id, email) values
@@ -85,8 +85,15 @@ set local role anon;
 select throws_ok($$ select 1 from chukta.workers $$, '42501', null, 'anon has no access');
 reset role;
 set local role authenticated;
-select throws_ok($$ select chukta.record_pin_failure(array['d3000000-0000-0000-0000-000000000001'::uuid]) $$,
-  '42501', null, 'clients cannot call record_pin_failure');
+select throws_ok($$ select chukta.reserve_pin_attempt('d1000000-0000-0000-0000-00000000000a') $$,
+  '42501', null, 'clients cannot call reserve_pin_attempt');
+reset role;
+select is(
+  (select array_agg(chukta.reserve_pin_attempt('d1000000-0000-0000-0000-00000000000b')) from generate_series(1, 11)),
+  array['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','locked'],
+  '10 attempts per window, the 11th locks');
+select chukta.clear_pin_attempts('d1000000-0000-0000-0000-00000000000b');
+select is(chukta.reserve_pin_attempt('d1000000-0000-0000-0000-00000000000b'), 'ok', 'clear_pin_attempts unlocks');
 
 select * from finish();
 rollback;

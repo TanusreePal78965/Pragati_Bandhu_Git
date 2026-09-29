@@ -33,8 +33,6 @@ create table chukta.staff_users (
   auth_user_id      uuid not null unique references auth.users(id) on delete cascade,
   pin_hash          text not null,
   pin_salt          text not null,
-  failed_attempts   int not null default 0,
-  locked_until      timestamptz,
   is_active         boolean not null default true,
   created_at        timestamptz not null default now(),
   server_updated_at timestamptz not null default clock_timestamp()

@@ -121,16 +121,56 @@ begin
   return jsonb_set(event, '{claims}', claims);
 end $$;
 
--- 5. Atomic PIN failure counter (service role only).
-create or replace function chukta.record_pin_failure(p_staff_ids uuid[]) returns void
+-- 5. Per-shop staff PIN throttle (atomic reservation BEFORE PIN verification).
+create table chukta.shop_pin_throttle (
+  shop_id      uuid primary key references public.shops(id) on delete cascade,
+  window_start timestamptz not null default now(),
+  attempts     int not null default 0,
+  lockouts     int not null default 0,
+  locked_until timestamptz
+);
+alter table chukta.shop_pin_throttle enable row level security;
+revoke all on chukta.shop_pin_throttle from anon, authenticated;
+grant all on chukta.shop_pin_throttle to service_role;
+
+-- Returns 'ok' (attempt reserved) or 'locked'. 10 attempts per 15-minute window per shop;
+-- the 11th locks the shop's staff login for 15 min × 2^(lockouts−1), capped at 2^6 (16 h).
+create or replace function chukta.reserve_pin_attempt(p_shop_id uuid) returns text
+language plpgsql security definer set search_path = '' as $$
+declare
+  r chukta.shop_pin_throttle;
+begin
+  insert into chukta.shop_pin_throttle (shop_id) values (p_shop_id) on conflict (shop_id) do nothing;
+  select * into r from chukta.shop_pin_throttle where shop_id = p_shop_id for update;
+  if r.locked_until is not null and r.locked_until > now() then
+    return 'locked';
+  end if;
+  if r.window_start < now() - interval '15 minutes' then
+    r.window_start := now();
+    r.attempts := 0;
+  end if;
+  r.attempts := r.attempts + 1;
+  if r.attempts > 10 then
+    r.lockouts := r.lockouts + 1;
+    r.locked_until := now() + interval '15 minutes' * power(2, least(r.lockouts - 1, 6));
+    r.attempts := 0;
+    r.window_start := now();
+  end if;
+  update chukta.shop_pin_throttle
+     set window_start = r.window_start, attempts = r.attempts, lockouts = r.lockouts, locked_until = r.locked_until
+   where shop_id = p_shop_id;
+  return case when r.locked_until is not null and r.locked_until > now() then 'locked' else 'ok' end;
+end $$;
+
+create or replace function chukta.clear_pin_attempts(p_shop_id uuid) returns void
 language sql security definer set search_path = '' as $$
-  update chukta.staff_users
-     set failed_attempts = case when failed_attempts + 1 >= 5 then 0 else failed_attempts + 1 end,
-         locked_until    = case when failed_attempts + 1 >= 5 then now() + interval '15 minutes' else locked_until end
-   where id = any(p_staff_ids);
+  update chukta.shop_pin_throttle
+     set attempts = 0, lockouts = 0, locked_until = null, window_start = now()
+   where shop_id = p_shop_id;
 $$;
-revoke execute on function chukta.record_pin_failure(uuid[]) from public, anon, authenticated;
-grant execute on function chukta.record_pin_failure(uuid[]) to service_role;
+
+revoke execute on function chukta.reserve_pin_attempt(uuid), chukta.clear_pin_attempts(uuid) from public, anon, authenticated;
+grant execute on function chukta.reserve_pin_attempt(uuid), chukta.clear_pin_attempts(uuid) to service_role;
 
 -- 6. Pull-sync cursor indexes.
 create index if not exists idx_chukta_properties_sync on chukta.properties(server_updated_at, id);
