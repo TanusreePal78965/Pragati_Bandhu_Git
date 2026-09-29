@@ -34,6 +34,7 @@ export interface StaffDeps {
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 const fail = (status: number, error: string): HandlerResult => ({ status, body: { error } })
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 async function pinTaken(pin: string, staff: StaffRecord[], exceptId?: string): Promise<boolean> {
   for (const s of staff) {
@@ -56,6 +57,7 @@ export async function handleStaff(
     const propertyId = str(input.propertyId)
     const name = str(input.name)
     if (!propertyId || !name || !isValidPin(input.pin)) return fail(400, 'propertyId, name and a 4-6 digit pin are required')
+    if (!UUID.test(propertyId)) return fail(400, 'invalid propertyId')
     const shop = await deps.getPropertyShop(propertyId)
     if (!shop) return fail(404, 'property_not_found')
     if (shop !== caller.shopId) return fail(403, 'forbidden')
@@ -75,6 +77,7 @@ export async function handleStaff(
 
   const staffId = str(input.staffId)
   if (!staffId) return fail(400, 'staffId is required')
+  if (!UUID.test(staffId)) return fail(400, 'invalid staffId')
   const staff = await deps.getStaff(staffId)
   if (!staff) return fail(404, 'staff_not_found')
   if ((await deps.getPropertyShop(staff.property_id)) !== caller.shopId) return fail(403, 'forbidden')
