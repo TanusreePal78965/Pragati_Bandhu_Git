@@ -12,6 +12,7 @@ import AppFeatures from './pages/AppFeatures';
 import HelpCenter from './pages/HelpCenter';
 import RenewPlan from './pages/RenewPlan';
 import ForgotPassword from './pages/ForgotPassword';
+import ChuktaSignup from './pages/ChuktaSignup';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -415,6 +416,7 @@ export default function App() {
           <Route path="/help" element={<HelpCenter />} />
           <Route path="/renew" element={<RenewPlan />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/chukta" element={<ChuktaSignup />} />
         </Route>
         
         {/* Admin Routes */}
