@@ -50,6 +50,8 @@ test('no session: nothing attempted, attempts unchanged', async () => {
   const r = await flushPush(db, remote(() => null, seen), async () => false);
   expect(seen).toEqual([]);
   expect(r.stopped).toBe(true);
+  const row = await db.getFirstAsync<{ attempts: number }>("select attempts from sync_queue where row_id = 'w1'");
+  expect(row?.attempts).toBe(0);
 });
 
 test('update item is passed through with op and payload intact', async () => {
@@ -73,4 +75,18 @@ test('isPermanent classification', () => {
   expect(isPermanent({ status: 409, code: '23505', message: '' })).toBe(true);
   expect(isPermanent({ status: 429, code: null, message: '' })).toBe(false);
   expect(isPermanent({ status: null, code: null, message: 'Network request failed' })).toBe(false);
+  expect(isPermanent({ status: 401, code: '42501', message: '' })).toBe(false);
+  expect(isPermanent({ status: 0, code: '', message: 'fetch failed' })).toBe(false);
+});
+
+test('dead-lettered update clears the table cursor so the next pull restores it; a dead insert does not', async () => {
+  const db = await dbWith([['workers', 'w1', 'update'], ['properties', 'p1', 'insert']]);
+  await db.runAsync("insert or replace into sync_cursor (table_name, cursor) values ('workers', ?)", [JSON.stringify({ ts: 't', id: 'x' })]);
+  await db.runAsync("insert or replace into sync_cursor (table_name, cursor) values ('properties', ?)", [JSON.stringify({ ts: 't', id: 'y' })]);
+  const r = await flushPush(db, {
+    async write() { return { status: 404, code: null, message: 'x' }; },
+  }, async () => true);
+  expect(r).toEqual({ pushed: 0, dead: 2, stopped: false });
+  expect(await db.getFirstAsync("select 1 from sync_cursor where table_name = 'workers'")).toBeNull();
+  expect(await db.getFirstAsync("select 1 from sync_cursor where table_name = 'properties'")).not.toBeNull();
 });

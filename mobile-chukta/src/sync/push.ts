@@ -11,8 +11,10 @@ export interface RemoteWriter {
 
 /** 4xx (except auth/throttle/timeout) or a Postgres class 22/23/42 error will never succeed on retry. */
 export function isPermanent(err: RemoteError): boolean {
+  // A lost session (401) or throttle/timeout can carry a misleading Postgres code (e.g. 42501 from an
+  // anon-role RLS fallback) — the HTTP status is the ground truth for these and must win, so check it first.
+  if (err.status === null || err.status === 0 || [401, 408, 429].includes(err.status)) return false;
   if (err.code && /^(22|23|42)/.test(err.code)) return true;
-  if (err.status === null) return false;
   return err.status >= 400 && err.status < 500 && ![401, 408, 429].includes(err.status);
 }
 
@@ -34,6 +36,12 @@ export async function flushPush(
     }
     if (isPermanent(err)) {
       await db.runAsync("update sync_queue set status = 'dead', attempts = attempts + 1, last_error = ? where seq = ?", [err.message, row.seq]);
+      if (row.op === 'update') {
+        // The server version is now stranded: pull skipped this row while it was pending, and other
+        // devices' changes may have moved the cursor past it. Drop the cursor so the next pull re-reads
+        // the table from scratch and restores the authoritative server row over our dead-lettered patch.
+        await db.runAsync('delete from sync_cursor where table_name = ?', [row.table_name]);
+      }
       dead++;
       continue;
     }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TABLE_COLUMNS, type SyncedTable } from '../db/schema';
-import type { Cursor, RemoteReader } from './pull';
+import { cursorFilter, type Cursor, type RemoteReader } from './pull';
 import type { RemoteError, RemoteWriter } from './push';
 
 const BOOLEAN_COLUMNS = new Set(['is_active', 'weekly_off_override']);
@@ -39,7 +39,8 @@ export function createSupabaseRemote(client: SupabaseClient): RemoteWriter & Rem
         let q = chukta().from(table).select(TABLE_COLUMNS[table].join(','))
           .order('server_updated_at', { ascending: true }).order('id', { ascending: true }).limit(limit);
         if (cursor) {
-          q = q.or(`server_updated_at.gt.${cursor.ts},and(server_updated_at.eq.${cursor.ts},id.gt.${cursor.id})`);
+          const f = cursorFilter(cursor);
+          q = f.kind === 'gte' ? q.gte('server_updated_at', f.ts) : q.or(f.or);
         }
         const { data, error, status } = await q;
         return { rows: (data ?? []) as unknown as Record<string, unknown>[], error: toError(error, status) };

@@ -1,6 +1,6 @@
 import { openTestDb } from '../db/testing/betterSqliteDb';
 import { migrate, type SyncedTable } from '../db/schema';
-import { pullAll, type Cursor, type RemoteReader } from '../sync/pull';
+import { cursorFilter, pullAll, type Cursor, type RemoteReader } from '../sync/pull';
 
 const worker = (id: string, ts: string, name = id) => ({
   id, property_id: 'p', name, phone: null, pay_basis: 'daily', rate_paise: 50000, joining_date: '2026-09-01', status: 'active',
@@ -13,8 +13,10 @@ function fakeRemote(data: Partial<Record<SyncedTable, Record<string, unknown>[]>
     async fetchSince(table, cursor: Cursor | null, limit) {
       calls.push(`${table}:${cursor ? `${cursor.ts}|${cursor.id}` : '-'}`);
       const rows = (data[table] ?? [])
-        .filter((r) => !cursor || (r.server_updated_at as string) > cursor.ts
-          || ((r.server_updated_at as string) === cursor.ts && (r.id as string) > cursor.id))
+        .filter((r) => !cursor || (cursor.id === ''
+          ? (r.server_updated_at as string) >= cursor.ts
+          : (r.server_updated_at as string) > cursor.ts
+            || ((r.server_updated_at as string) === cursor.ts && (r.id as string) > cursor.id)))
         .sort((a, b) => `${a.server_updated_at}|${a.id}`.localeCompare(`${b.server_updated_at}|${b.id}`))
         .slice(0, limit);
       return { rows, error: null };
@@ -70,4 +72,10 @@ test('overlap re-read picks up a late-committed row', async () => {
   await pullAll(db, fakeRemote(data));
   const w = await db.getFirstAsync<{ id: string }>("select id from workers where id = 'b'");
   expect(w?.id).toBe('b');
+});
+
+test('cursorFilter never emits an empty id comparison', () => {
+  expect(cursorFilter({ ts: '2026-09-30T09:59:00.000Z', id: '' })).toEqual({ kind: 'gte', ts: '2026-09-30T09:59:00.000Z' });
+  const f = cursorFilter({ ts: '2026-09-30T10:00:00+00:00', id: 'a1' });
+  expect(f).toEqual({ kind: 'after', or: 'server_updated_at.gt.2026-09-30T10:00:00+00:00,and(server_updated_at.eq.2026-09-30T10:00:00+00:00,id.gt.a1)' });
 });
