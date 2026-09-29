@@ -1,0 +1,38 @@
+import { Ionicons } from '@expo/vector-icons';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useT } from '../i18n/useT';
+import { LanguageRoute } from '../screens/LanguageScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { colors } from '../ui/theme';
+import type { RootStackParamList, TabParamList } from './routes';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<TabParamList>();
+
+type IconName = keyof typeof Ionicons.glyphMap;
+const icon = (name: IconName) => ({ color, size }: { color: string; size: number }) => <Ionicons name={name} color={color} size={size} />;
+
+function Tabs() {
+  const t = useT();
+  return (
+    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: colors.primary }}>
+      {/* TABS */}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
+    </Tab.Navigator>
+  );
+}
+
+export function SessionNavigator() {
+  const t = useT();
+  return (
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="Tabs">
+        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+        <Stack.Screen name="Language" component={LanguageRoute} options={{ title: t('language.title') }} />
+        {/* ROUTES */}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}

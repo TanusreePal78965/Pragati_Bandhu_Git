@@ -7,13 +7,27 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#FFFFFF" },
-    "ios": { "supportsTablet": false, "bundleIdentifier": "com.pragatibandhu.chukta" },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.pragatibandhu.chukta"
+    },
     "android": {
       "package": "com.pragatibandhu.chukta",
-      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#FFFFFF" },
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "edgeToEdgeEnabled": true
     },
-    "plugins": ["expo-sqlite", "expo-localization"]
+    "plugins": [
+      "expo-sqlite",
+      "expo-localization",
+      "@react-native-community/datetimepicker"
+    ]
   }
 }
