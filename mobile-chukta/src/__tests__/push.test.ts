@@ -77,6 +77,8 @@ test('isPermanent classification', () => {
   expect(isPermanent({ status: null, code: null, message: 'Network request failed' })).toBe(false);
   expect(isPermanent({ status: 401, code: '42501', message: '' })).toBe(false);
   expect(isPermanent({ status: 0, code: '', message: 'fetch failed' })).toBe(false);
+  expect(isPermanent({ status: 406, code: 'PGRST106', message: '' })).toBe(false);
+  expect(isPermanent({ status: 404, code: 'PGRST205', message: '' })).toBe(false);
 });
 
 test('dead-lettered update clears the table cursor so the next pull restores it; a dead insert does not', async () => {

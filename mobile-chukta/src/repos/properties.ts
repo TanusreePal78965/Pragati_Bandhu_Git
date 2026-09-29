@@ -7,6 +7,7 @@ export type PropertySettingsPatch = Partial<Pick<Property,
   'name' | 'address' | 'is_active' | 'default_pay_basis' | 'default_attendance_mode' | 'shift_hours' | 'weekly_off' | 'monthly_divisor'>>;
 
 export async function createProperty(ctx: RepoContext, input: { shopId: string; name: string; address?: string }): Promise<Property> {
+  if (ctx.role !== 'owner') throw new Error('only the owner can manage properties');
   const row: Property = {
     id: ctx.newId(), shop_id: input.shopId, name: input.name.trim(), address: input.address ?? null, is_active: 1,
     default_pay_basis: 'daily', default_attendance_mode: 'day', shift_hours: 8, weekly_off: 0, monthly_divisor: 'calendar',
@@ -17,6 +18,7 @@ export async function createProperty(ctx: RepoContext, input: { shopId: string; 
 }
 
 export async function updatePropertySettings(ctx: RepoContext, id: string, patch: PropertySettingsPatch): Promise<void> {
+  if (ctx.role !== 'owner') throw new Error('only the owner can manage properties');
   await updateAndEnqueue(ctx, 'properties', id, patch);
 }
 

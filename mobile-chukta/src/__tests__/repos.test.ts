@@ -39,6 +39,25 @@ test('updates enqueue only the patch as op update; workers can be archived', asy
   expect(JSON.parse(last.payload)).toEqual({ id: w.id, status: 'left', left_date: '2026-09-20' });
 });
 
+test('switching a worker to hourly pay forces attendance_mode to hours', async () => {
+  const c = await ctx();
+  const p = await createProperty(c, { shopId: 'shop1', name: 'Main' });
+  const w = await createWorker(c, {
+    propertyId: p.id, name: 'Ram', payBasis: 'daily', ratePaise: 50000, joiningDate: '2026-09-01', attendanceMode: 'day',
+  });
+  await updateWorker(c, w.id, { pay_basis: 'hourly' });
+  const last = (await queue(c)).at(-1)!;
+  expect(JSON.parse(last.payload)).toMatchObject({ id: w.id, pay_basis: 'hourly', attendance_mode: 'hours' });
+});
+
+test('staff cannot create or update properties', async () => {
+  const c = await ctx('staff');
+  await expect(createProperty(c, { shopId: 'shop1', name: 'Main' })).rejects.toThrow('owner');
+  const owner = await ctx();
+  const p = await createProperty(owner, { shopId: 'shop1', name: 'Main' });
+  await expect(updatePropertySettings(c, p.id, { name: 'New' })).rejects.toThrow('owner');
+});
+
 test('attendance rows are appended, never updated', async () => {
   const c = await ctx('staff');
   await markAttendance(c, { propertyId: 'p', workerId: 'w', date: '2026-09-02', status: 'absent' });

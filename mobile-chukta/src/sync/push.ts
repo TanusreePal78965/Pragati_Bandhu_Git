@@ -14,6 +14,7 @@ export function isPermanent(err: RemoteError): boolean {
   // A lost session (401) or throttle/timeout can carry a misleading Postgres code (e.g. 42501 from an
   // anon-role RLS fallback) — the HTTP status is the ground truth for these and must win, so check it first.
   if (err.status === null || err.status === 0 || [401, 408, 429].includes(err.status)) return false;
+  if (err.code && /^PGRST[12]\d\d$/.test(err.code)) return false; // schema/config errors (e.g. schema not exposed, stale cache) are fixable server-side
   if (err.code && /^(22|23|42)/.test(err.code)) return true;
   return err.status >= 400 && err.status < 500 && ![401, 408, 429].includes(err.status);
 }

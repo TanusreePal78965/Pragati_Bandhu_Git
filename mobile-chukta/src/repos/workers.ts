@@ -30,6 +30,7 @@ export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<
 
 export async function updateWorker(ctx: RepoContext, id: string, patch: WorkerPatch): Promise<void> {
   if (patch.status === 'left' && !patch.left_date) throw new Error('left_date is required when a worker leaves');
+  if (patch.pay_basis === 'hourly') patch = { ...patch, attendance_mode: 'hours' };
   await updateAndEnqueue(ctx, 'workers', id, patch);
 }
 

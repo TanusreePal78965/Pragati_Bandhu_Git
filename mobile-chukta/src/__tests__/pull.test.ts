@@ -74,6 +74,17 @@ test('overlap re-read picks up a late-committed row', async () => {
   expect(w?.id).toBe('b');
 });
 
+test('an unparseable stored cursor triggers a full re-pull instead of throwing', async () => {
+  const db = openTestDb();
+  await migrate(db);
+  await db.runAsync("insert or replace into sync_cursor (table_name, cursor) values ('workers', ?)", [JSON.stringify({ ts: 'garbage', id: 'x' })]);
+  const calls: string[] = [];
+  await pullAll(db, fakeRemote({ workers: [worker('a', '2026-09-30T10:00:00Z')] }, calls));
+  expect(calls.find((c) => c.startsWith('workers'))).toBe('workers:-');
+  const w = await db.getFirstAsync<{ id: string }>("select id from workers where id = 'a'");
+  expect(w?.id).toBe('a');
+});
+
 test('cursorFilter never emits an empty id comparison', () => {
   expect(cursorFilter({ ts: '2026-09-30T09:59:00.000Z', id: '' })).toEqual({ kind: 'gte', ts: '2026-09-30T09:59:00.000Z' });
   const f = cursorFilter({ ts: '2026-09-30T10:00:00+00:00', id: 'a1' });

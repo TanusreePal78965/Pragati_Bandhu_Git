@@ -28,7 +28,8 @@ export async function pullAll(db: SqlDb, remote: RemoteReader, pageSize = 500): 
     const stored = await getCursor(db, table);
     // Re-read a 60s overlap each run: server_updated_at is stamped before commit, so a late-committing row
     // can carry an earlier timestamp than rows already pulled. Upserts are idempotent.
-    let cursor: Cursor | null = stored ? { ts: new Date(Date.parse(stored.ts) - 60_000).toISOString(), id: '' } : null;
+    const storedMs = stored ? Date.parse(stored.ts) : NaN;
+    let cursor: Cursor | null = stored && !Number.isNaN(storedMs) ? { ts: new Date(storedMs - 60_000).toISOString(), id: '' } : null;
     for (;;) {
       const { rows, error } = await remote.fetchSince(table, cursor, pageSize);
       if (error) throw new Error(`pull ${table}: ${error.message}`);
