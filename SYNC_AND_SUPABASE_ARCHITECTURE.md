@@ -67,7 +67,7 @@ CREATE TABLE sync_queue (
 
 ## 4. flushSyncQueue() — How Sync Happens
 
-**File:** [mobile/src/db/syncQueue.ts](mobile/src/db/syncQueue.ts)
+**File:** [mobile-shopai/src/db/syncQueue.ts](mobile-shopai/src/db/syncQueue.ts)
 
 1. Checks network connectivity via `NetInfo.fetch()` — skips if offline.
 2. Loads all queue items with `attempts < 5`, ordered by `id ASC` (oldest first).
@@ -96,7 +96,7 @@ CREATE TABLE sync_queue (
 
 ## 6. startSyncService() — Full Lifecycle
 
-**File:** [mobile/src/services/syncService.ts](mobile/src/services/syncService.ts)
+**File:** [mobile-shopai/src/services/syncService.ts](mobile-shopai/src/services/syncService.ts)
 
 ```text
 startSyncService(onDeactivated)
@@ -128,7 +128,7 @@ startSyncService(onDeactivated)
 
 ## 7. checkShopStatus() — Admin Deactivation Check
 
-**File:** [mobile/src/services/syncService.ts](mobile/src/services/syncService.ts)
+**File:** [mobile-shopai/src/services/syncService.ts](mobile-shopai/src/services/syncService.ts)
 
 Runs for **all users** regardless of consent. Queries Supabase directly (not via queue):
 
@@ -154,33 +154,33 @@ Runs on:
 
 | Call | File | When |
 | --- | --- | --- |
-| `POST /functions/v1/send-otp` | [authService.ts](mobile/src/services/authService.ts):24 | User submits phone number on login screen |
-| `POST /functions/v1/verify-otp` | [authService.ts](mobile/src/services/authService.ts):43 | User submits OTP code |
-| `supabase.auth.setSession()` | [authService.ts](mobile/src/services/authService.ts):56 | After OTP verified — stores JWT in AsyncStorage |
-| `supabase.auth.getSession()` | [authService.ts](mobile/src/services/authService.ts):78 | App mount, to check if user is already logged in |
-| `supabase.auth.signOut()` | [authService.ts](mobile/src/services/authService.ts):148 | User taps logout |
-| `supabase.auth.onAuthStateChange()` | [AuthContext.tsx](mobile/src/context/AuthContext.tsx):77 | Always listening — catches token refresh / remote sign-out |
+| `POST /functions/v1/send-otp` | [authService.ts](mobile-shopai/src/services/authService.ts):24 | User submits phone number on login screen |
+| `POST /functions/v1/verify-otp` | [authService.ts](mobile-shopai/src/services/authService.ts):43 | User submits OTP code |
+| `supabase.auth.setSession()` | [authService.ts](mobile-shopai/src/services/authService.ts):56 | After OTP verified — stores JWT in AsyncStorage |
+| `supabase.auth.getSession()` | [authService.ts](mobile-shopai/src/services/authService.ts):78 | App mount, to check if user is already logged in |
+| `supabase.auth.signOut()` | [authService.ts](mobile-shopai/src/services/authService.ts):148 | User taps logout |
+| `supabase.auth.onAuthStateChange()` | [AuthContext.tsx](mobile-shopai/src/context/AuthContext.tsx):77 | Always listening — catches token refresh / remote sign-out |
 
 ### Shop Recovery on Login
 
 | Call | File | When |
 | --- | --- | --- |
-| `supabase.from('shops').select('...')` | [authService.ts](mobile/src/services/authService.ts):93 | If JWT valid but no local shop info — recovers shop to AsyncStorage + SQLite |
+| `supabase.from('shops').select('...')` | [authService.ts](mobile-shopai/src/services/authService.ts):93 | If JWT valid but no local shop info — recovers shop to AsyncStorage + SQLite |
 
 ### Admin Status Check
 
 | Call | File | When |
 | --- | --- | --- |
-| `supabase.from('shops').select('is_active').eq('id', phone)` | [syncService.ts](mobile/src/services/syncService.ts):24 | On startup + every app foreground |
+| `supabase.from('shops').select('is_active').eq('id', phone)` | [syncService.ts](mobile-shopai/src/services/syncService.ts):24 | On startup + every app foreground |
 
 ### Data Sync (Flush Queue → Supabase)
 
 | Supabase Call | File | Tables |
 | --- | --- | --- |
-| `supabase.from(table).upsert({ ...payload, shop_id })` | [syncQueue.ts](mobile/src/db/syncQueue.ts):119 | `products`, `categories`, `brands`, `customers`, `sales_log` |
-| `supabase.from('shops').upsert(...)` | [syncQueue.ts](mobile/src/db/syncQueue.ts):129 | `shops` — excludes `is_active` (admin-only field) |
-| `supabase.from('bills').upsert(...)` | [syncQueue.ts](mobile/src/db/syncQueue.ts):152 | `bills` + `bill_items` + `sales_log` (compound) |
-| `supabase.from(table).delete().eq('id', dataId)` | [syncQueue.ts](mobile/src/db/syncQueue.ts):179 | Any table — triggered by DELETE operations |
+| `supabase.from(table).upsert({ ...payload, shop_id })` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):119 | `products`, `categories`, `brands`, `customers`, `sales_log` |
+| `supabase.from('shops').upsert(...)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):129 | `shops` — excludes `is_active` (admin-only field) |
+| `supabase.from('bills').upsert(...)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):152 | `bills` + `bill_items` + `sales_log` (compound) |
+| `supabase.from(table).delete().eq('id', dataId)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):179 | Any table — triggered by DELETE operations |
 
 ### Cloud Restore (restoreService.ts)
 
@@ -308,7 +308,7 @@ SettingsScreen → "Restore from Cloud" button
 
 ### What restoreFromCloud() Does
 
-**File:** [mobile/src/services/restoreService.ts](mobile/src/services/restoreService.ts)
+**File:** [mobile-shopai/src/services/restoreService.ts](mobile-shopai/src/services/restoreService.ts)
 
 ```text
 restoreFromCloud()
@@ -339,7 +339,7 @@ restoreFromCloud()
 
 ### importFromJson() — How Data Lands in SQLite
 
-**File:** [mobile/src/db/backup.ts](mobile/src/db/backup.ts)
+**File:** [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts)
 
 - Runs inside a single `db.withTransactionSync()` — all-or-nothing.
 - Uses `INSERT OR REPLACE` on every row — **idempotent**. Safe to run on a non-empty DB. Existing rows with the same `id` are replaced with the cloud version. New rows are added.
@@ -391,7 +391,7 @@ These are **offline backup** features — no Supabase involved. All data comes f
 ### JSON Export
 
 **Trigger:** Settings → Data & Backup → Export Backup  
-**File:** [mobile/src/db/backup.ts](mobile/src/db/backup.ts) → `exportAsJson()`
+**File:** [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts) → `exportAsJson()`
 
 ```text
 exportAsJson()
@@ -415,7 +415,7 @@ exportAsJson()
 ### JSON Import
 
 **Trigger:** Settings → Data & Backup → Import Backup (pick a `.json` file)  
-**File:** [mobile/src/db/backup.ts](mobile/src/db/backup.ts) → `importFromJson()`
+**File:** [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts) → `importFromJson()`
 
 ```text
 handleImportJson()
@@ -442,7 +442,7 @@ handleImportJson()
 ### SQL Export (Debug Mode)
 
 **Trigger:** Tap version number 5 times in Settings → "Export Local Data" button appears  
-**File:** [mobile/src/db/db.ts](mobile/src/db/db.ts) → `exportAsSql(shopId)`
+**File:** [mobile-shopai/src/db/db.ts](mobile-shopai/src/db/db.ts) → `exportAsSql(shopId)`
 
 Generates `INSERT INTO ... ON CONFLICT (id) DO NOTHING` statements for all tables, injectable into the Supabase SQL Editor. Used for manual data recovery / debugging only.
 
@@ -505,15 +505,15 @@ After any delete-all: `clearShopInfo()` + `setHasConsent(false)` + `logout()` �
 
 | File | Role |
 | --- | --- |
-| [mobile/src/db/syncQueue.ts](mobile/src/db/syncQueue.ts) | `addToSyncQueue`, `flushSyncQueue`, `getPendingSyncCount` |
-| [mobile/src/db/db.ts](mobile/src/db/db.ts) | All SQLite reads/writes + `addToSyncQueue` calls for every mutation |
-| [mobile/src/db/backup.ts](mobile/src/db/backup.ts) | `exportAsJson`, `importFromJson`, `clearAllLocalData` |
-| [mobile/src/services/syncService.ts](mobile/src/services/syncService.ts) | `startSyncService`, `stopSyncService`, `checkShopStatus` |
-| [mobile/src/services/authService.ts](mobile/src/services/authService.ts) | OTP send/verify, `getStoredAuth` (with shop recovery) |
-| [mobile/src/services/restoreService.ts](mobile/src/services/restoreService.ts) | `restoreFromCloud`, `deleteFromCloud` |
-| [mobile/src/context/AuthContext.tsx](mobile/src/context/AuthContext.tsx) | `isAuthenticated`, `isShopSetup`, `isShopActive`, `isAutoRestoring` state |
-| [mobile/src/utils/storage.ts](mobile/src/utils/storage.ts) | AsyncStorage typed wrappers |
-| [mobile/src/db/sqlite.ts](mobile/src/db/sqlite.ts) | SQLite schema, `is_active` migration |
+| [mobile-shopai/src/db/syncQueue.ts](mobile-shopai/src/db/syncQueue.ts) | `addToSyncQueue`, `flushSyncQueue`, `getPendingSyncCount` |
+| [mobile-shopai/src/db/db.ts](mobile-shopai/src/db/db.ts) | All SQLite reads/writes + `addToSyncQueue` calls for every mutation |
+| [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts) | `exportAsJson`, `importFromJson`, `clearAllLocalData` |
+| [mobile-shopai/src/services/syncService.ts](mobile-shopai/src/services/syncService.ts) | `startSyncService`, `stopSyncService`, `checkShopStatus` |
+| [mobile-shopai/src/services/authService.ts](mobile-shopai/src/services/authService.ts) | OTP send/verify, `getStoredAuth` (with shop recovery) |
+| [mobile-shopai/src/services/restoreService.ts](mobile-shopai/src/services/restoreService.ts) | `restoreFromCloud`, `deleteFromCloud` |
+| [mobile-shopai/src/context/AuthContext.tsx](mobile-shopai/src/context/AuthContext.tsx) | `isAuthenticated`, `isShopSetup`, `isShopActive`, `isAutoRestoring` state |
+| [mobile-shopai/src/utils/storage.ts](mobile-shopai/src/utils/storage.ts) | AsyncStorage typed wrappers |
+| [mobile-shopai/src/db/sqlite.ts](mobile-shopai/src/db/sqlite.ts) | SQLite schema, `is_active` migration |
 
 ---
 

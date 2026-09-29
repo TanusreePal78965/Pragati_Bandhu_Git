@@ -1,88 +1,56 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10'
+import { corsHeaders, json, type Session } from '../_shared/account.ts'
+import { handleLogin, type LoginDeps } from './handler.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const url = Deno.env.get('SUPABASE_URL')!
+const noPersist = { auth: { persistSession: false, autoRefreshToken: false } }
+const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, noPersist)
+const publicClient = () => createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, noPersist)
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
+const SHOP_COLUMNS =
+  'id, auth_user_id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active'
 
-async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [saltB64, hashB64] = stored.split(':')
-  if (!saltB64 || !hashB64) return false
-
-  const salt = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0))
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  )
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
-    keyMaterial,
-    256
-  )
-  const computedB64 = btoa(String.fromCharCode(...new Uint8Array(bits)))
-
-  // Constant-time comparison.
-  if (computedB64.length !== hashB64.length) return false
-  let diff = 0
-  for (let i = 0; i < computedB64.length; i++) {
-    diff |= computedB64.charCodeAt(i) ^ hashB64.charCodeAt(i)
-  }
-  return diff === 0
+const deps: LoginDeps = {
+  async findShopByPhone(phone) {
+    const { data, error } = await admin.from('shops').select(SHOP_COLUMNS).eq('phone', phone).maybeSingle()
+    if (error) throw error
+    return data
+  },
+  async getAuthEmail(userId) {
+    const { data, error } = await admin.auth.admin.getUserById(userId)
+    return error ? null : data.user?.email ?? null
+  },
+  async signIn(email, password) {
+    const { data, error } = await publicClient().auth.signInWithPassword({ email, password })
+    return error ? null : (data.session as unknown as Session | null)
+  },
+  async getSubscription(shopId, app) {
+    const { data, error } = await admin.from('app_subscriptions')
+      .select('app, plan_type, is_active, expires_at').eq('shop_id', shopId).eq('app', app).maybeSingle()
+    if (error) throw error
+    return data
+  },
+  async recordSession(sessionId, userId, app, deviceId) {
+    const { error } = await admin.from('app_sessions').insert({ session_id: sessionId, user_id: userId, app, device_id: deviceId })
+    if (error) throw error
+  },
+  async refresh(refreshToken) {
+    const { data, error } = await publicClient().auth.refreshSession({ refresh_token: refreshToken })
+    if (error || !data.session) throw error ?? new Error('refresh returned no session')
+    return data.session as unknown as Session
+  },
+  async revoke(accessToken) {
+    await admin.auth.admin.signOut(accessToken, 'local')
+  },
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   try {
-    const { phone, password } = await req.json()
-
-    if (!phone || !password) {
-      return new Response(JSON.stringify({ error: 'phone and password are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { data: shop, error } = await supabase
-      .from('shops')
-      .select('id, password_hash, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, plan_expires_at, plan_type')
-      .eq('phone', phone)
-      .maybeSingle()
-
-    if (error) throw error
-
-    const invalid = () =>
-      new Response(JSON.stringify({ error: 'Invalid phone number or password' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-
-    if (!shop || !shop.password_hash) return invalid()
-
-    const ok = await verifyPassword(password, shop.password_hash)
-    if (!ok) return invalid()
-
-    const { password_hash: _omit, ...shopWithoutHash } = shop
-
-    return new Response(JSON.stringify({ shop: shopWithoutHash }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
+    const result = await handleLogin(await req.json(), deps)
+    return json(result.status, result.body)
   } catch (err) {
     console.error('login error:', err)
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : 'Internal error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return json(500, { error: 'Internal error' })
   }
 })

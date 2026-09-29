@@ -1,0 +1,1132 @@
+import React, { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    Switch,
+    StatusBar,
+    Alert,
+    ActivityIndicator,
+    Share,
+    Linking,
+    Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import * as DocumentPicker from "expo-document-picker";
+import { colors } from "../../theme/colors";
+import { typography } from "../../theme/typography";
+import { spacing } from "../../theme/spacing";
+import ScreenHeader from "../../components/common/ScreenHeader";
+import { useAuth } from "../../context/AuthContext";
+import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent, getStoredShopId } from "../../utils/storage";
+import { getAppVersion, getAppVersionCode } from "../../lib/version";
+import { supabase } from "../../lib/supabase";
+import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
+import { exportAsSql, queueAllLocalData, updateShop, getShop, resetShopTestData } from "../../db/db";
+import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
+import { restoreFromCloud, deleteFromCloud } from "../../services/restoreService";
+import { startSyncService } from "../../services/syncService";
+import { fetchShopStatus, isPlanExpired } from "../../services/subscription";
+import { useAlert } from "../../context/AlertContext";
+
+const SectionHeader = ({ title }: { title: string }) => (
+    <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderTitle}>{title}</Text>
+    </View>
+);
+
+const SettingsItem = ({
+    icon,
+    title,
+    value,
+    onPress,
+    showChevron = true,
+}: {
+    icon: string;
+    title: string;
+    value?: string;
+    onPress?: () => void;
+    showChevron?: boolean;
+}) => (
+    <TouchableOpacity
+        style={styles.settingsItem}
+        onPress={onPress}
+        disabled={!onPress}
+    >
+        <View style={styles.settingsItemLeft}>
+            <View style={styles.iconContainer}>
+                <Ionicons name={icon as any} size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.settingsItemTitle}>{title}</Text>
+        </View>
+        <View style={styles.settingsItemRight}>
+            {value && <Text style={styles.settingsItemValue}>{value}</Text>}
+            {showChevron && (
+                <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                />
+            )}
+        </View>
+    </TouchableOpacity>
+);
+
+const SettingsInfoRow = ({
+    label,
+    value,
+    isOptional = false,
+}: {
+    label: string;
+    value: string;
+    isOptional?: boolean;
+}) => (
+    <View style={styles.infoRow}>
+        <Text style={styles.infoLabel}>
+            {label} {isOptional && "(OPTIONAL)"}
+        </Text>
+        <Text style={styles.infoValue}>{value}</Text>
+    </View>
+);
+
+export default function SettingsScreen() {
+    const { showAlert } = useAlert();
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [shopInfo, setShopInfoState] = useState<StoredShopInfo | null>(null);
+    const [syncPendingCount, setSyncPendingCount] = useState(0);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [isRestoring, setIsRestoring] = useState(false);
+    const [isEnablingCloud, setIsEnablingCloud] = useState(false);
+    const [cloudUploadText, setCloudUploadText] = useState('Enabling…');
+    const [isExporting, setIsExporting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [allowOutOfStock, setAllowOutOfStock] = useState(false);
+    const [versionClicks, setVersionClicks] = useState(0);
+    const [showExport, setShowExport] = useState(false);
+    const navigation = useNavigation();
+    const { logout, phone, setShopActive } = useAuth();
+
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            const loadLatestInfo = async () => {
+                let info = await getShopInfo();
+                const shopId = await getStoredShopId();
+                if (shopId) {
+                    try {
+                        const status = await fetchShopStatus(shopId);
+                        if (status) {
+                            if (!status.isActive || isPlanExpired(status.planExpiresAt)) {
+                                setShopActive(false);
+                            }
+                            if (info) {
+                                info = {
+                                    ...info,
+                                    isActive: status.isActive,
+                                    planExpiresAt: status.planExpiresAt ?? undefined,
+                                    planType: status.planType ?? undefined,
+                                    allowOutOfStockBilling: status.allowOutOfStockBilling,
+                                };
+                                await persistShopInfo(info);
+                            }
+                        }
+                    } catch (_) { }
+                }
+                const sqliteShop = getShop();
+                const isAllowed = sqliteShop?.allowOutOfStockBilling ?? info?.allowOutOfStockBilling ?? false;
+                if (!cancelled) {
+                    setShopInfoState(info ? { ...info, allowOutOfStockBilling: isAllowed } : null);
+                    setAllowOutOfStock(isAllowed);
+                    setSyncPendingCount(getPendingSyncCount());
+                }
+            };
+            loadLatestInfo();
+            return () => { cancelled = true; };
+        }, [])
+    );
+
+    const handleSyncNow = async () => {
+        setIsSyncing(true);
+        const beforeCount = getPendingSyncCount();
+        try {
+            await flushSyncQueue();
+        } finally {
+            const afterCount = getPendingSyncCount();
+            setSyncPendingCount(afterCount);
+            setIsSyncing(false);
+            const synced = beforeCount - afterCount;
+            if (synced > 0 && afterCount === 0) {
+                showAlert("Synced", `All ${synced} item${synced > 1 ? "s" : ""} uploaded successfully.`, undefined, "success");
+            } else if (synced > 0 && afterCount > 0) {
+                showAlert("Partially Synced", `${synced} item${synced > 1 ? "s" : ""} uploaded. ${afterCount} still pending — they will retry automatically.`, undefined, "warning");
+            } else if (beforeCount === 0) {
+                showAlert("All Caught Up", "Nothing to sync.", undefined, "info");
+            } else {
+                showAlert("Sync Failed", `${afterCount} item${afterCount > 1 ? "s" : ""} could not be uploaded. Check your connection and try again.`, undefined, "error");
+            }
+        }
+    };
+
+    const handleExport = () => {
+        const rawPhone = shopInfo?.phone ?? phone ?? '';
+        if (!rawPhone) {
+            showAlert("Export Failed", "Could not determine shop phone number.", undefined, "error");
+            return;
+        }
+        const shopId = rawPhone.slice(-10);
+        const sql = exportAsSql(shopId);
+        Share.share({ message: sql, title: `Pragati Bandhu export — ${shopId}` });
+    };
+
+    const handleVersionPress = () => {
+        const nextClicks = versionClicks + 1;
+        setVersionClicks(nextClicks);
+        if (nextClicks >= 5 && !showExport) {
+            setShowExport(true);
+            showAlert("Debug Mode", "Export Local Data button is now visible.", undefined, "info");
+        }
+    };
+
+    // ── Enable Cloud Backup ────────────────────────────────────────────────────
+    const handleEnableCloudBackup = () => {
+        showAlert({
+            title: "Enable Cloud Backup?",
+            message: "All your existing data — products, customers, bills — will be uploaded to the cloud. You can restore it on any device after reinstalling.\n\nThis cannot be undone (you can disable sync later but cloud data remains).",
+            type: "confirm",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Enable",
+                    style: "default",
+                    onPress: async () => {
+                        setCloudUploadText('Enabling…');
+                        setIsEnablingCloud(true);
+                        try {
+                            const localShop = getShop();
+                            if (localShop) {
+                                updateShop({ ...localShop, aiConsent: true });
+                            }
+
+                            const currentInfo = await getShopInfo();
+                            if (currentInfo) {
+                                await persistShopInfo({ ...currentInfo, aiConsent: true });
+                            }
+                            await setHasConsent(true);
+
+                            queueAllLocalData();
+
+                            updateShop({ aiConsent: true });
+                            setCloudUploadText("Uploading data…");
+                            queueAllLocalData();
+                            await startSyncService(() => setShopActive(false), () => {});
+                            await flushSyncQueue();
+                            const refreshed = await getShopInfo();
+                            setShopInfoState(refreshed);
+                            setSyncPendingCount(getPendingSyncCount());
+                            showAlert({
+                                title: "Cloud Backup Enabled",
+                                message: "Your data has been uploaded. Future changes will sync automatically.",
+                                type: "success",
+                            });
+                        } catch (e: any) {
+                            showAlert("Failed", e?.message ?? "Could not enable cloud backup. Try again.", undefined, "error");
+                        } finally {
+                            setIsEnablingCloud(false);
+                        }
+                    },
+                },
+            ],
+        });
+    };
+
+    // ── Cloud Restore ──────────────────────────────────────────────────────────
+    const handleRestoreFromCloud = () => {
+        showAlert({
+            title: "Restore from Cloud",
+            message: "This will download all your cloud data onto this device. Existing local data with the same ID will be updated.",
+            type: "confirm",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Restore",
+                    style: "default",
+                    onPress: async () => {
+                        setIsRestoring(true);
+                        const result = await restoreFromCloud();
+                        setIsRestoring(false);
+                        if (result.success && result.summary) {
+                            const s = result.summary;
+                            showAlert({
+                                title: "Restore Complete",
+                                message: `Restored:\n• ${s.products} products\n• ${s.customers} customers\n• ${s.categories} categories\n• ${s.brands} brands\n• ${s.bills} bills`,
+                                type: "success",
+                            });
+                        } else {
+                            showAlert("Restore Failed", result.error ?? "Could not connect to cloud. Check your internet connection and try again.", undefined, "error");
+                        }
+                    },
+                },
+            ],
+        });
+    };
+
+    const handleToggleAllowOutOfStock = async (val: boolean) => {
+        setAllowOutOfStock(val);
+        updateShop({ allowOutOfStockBilling: val });
+        const currentInfo = await getShopInfo();
+        if (currentInfo) {
+            await persistShopInfo({ ...currentInfo, allowOutOfStockBilling: val });
+        }
+        const shopId = await getStoredShopId();
+        if (shopId) {
+            try {
+                await supabase.from('shops').update({ allow_out_of_stock_billing: val }).eq('id', shopId);
+            } catch (_) {}
+        }
+        await flushSyncQueue();
+    };
+
+    // ── Export Backup ──────────────────────────────────────────────────────────
+    const handleExportJson = () => {
+        // C5: Warn the user that the file contains sensitive data before sharing.
+        Alert.alert(
+            "Privacy Notice",
+            "The backup file contains sensitive information including customer names, phone numbers, and transaction history.\n\nOnly share it with trusted services (e.g. your own cloud storage or email).",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Export Anyway",
+                    onPress: async () => {
+                        setIsExporting(true);
+                        try {
+                            const data = exportAsJson();
+                            const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+                            const fileName = `pragati_bandhu_backup_${date}.json`;
+                            const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+                            await FileSystem.writeAsStringAsync(filePath, JSON.stringify(data, null, 2));
+                            const canShare = await Sharing.isAvailableAsync();
+                            if (canShare) {
+                                await Sharing.shareAsync(filePath, { mimeType: "application/json", dialogTitle: "Save Backup File" });
+                            } else {
+                                Alert.alert("Export Failed", "Sharing is not available on this device.");
+                            }
+                        } catch (e: any) {
+                            Alert.alert("Export Failed", e?.message ?? "Something went wrong.");
+                        } finally {
+                            setIsExporting(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    // ── Import Backup ──────────────────────────────────────────────────────────
+    const handleImportJson = async () => {
+        try {
+            // C4: Include text/plain so Android file managers that mislabel .json
+            // files as plain text still show up in the picker.
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ["application/json", "text/plain"],
+                copyToCacheDirectory: true,
+            });
+            if (result.canceled || !result.assets?.[0]) return;
+
+            const fileUri = result.assets[0].uri;
+            const raw = await FileSystem.readAsStringAsync(fileUri);
+            const parsed = JSON.parse(raw);
+
+            if (!parsed.version || !parsed.exportedAt) {
+                Alert.alert("Invalid File", "This file is not a valid Pragati Bandhu backup.");
+                return;
+            }
+
+            // C6: Validate that the backup belongs to the current shop before importing.
+            // Mixing data from two different shops would corrupt balances and history.
+            const currentPhone = (phone ?? shopInfo?.phone ?? '').slice(-10);
+            const backupPhone = (parsed.shop?.phone ?? parsed.shop?.id ?? '').slice(-10);
+            if (backupPhone && currentPhone && backupPhone !== currentPhone) {
+                Alert.alert(
+                    "Wrong Shop Backup",
+                    `This backup belongs to shop ${backupPhone}, but you are logged in as ${currentPhone}.\n\nImporting it may mix data from two different shops. Are you sure?`,
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                            text: "Import Anyway",
+                            style: "destructive",
+                            onPress: () => proceedWithImport(parsed),
+                        },
+                    ]
+                );
+                return;
+            }
+
+            proceedWithImport(parsed);
+        } catch (e: any) {
+            Alert.alert("Import Failed", e?.message ?? "Could not read the file.");
+        }
+    };
+
+    const proceedWithImport = async (parsed: any) => {
+        const s = parsed;
+        const hasConsent = shopInfo?.aiConsent ?? false;
+        const cloudNote = hasConsent ? "\n\nYour cloud backup will be updated automatically." : "";
+        Alert.alert(
+            "Import Backup?",
+            `Found:\n• ${s.products?.length ?? 0} products\n• ${s.customers?.length ?? 0} customers\n• ${s.categories?.length ?? 0} categories\n• ${s.brands?.length ?? 0} brands\n• ${s.bills?.length ?? 0} bills\n\nThis will merge with your existing data.${cloudNote}`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Import",
+                    onPress: async () => {
+                        const summary = importFromJson(parsed);
+                        // For cloud users: re-queue all imported rows so Supabase
+                        // reflects the restored state. This also cancels any stale
+                        // DELETE queue entries for the same IDs.
+                        if (hasConsent) {
+                            queueAllLocalData();
+                            await flushSyncQueue();
+                        }
+                        Alert.alert(
+                            "Import Complete",
+                            `Imported:\n• ${summary.products} products\n• ${summary.customers} customers\n• ${summary.categories} categories\n• ${summary.brands} brands\n• ${summary.bills} bills`
+                        );
+                    },
+                },
+            ]
+        );
+    };
+
+    // ── Delete All Data ────────────────────────────────────────────────────────
+    const handleDeleteAllData = () => {
+        const hasConsent = shopInfo?.aiConsent ?? false;
+
+        if (hasConsent) {
+            // Cloud user: offer two paths
+            Alert.alert(
+                "Delete All Data",
+                "Choose what to delete:",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Local Only",
+                        onPress: confirmDeleteLocal,
+                    },
+                    {
+                        text: "Local + Cloud",
+                        style: "destructive",
+                        onPress: confirmDeleteEverything,
+                    },
+                ]
+            );
+        } else {
+            // Offline user: only local data to delete
+            confirmDeleteLocal();
+        }
+    };
+
+    const confirmDeleteLocal = () => {
+        Alert.alert(
+            "Delete Local Data?",
+            "All products, customers, bills and settings will be permanently removed from this device. This cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsDeleting(true);
+                        clearAllLocalData();
+                        await clearAllUserData();
+                        await setHasConsent(false);
+                        setIsDeleting(false);
+                        await logout();
+                    },
+                },
+            ]
+        );
+    };
+
+    const confirmDeleteEverything = () => {
+        Alert.alert(
+            "Delete Everything?",
+            "This will permanently delete ALL your data — products, customers, bills — from this device AND the cloud. This cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Yes, Delete Everything",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsDeleting(true);
+                        const cloudResult = await deleteFromCloud();
+                        if (!cloudResult.success) {
+                            setIsDeleting(false);
+                            Alert.alert("Cloud Delete Failed", cloudResult.error ?? "Could not delete cloud data. Check your connection and try again.");
+                            return;
+                        }
+                        clearAllLocalData();
+                        await clearAllUserData();
+                        await setHasConsent(false);
+                        setIsDeleting(false);
+                        await logout();
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleStartFresh = () => {
+        showAlert({
+            title: "Start Fresh / Reset Test Data?",
+            message: "This will delete all products, categories, brands, customers, bills, and udhar records on this device.\n\nYour shop account and profile will remain saved.",
+            type: "confirm",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Reset Test Data",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            resetShopTestData();
+                            const shopId = await getStoredShopId();
+                            if (shopId && shopInfo?.aiConsent) {
+                                const { data: session } = await supabase.auth.getSession();
+                                const token = session?.session?.access_token;
+                                if (token) {
+                                    fetch(`${supabase.supabaseUrl}/functions/v1/payments/admin/shops/${shopId}/reset-data`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'apikey': supabase.supabaseKey,
+                                            'Authorization': `Bearer ${token}`
+                                        }
+                                    }).catch(() => {});
+                                }
+                            }
+                            setSyncPendingCount(getPendingSyncCount());
+                            showAlert({
+                                title: "Fresh Start Ready",
+                                message: "All testing products, bills, and customers have been cleared. Your shop profile is ready for real data!",
+                                type: "success"
+                            });
+                        } catch (e: any) {
+                            showAlert("Reset Failed", e?.message ?? "Could not reset test data.", undefined, "error");
+                        }
+                    }
+                }
+            ]
+        });
+    };
+
+    const handleLogout = () => {
+        showAlert({
+            title: "Logout",
+            message: "Are you sure you want to logout?",
+            type: "confirm",
+            buttons: [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Logout",
+                    style: "destructive",
+                    onPress: async () => {
+                        await logout();
+                    },
+                },
+            ],
+        });
+    };
+
+    return (
+        <SafeAreaView style={styles.container} edges={["top"]}>
+            <StatusBar barStyle="dark-content" />
+
+            <ScreenHeader
+                isMainTab={true}
+                shopName={shopInfo?.shopName ?? "—"}
+                syncPendingCount={shopInfo?.aiConsent ? syncPendingCount : undefined}
+                onNotificationPress={() => { }}
+            />
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {/* Profile Section */}
+                <View style={styles.profileCard}>
+                    <View style={styles.profileInfo}>
+                        <View style={styles.avatarPlaceholder}>
+                            <Ionicons name="person" size={40} color="#fbbf24" />
+                        </View>
+                        <View style={styles.profileText}>
+                            <Text style={styles.profileName}>
+                                {shopInfo?.ownerName ?? "—"}
+                            </Text>
+                            <Text style={styles.profilePhone}>
+                                {phone ? `${phone}` : "—"}
+                            </Text>
+                        </View>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.editProfileButton}
+                        activeOpacity={0.7}
+                        onPress={() => (navigation as any).navigate("EditShop")}
+                    >
+                        <Ionicons name="create-outline" size={22} color={colors.primary} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* App Preferences */}
+                {/*<SectionHeader title="APP PREFERENCES" />
+                <SettingsItem icon="language" title="Language" value="English" />
+                 <View style={styles.settingsItem}>
+                    <View style={styles.settingsItemLeft}>
+                        <View style={styles.iconContainer}>
+                            <Ionicons
+                                name="moon"
+                                size={22}
+                                color={colors.primary}
+                            />
+                        </View>
+                        <Text style={styles.settingsItemTitle}>Dark Mode</Text>
+                    </View>
+                    <Switch
+                        value={isDarkMode}
+                        onValueChange={setIsDarkMode}
+                        trackColor={{
+                            false: "#e5e7eb",
+                            true: colors.primary,
+                        }}
+                        thumbColor="#ffffff"
+                    />
+                </View> 
+                <SettingsItem icon="notifications" title="Notification Settings" />*/}
+
+                {/* Business Info */}
+                <SectionHeader title="BUSINESS INFO" />
+                <View style={styles.infoContainer}>
+                    <SettingsInfoRow
+                        label="SHOP NAME"
+                        value={shopInfo?.shopName ?? "—"}
+                    />
+                    <SettingsInfoRow
+                        label="BUSINESS CATEGORY"
+                        value={shopInfo?.category || "Not Provided"}
+                        isOptional={true}
+                    />
+                    <SettingsInfoRow
+                        label="WHATSAPP NUMBER"
+                        value={shopInfo?.whatsappNumber || "Not Provided"}
+                        isOptional={true}
+                    />
+                    <SettingsInfoRow
+                        label="PLAN TYPE"
+                        value={
+                            shopInfo?.planType === 'yearly'
+                                ? 'Yearly'
+                                : shopInfo?.planType === 'monthly'
+                                    ? 'Monthly'
+                                    : 'Standard'
+                        }
+                    />
+                    <SettingsInfoRow
+                        label="ACCOUNT EXPIRY"
+                        value={
+                            (() => {
+                                const expiryDate = shopInfo?.planExpiresAt
+                                    ? new Date(shopInfo.planExpiresAt)
+                                    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                                const dateStr = expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                                const isPast = expiryDate < new Date();
+                                const daysLeft = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                                return `${dateStr} (${isPast ? 'Expired' : `${daysLeft} days left`})`;
+                            })()
+                        }
+                    />
+                    {(!shopInfo?.planExpiresAt || new Date(shopInfo.planExpiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) && (
+                        <View style={{ paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, marginTop: 4 }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 8 }}>
+                                To manage your account expiry, visit the web portal.
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => Linking.openURL("https://tanusreepal78965.github.io/Pragati_Bandhu_Git/renew")}
+                                style={{
+                                    backgroundColor: colors.primary,
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 8,
+                                    alignSelf: 'flex-start'
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                                    Manage Account Online ➔
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                    <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>CLOUD BACKUP</Text>
+                        <View style={styles.badgeRow}>
+                            <View style={[
+                                styles.badge,
+                                shopInfo?.aiConsent ? styles.badgeActive : styles.badgeInactive,
+                            ]}>
+                                <Ionicons
+                                    name={shopInfo?.aiConsent ? "cloud-done-outline" : "phone-portrait-outline"}
+                                    size={12}
+                                    color={shopInfo?.aiConsent ? colors.success : colors.textSecondary}
+                                />
+                                <Text style={[
+                                    styles.badgeText,
+                                    { color: shopInfo?.aiConsent ? colors.success : colors.textSecondary },
+                                ]}>
+                                    {shopInfo?.aiConsent ? "Enabled" : "This Device Only"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {Boolean(shopInfo?.aiConsent) && syncPendingCount > 0 && (
+                    <TouchableOpacity
+                        style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+                        onPress={handleSyncNow}
+                        disabled={isSyncing}
+                    >
+                        {isSyncing ? (
+                            <ActivityIndicator size="small" color="#B45309" />
+                        ) : (
+                            <Ionicons name="cloud-upload-outline" size={18} color="#B45309" />
+                        )}
+                        <Text style={styles.syncButtonText}>
+                            {isSyncing
+                                ? "Syncing..."
+                                : syncPendingCount > 0
+                                    ? `Sync Now (${syncPendingCount} pending)`
+                                    : "Sync Now"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* Billing Preferences */}
+                <SectionHeader title="BILLING PREFERENCES" />
+                <TouchableOpacity
+                    style={[styles.settingsItem, { paddingVertical: 12, minHeight: 54 }]}
+                    onPress={() => handleToggleAllowOutOfStock(!allowOutOfStock)}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 12 }}>
+                        <View style={styles.iconContainer}>
+                            <Ionicons name="cart-outline" size={22} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
+                                Allow Out-of-Stock Billing
+                            </Text>
+                            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                                Sell items even when stock reaches zero
+                            </Text>
+                        </View>
+                    </View>
+                    <Switch
+                        value={allowOutOfStock}
+                        onValueChange={handleToggleAllowOutOfStock}
+                        trackColor={{ false: "#CBD5E1", true: colors.primary }}
+                        thumbColor={Platform.OS === "android" ? (allowOutOfStock ? colors.primary : "#F4F3F4") : "#FFFFFF"}
+                    />
+                </TouchableOpacity>
+
+                {/* Inventory Settings */}
+                <SectionHeader title="INVENTORY SETTINGS" />
+                <SettingsItem
+                    icon="apps"
+                    title="Manage Categories"
+                    onPress={() => (navigation as any).navigate("ManageCategories")}
+                />
+                <SettingsItem
+                    icon="pricetag"
+                    title="Manage Brands"
+                    onPress={() => (navigation as any).navigate("ManageBrands")}
+                />
+
+                {/* Data & Backup */}
+                <SectionHeader title="DATA & BACKUP" />
+
+                {!shopInfo?.aiConsent && (
+                    <TouchableOpacity
+                        style={styles.enableCloudButton}
+                        onPress={handleEnableCloudBackup}
+                        disabled={isEnablingCloud}
+                    >
+                        {isEnablingCloud ? (
+                            <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                            <Ionicons name="cloud-upload-outline" size={20} color="#ffffff" />
+                        )}
+                        <Text style={styles.enableCloudText}>
+                            {isEnablingCloud ? cloudUploadText : "Enable Cloud Backup"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {shopInfo?.aiConsent && (
+                    <SettingsItem
+                        icon="cloud-download-outline"
+                        title="Restore from Cloud"
+                        onPress={handleRestoreFromCloud}
+                        showChevron={false}
+                    />
+                )}
+                {isRestoring && (
+                    <View style={styles.inlineLoader}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.inlineLoaderText}>Restoring from cloud…</Text>
+                    </View>
+                )}
+
+                <SettingsItem
+                    icon="share-outline"
+                    title="Export Backup (.json)"
+                    onPress={handleExportJson}
+                    showChevron={false}
+                />
+                {isExporting && (
+                    <View style={styles.inlineLoader}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.inlineLoaderText}>Preparing backup file…</Text>
+                    </View>
+                )}
+
+                <SettingsItem
+                    icon="folder-open-outline"
+                    title="Import from Backup"
+                    onPress={handleImportJson}
+                    showChevron={false}
+                />
+
+                <SettingsItem
+                    icon="refresh-outline"
+                    title="Start Fresh (Reset Test Data)"
+                    onPress={handleStartFresh}
+                    showChevron={false}
+                />
+
+                <TouchableOpacity style={styles.deleteDataButton} onPress={handleDeleteAllData} disabled={isDeleting}>
+                    {isDeleting ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                    ) : (
+                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                    )}
+                    <Text style={styles.deleteDataText}>
+                        {isDeleting ? "Deleting…" : "Delete All Data"}
+                    </Text>
+                </TouchableOpacity>
+
+                {/* Support & Info */}
+                <SectionHeader title="SUPPORT & INFO" />
+                <SettingsItem
+                    icon="sparkles"
+                    title="App Features"
+                    value="What can this app do?"
+                    onPress={() => (navigation as any).navigate("AppFeatures")}
+                />
+                <SettingsItem icon="help-circle" title="Help Center" onPress={() => (navigation as any).navigate("HelpCenter")} />
+                <SettingsItem icon="shield-checkmark" title="Privacy Policy" onPress={() => (navigation as any).navigate("PrivacyPolicy")} />
+                <SettingsItem icon="document-text" title="Terms of Service" onPress={() => (navigation as any).navigate("TermsOfService")} />
+                <SettingsItem
+                    icon="information-circle"
+                    title="App Version"
+                    value={`v${getAppVersion()} (${getAppVersionCode()})`}
+                    showChevron={false}
+                    onPress={handleVersionPress}
+                />
+
+                {/* Export Button */}
+                {showExport && (
+                    <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
+                        <Ionicons name="download-outline" size={20} color={colors.textSecondary} />
+                        <Text style={styles.exportText}>Export Local Data (SQL)</Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* Logout Button */}
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Ionicons
+                        name="log-out-outline"
+                        size={24}
+                        color={colors.error}
+                    />
+                    <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: spacing.tabBarOffset }} />
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: colors.surface,
+    },
+    profileCard: {
+        backgroundColor: colors.surface,
+        margin: spacing.sm,
+        padding: spacing.sm,
+        borderRadius: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 15,
+        elevation: 4,
+    },
+    profileInfo: {
+        flexDirection: "row",
+        alignItems: "center",
+        flex: 1,
+        minWidth: 0,
+    },
+    avatarPlaceholder: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: "#f0f7ff",
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+        borderColor: "#e0e7ff",
+    },
+    profileText: {
+        marginLeft: spacing.md,
+        flex: 1,
+        minWidth: 0,
+    },
+    profileName: {
+        fontSize: typography.sizes.md,
+        fontWeight: "700",
+        color: colors.text,
+    },
+    profilePhone: {
+        fontSize: typography.sizes.sm,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    editProfileButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#f0f7ff",
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: "#e0e7ff",
+        flexShrink: 0,
+        marginLeft: spacing.sm,
+    },
+    editProfileText: {
+        color: colors.primary,
+        fontWeight: "600",
+        fontSize: 13,
+        marginLeft: 4,
+    },
+    sectionHeader: {
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 4,
+        backgroundColor: "#f3f4f6",
+    },
+    sectionHeaderTitle: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: colors.textSecondary,
+        letterSpacing: 0.5,
+    },
+    settingsItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 8,
+        backgroundColor: colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    settingsItemLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    iconContainer: {
+        width: 28,
+        alignItems: "center",
+    },
+    settingsItemTitle: {
+        fontSize: 14,
+        color: colors.text,
+        marginLeft: spacing.sm,
+    },
+    settingsItemRight: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    settingsItemValue: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginRight: spacing.xs,
+    },
+    infoContainer: {
+        backgroundColor: colors.surface,
+    },
+    infoRow: {
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    infoLabel: {
+        fontSize: 9,
+        color: colors.textSecondary,
+        fontWeight: "600",
+        marginBottom: 2,
+    },
+    infoValue: {
+        fontSize: 14,
+        color: colors.text,
+        fontWeight: "500",
+    },
+    logoutButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#fef2f2",
+        marginHorizontal: spacing.sm,
+        marginVertical: 6,
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#fee2e2",
+    },
+    logoutText: {
+        color: colors.error,
+        fontWeight: "700",
+        marginLeft: spacing.sm,
+        fontSize: 14,
+    },
+    badgeRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginTop: 4,
+    },
+    badge: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 14,
+        gap: 4,
+    },
+    badgeActive: {
+        backgroundColor: colors.success + "18",
+    },
+    badgeInactive: {
+        backgroundColor: colors.border,
+    },
+    badgeText: {
+        fontSize: 11,
+        fontWeight: "600",
+    },
+    syncButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        marginHorizontal: spacing.sm,
+        marginTop: 6,
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#F59E0B",
+        backgroundColor: "#FEF3C7",
+    },
+    syncButtonDisabled: {
+        opacity: 0.5,
+    },
+    syncButtonText: {
+        color: "#B45309",
+        fontWeight: "700",
+        fontSize: 13,
+    },
+    exportButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        marginTop: 10,
+        marginHorizontal: spacing.sm,
+        marginBottom: 6,
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+    },
+    exportText: {
+        color: colors.textSecondary,
+        fontWeight: "600",
+        fontSize: 13,
+    },
+    enableCloudButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        marginHorizontal: spacing.sm,
+        marginTop: 6,
+        marginBottom: 4,
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: colors.primary,
+    },
+    enableCloudText: {
+        color: "#ffffff",
+        fontWeight: "700",
+        fontSize: 13,
+    },
+    deleteDataButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        marginHorizontal: spacing.sm,
+        marginTop: 6,
+        marginBottom: 4,
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#fee2e2",
+        backgroundColor: "#fef2f2",
+    },
+    deleteDataText: {
+        color: colors.error,
+        fontWeight: "600",
+        fontSize: 13,
+    },
+    inlineLoader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: spacing.md,
+        paddingVertical: 4,
+        backgroundColor: colors.surface,
+    },
+    inlineLoaderText: {
+        fontSize: 12,
+        color: colors.textSecondary,
+    },
+});

@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "ShopAI",
+    "slug": "Pragati_Bandhu",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F0F4F8"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.pragatibandhu.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F0F4F8"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "30909bed-4ac9-449e-aa9c-f94a3b176d94"
+      }
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-font",
+      "./withJvmArgs.js"
+    ]
+  }
+}

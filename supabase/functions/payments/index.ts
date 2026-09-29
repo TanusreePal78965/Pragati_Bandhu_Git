@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10'
 import { jwtVerify, createRemoteJWKSet, SignJWT } from 'https://deno.land/x/jose@v5.2.4/index.ts'
+import { parseApp } from '../_shared/account.ts'
+import { extendExpiry } from './expiry.ts'
+
+const SHOP_ADMIN_COLUMNS =
+  'id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, active_device_id, created_at, last_synced_at, allow_out_of_stock_billing, auth_user_id'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,15 +33,19 @@ async function verifyFirebaseToken(idToken: string) {
   return payload.phone_number as string
 }
 
-const ADMIN_JWT_SECRET = Deno.env.get('ADMIN_JWT_SECRET') || 'super_secret_fallback_key_12345'
-const adminSecretKey = new TextEncoder().encode(ADMIN_JWT_SECRET)
+function adminSecretKey() {
+  const secret = Deno.env.get('ADMIN_JWT_SECRET')
+  if (!secret) throw new Error('Admin auth not configured')
+  return new TextEncoder().encode(secret)
+}
 
 async function verifyAdminToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, adminSecretKey)
+    const { payload } = await jwtVerify(token, adminSecretKey())
     if (payload.role !== 'superadmin') throw new Error('Invalid role')
     return true
   } catch (e) {
+    if (e instanceof Error && e.message === 'Admin auth not configured') throw e
     throw new Error('Unauthorized admin token')
   }
 }
@@ -52,8 +61,9 @@ Deno.serve(async (req) => {
 
     // === INITIATE PAYMENT ===
     if (path === '/initiate' && req.method === 'POST') {
-      const { phone, utr, amount, planType } = await req.json()
-      if (!phone || !utr || !amount || !planType) {
+      const { phone, utr, amount, planType, app: rawApp } = await req.json()
+      const app = parseApp(rawApp, 'shopai')
+      if (!phone || !utr || !amount || !planType || !app) {
         return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
@@ -67,6 +77,7 @@ Deno.serve(async (req) => {
         merchant_transaction_id: utr,
         amount,
         plan_type: planType,
+        app,
         status: 'pending'
       })
 
@@ -80,12 +91,30 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // === PUBLIC: LOOKUP (RenewPlan page) ===
+    if (path === '/lookup' && req.method === 'POST') {
+      const { phone, app: rawApp } = await req.json()
+      const app = parseApp(rawApp, 'shopai')
+      if (!phone || !app) {
+        return new Response(JSON.stringify({ error: 'phone is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const { data: shop } = await supabase.from('shops').select('id, shop_name').eq('phone', phone).maybeSingle()
+      if (!shop) {
+        return new Response(JSON.stringify({ error: 'Shop not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const { data: sub } = await supabase.from('app_subscriptions').select('expires_at').eq('shop_id', shop.id).eq('app', app).maybeSingle()
+      return new Response(JSON.stringify({ shop_name: shop.shop_name, expires_at: sub?.expires_at ?? null }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     // === ADMIN: LOGIN ===
     if (path === '/admin/login' && req.method === 'POST') {
       const { username, password } = await req.json()
-      const validUser = Deno.env.get('ADMIN_USERNAME') || 'admin'
-      const validPass = Deno.env.get('ADMIN_PASSWORD') || 'admin123'
-      
+      const validUser = Deno.env.get('ADMIN_USERNAME')
+      const validPass = Deno.env.get('ADMIN_PASSWORD')
+      if (!validUser || !validPass || !Deno.env.get('ADMIN_JWT_SECRET')) {
+        return new Response(JSON.stringify({ error: 'Admin auth not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
       if (username !== validUser || password !== validPass) {
         return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
@@ -94,7 +123,7 @@ Deno.serve(async (req) => {
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime('24h')
-        .sign(adminSecretKey)
+        .sign(adminSecretKey())
 
       return new Response(JSON.stringify({ token }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -173,16 +202,9 @@ Deno.serve(async (req) => {
       
       await verifyAdminToken(token)
 
-      // Auto-populate 30-day trial for any existing shops missing plan_expires_at
-      const expiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      await supabase
-        .from('shops')
-        .update({ plan_expires_at: expiryDate, plan_type: 'monthly' })
-        .is('plan_expires_at', null)
-
       const { data: shops, error } = await supabase
         .from('shops')
-        .select('*')
+        .select(`${SHOP_ADMIN_COLUMNS}, app_subscriptions(app, plan_type, is_active, expires_at)`)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -199,7 +221,7 @@ Deno.serve(async (req) => {
       await verifyAdminToken(token)
 
       // Get basic shop info
-      const { data: shop, error: shopErr } = await supabase.from('shops').select('*').eq('id', shopId).single()
+      const { data: shop, error: shopErr } = await supabase.from('shops').select(`${SHOP_ADMIN_COLUMNS}, app_subscriptions(app, plan_type, is_active, expires_at)`).eq('id', shopId).single()
       if (shopErr || !shop) throw new Error('Shop not found')
 
       // Get counts
@@ -248,23 +270,19 @@ Deno.serve(async (req) => {
       const token = authHeader.replace('Bearer ', '')
       await verifyAdminToken(token)
 
-      const { data: shop } = await supabase.from('shops').select('plan_expires_at, plan_type').eq('id', shopId).single()
-      if (!shop) throw new Error('Shop not found')
+      const body = await req.json().catch(() => ({}))
+      const app = parseApp(body.app, 'shopai')
+      if (!app) throw new Error('unknown app')
+      const { data: sub } = await supabase.from('app_subscriptions')
+        .select('expires_at, plan_type').eq('shop_id', shopId).eq('app', app).maybeSingle()
+      const newExpiry = extendExpiry(sub?.expires_at ?? null, 30)
+      const { error: subErr } = await supabase.from('app_subscriptions').upsert(
+        { shop_id: shopId, app, plan_type: sub?.plan_type || 'standard', expires_at: newExpiry, is_active: true, updated_at: new Date().toISOString() },
+        { onConflict: 'shop_id,app' })
+      if (subErr) throw subErr
+      await supabase.from('shops').update({ is_active: true }).eq('id', shopId)
 
-      // Calculate new expiry date
-      let currentExpiry = shop.plan_expires_at ? new Date(shop.plan_expires_at) : new Date()
-      if (currentExpiry < new Date()) {
-        currentExpiry = new Date() // If already expired, start from today
-      }
-      currentExpiry.setDate(currentExpiry.getDate() + 30)
-
-      await supabase.from('shops').update({ 
-        plan_expires_at: currentExpiry.toISOString(),
-        plan_type: shop.plan_type || 'standard',
-        is_active: true
-      }).eq('id', shopId)
-
-      return new Response(JSON.stringify({ success: true, newExpiry: currentExpiry.toISOString() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ success: true, newExpiry }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // === ADMIN: SET CUSTOM EXPIRY (TESTING OVERRIDE) ===
@@ -275,12 +293,12 @@ Deno.serve(async (req) => {
       const token = authHeader.replace('Bearer ', '')
       await verifyAdminToken(token)
 
-      const { plan_expires_at } = await req.json()
-      if (!plan_expires_at) throw new Error('plan_expires_at is required')
-
-      await supabase.from('shops').update({ 
-        plan_expires_at
-      }).eq('id', shopId)
+      const { plan_expires_at, app: rawApp } = await req.json()
+      const app = parseApp(rawApp, 'shopai')
+      if (!plan_expires_at || !app) throw new Error('plan_expires_at is required')
+      const { error: subErr } = await supabase.from('app_subscriptions')
+        .update({ expires_at: plan_expires_at, updated_at: new Date().toISOString() }).eq('shop_id', shopId).eq('app', app)
+      if (subErr) throw subErr
 
       return new Response(JSON.stringify({ success: true, plan_expires_at }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -329,18 +347,19 @@ Deno.serve(async (req) => {
       if (!payment) throw new Error('Payment not found')
       
       const days = payment.plan_type === 'yearly' ? 365 : 30
-      const newExpiry = new Date()
-      newExpiry.setDate(newExpiry.getDate() + days)
-
-      await supabase.from('shops').update({
-        plan_expires_at: newExpiry.toISOString(),
-        plan_type: payment.plan_type,
-        is_active: true
-      }).eq('id', payment.shop_id)
+      const app = parseApp(payment.app, 'shopai')!
+      const { data: sub } = await supabase.from('app_subscriptions')
+        .select('expires_at').eq('shop_id', payment.shop_id).eq('app', app).maybeSingle()
+      const newExpiry = extendExpiry(sub?.expires_at ?? null, days)
+      const { error: subErr } = await supabase.from('app_subscriptions').upsert(
+        { shop_id: payment.shop_id, app, plan_type: payment.plan_type, expires_at: newExpiry, is_active: true, updated_at: new Date().toISOString() },
+        { onConflict: 'shop_id,app' })
+      if (subErr) throw subErr
+      await supabase.from('shops').update({ is_active: true }).eq('id', payment.shop_id)
 
       await supabase.from('payments').update({ status: 'success' }).eq('id', paymentId)
 
-      return new Response(JSON.stringify({ success: true, newExpiry: newExpiry.toISOString() }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ success: true, newExpiry }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // === ADMIN: REJECT PAYMENT ===
@@ -355,6 +374,23 @@ Deno.serve(async (req) => {
 
       await supabase.from('payments').update({ status: 'failed' }).eq('id', paymentId)
 
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // === ADMIN: SAVE APP SETTINGS (replaces anon REST write from the web) ===
+    if (path === '/admin/settings' && req.method === 'POST') {
+      const authHeader = req.headers.get('authorization')
+      if (!authHeader) throw new Error('Missing authorization')
+      await verifyAdminToken(authHeader.replace('Bearer ', ''))
+
+      const { settings } = await req.json()
+      if (!Array.isArray(settings) || settings.some((s) => typeof s?.key !== 'string' || typeof s?.value !== 'string')) {
+        return new Response(JSON.stringify({ error: 'settings must be [{ key, value }]' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const now = new Date().toISOString()
+      const { error } = await supabase.from('app_settings')
+        .upsert(settings.map((s: { key: string; value: string }) => ({ key: s.key, value: s.value, updated_at: now })), { onConflict: 'key' })
+      if (error) throw error
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 

@@ -10,11 +10,12 @@ type Shop = {
   shop_name: string;
   owner_name: string;
   phone: string;
-  plan_type: string;
-  plan_expires_at: string | null;
   is_active: boolean;
   created_at: string;
+  app_subscriptions?: { app: 'shopai' | 'chukta'; plan_type: string; is_active: boolean; expires_at: string | null }[];
 };
+
+const shopaiSub = (shop: Shop) => shop.app_subscriptions?.find((s) => s.app === 'shopai');
 
 export default function AdminShops() {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -209,7 +210,7 @@ export default function AdminShops() {
               </tr>
             ) : (
               filteredShops.map((shop) => {
-                const isExpired = shop.plan_expires_at ? new Date(shop.plan_expires_at) < new Date() : true;
+                const isExpired = shopaiSub(shop)?.expires_at ? new Date(shopaiSub(shop)!.expires_at!) < new Date() : true;
                 return (
                   <tr key={shop.id}>
                     <td>
@@ -218,16 +219,19 @@ export default function AdminShops() {
                     </td>
                     <td>{shop.owner_name}</td>
                     <td>
-                      {shop.plan_type ? (
-                        <span className="badge badge-warning">{shop.plan_type}</span>
+                      {shopaiSub(shop)?.plan_type ? (
+                        <span className="badge badge-warning">{shopaiSub(shop)?.plan_type}</span>
                       ) : (
                         <span style={{ color: '#94a3b8', fontSize: '0.875rem' }}>None</span>
                       )}
+                      {shop.app_subscriptions?.some((s) => s.app === 'chukta') && (
+                        <span className="badge badge-success" style={{ marginLeft: 4 }}>Chukta</span>
+                      )}
                     </td>
                     <td>
-                      {shop.plan_expires_at ? (
+                      {shopaiSub(shop)?.expires_at ? (
                         <div style={{ color: isExpired ? '#ef4444' : '#0f172a', fontWeight: isExpired ? 600 : 400 }}>
-                          {formatDateDdMmmYyyy(shop.plan_expires_at)}
+                          {formatDateDdMmmYyyy(shopaiSub(shop)!.expires_at)}
                           {isExpired && <span style={{ display: 'block', fontSize: '0.75rem' }}>(Expired)</span>}
                         </div>
                       ) : (

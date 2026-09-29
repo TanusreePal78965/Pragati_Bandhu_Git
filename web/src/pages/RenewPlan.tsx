@@ -26,23 +26,21 @@ export default function RenewPlan() {
     }
     setIsLoading(true);
     try {
-      // Check if phone number is actually registered
-      const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/shops?phone=eq.%2B91${clean}&select=id,shop_name,plan_expires_at`, {
-        method: 'GET',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
+      const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/payments/lookup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ phone: `+91${clean}`, app: 'shopai' }),
       });
       const checkBody = await checkRes.json();
-      if (!checkBody || checkBody.length === 0) {
+      if (checkRes.status === 404) {
         setError('This phone number is not registered. Check the number and try again.');
         setIsLoading(false);
         return;
       }
+      if (!checkRes.ok) throw new Error(checkBody.error ?? 'Could not verify phone number');
 
-      setShopName(checkBody[0].shop_name || '');
-      setCurrentExpiry(checkBody[0].plan_expires_at || null);
+      setShopName(checkBody.shop_name || '');
+      setCurrentExpiry(checkBody.expires_at || null);
       setStep('pay');
     } catch (e: any) {
       setError(e?.message ?? 'Could not verify phone number. Please try again.');
@@ -70,7 +68,8 @@ export default function RenewPlan() {
           phone: `+91${phone.replace(/\D/g, '')}`,
           utr,
           amount: planType === 'yearly' ? 999 : 99,
-          planType
+          planType,
+          app: 'shopai'
         })
       });
       const body = await res.json();

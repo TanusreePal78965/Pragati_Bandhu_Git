@@ -424,7 +424,7 @@ Pragati_Bandhu/
 │       ├── 001_rls_policies.sql
 │       └── (applied via MCP tool — see scope doc §14.3)
 ├── backend/                         # Legacy Express — not deployed, kept for reference
-└── mobile/
+└── mobile-shopai/
     ├── app.json
     ├── App.tsx
     └── src/
