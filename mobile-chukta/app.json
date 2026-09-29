@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Chukta",
+    "slug": "chukta",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#FFFFFF" },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.pragatibandhu.chukta" },
+    "android": {
+      "package": "com.pragatibandhu.chukta",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#FFFFFF" },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": ["expo-sqlite", "expo-localization"]
+  }
+}

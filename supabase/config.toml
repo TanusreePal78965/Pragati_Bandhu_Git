@@ -5,14 +5,14 @@
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+schemas = ["public", "graphql_public", "chukta"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -64,3 +64,13 @@ entrypoint = "./functions/reset-password/index.ts"
 enabled = true
 verify_jwt = false  # admin routes use a custom admin JWT; /initiate and /lookup are pre-login
 entrypoint = "./functions/payments/index.ts"
+
+[functions.chukta-staff]
+enabled = true
+verify_jwt = false  # the function validates the owner's token itself (auth.getUser) and reads app/app_role/shop_id claims
+entrypoint = "./functions/chukta-staff/index.ts"
+
+[functions.chukta-login-staff]
+enabled = true
+verify_jwt = false  # pre-login; staff prove identity with owner phone + PIN
+entrypoint = "./functions/chukta-login-staff/index.ts"

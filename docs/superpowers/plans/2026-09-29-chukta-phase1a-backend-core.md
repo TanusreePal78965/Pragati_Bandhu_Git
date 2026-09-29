@@ -38,9 +38,9 @@ Plan 1B (screens, web signup, admin) builds on this.
   - `weekly_off` 0 = Sunday … 6 = Saturday, null = none;
   - property defaults: `default_pay_basis='daily'`, `default_attendance_mode='day'`, `shift_hours=8`, `weekly_off=0`, `monthly_divisor='calendar'`.
 - **Staff:**
-  - PIN is 4–6 digits, unique among a property's **active** staff, stored only as PBKDF2-SHA256 (100,000 iterations, 16-byte salt).
+  - PIN is 4–6 digits, unique among the **shop's** active staff (all properties); reactivation requires a new PIN, stored only as PBKDF2-SHA256 (100,000 iterations, 16-byte salt).
   - The hidden auth email is `st-<staff_id>@<AUTH_EMAIL_DOMAIN>` (default `accounts.pragatibandhu.internal`).
-  - 5 wrong PINs → locked for 15 minutes.
+  - per-shop throttle: 10 attempts / 15 min, then escalating lock 15 min × 2^(n−1) (max 16 h), cleared on success (`chukta.reserve_pin_attempt` / `chukta.clear_pin_attempts`).
   - Staff login input: the owner's phone (E.164) plus the PIN.
 - **Staff login errors** (`body.error`): `wrong_pin` (401), `too_many_attempts` (429), `ambiguous_pin` (409).
 - **Owner login:** the Phase 0 `login` function with `app: 'chukta'`, with errors `Invalid phone number or password` (401), `password_reset_required` (401), `not_subscribed` (403).
@@ -59,7 +59,7 @@ Plan 1B (screens, web signup, admin) builds on this.
 | File | Responsibility |
 |---|---|
 | `supabase/migrations/20260930100000_chukta_schema.sql` | Schema, tables, constraints, triggers |
-| `supabase/migrations/20260930100100_chukta_access.sql` | RLS helpers and policies, grants, hook extension, `record_pin_failure` |
+| `supabase/migrations/20260930100100_chukta_access.sql` | RLS helpers and policies, grants, hook extension, `reserve_pin_attempt`/`clear_pin_attempts` |
 | `supabase/tests/database/chukta_schema.test.sql`, `chukta_access.test.sql` | pgTAP |
 | `supabase/functions/_shared/pin.ts` (+test) | PIN validation/hash/verify, random password, staff email |
 | `supabase/functions/chukta-staff/{handler,index}.ts` (+test) | Owner creates/updates staff |
@@ -321,6 +321,8 @@ git commit -m "feat(db): add chukta schema for Phase 1 ledger"
 
 ### Task 2: Access control, hook extension, PIN-failure function
 
+> Superseded in part by fix rounds — see commits f22e138, 0fa3803 and the spec §7.
+
 **Files:**
 - Create: `supabase/migrations/20260930100100_chukta_access.sql`
 - Modify: `supabase/config.toml` (`[api] schemas`)
@@ -331,7 +333,7 @@ git commit -m "feat(db): add chukta schema for Phase 1 ledger"
 - Produces:
   - `chukta.jwt_role() → text` (`'owner'` unless the claim `app_role='staff'`);
   - `chukta.is_owner_of(uuid) → boolean`, `chukta.is_staff_of(uuid) → boolean`;
-  - `chukta.record_pin_failure(uuid[]) → void` (service role only);
+  - `chukta.reserve_pin_attempt(uuid) → text`, `chukta.clear_pin_attempts(uuid) → void` (per-shop PIN throttle, service role only);
   - a hook that adds `app_role` and `property_id` for active staff.
 
 - [ ] **Step 1: Write the failing test**
@@ -689,6 +691,8 @@ git commit -m "feat(functions): shared PIN hashing and staff identity helpers"
 
 ### Task 4: `chukta-staff` function (owner creates/updates staff)
 
+> Superseded in part by fix rounds — see commits f22e138, 0fa3803 and the spec §7.
+
 **Files:**
 - Create: `supabase/functions/chukta-staff/handler.ts`, `supabase/functions/chukta-staff/index.ts`
 - Modify: `supabase/config.toml`
@@ -1015,13 +1019,15 @@ git commit -m "feat(functions): chukta-staff for owner-managed staff PIN account
 
 ### Task 5: `chukta-login-staff` function
 
+> Superseded in part by fix rounds — see commits f22e138, 0fa3803 and the spec §7.
+
 **Files:**
 - Create: `supabase/functions/chukta-login-staff/handler.ts`, `supabase/functions/chukta-login-staff/index.ts`
 - Modify: `supabase/config.toml`
 - Test: `supabase/functions/chukta-login-staff/handler.test.ts`
 
 **Interfaces:**
-- Consumes: `isValidPin`, `verifyPin`, `hashPin` (in tests) (Task 3); `decodeJwtPayload`, `HandlerResult`, `Session`, `json`, `corsHeaders` (Phase 0); SQL `chukta.record_pin_failure(uuid[])`.
+- Consumes: `isValidPin`, `verifyPin`, `hashPin` (in tests) (Task 3); `decodeJwtPayload`, `HandlerResult`, `Session`, `json`, `corsHeaders` (Phase 0); SQL `chukta.reserve_pin_attempt(uuid)`, `chukta.clear_pin_attempts(uuid)`.
 - Produces: `POST /functions/v1/chukta-login-staff` `{ ownerPhone, pin, deviceId? }` → 200 `{ session, staff: { id, name }, property: { id, name } }` | 400 | 401 `{error:'wrong_pin'}` | 409 `{error:'ambiguous_pin'}` | 429 `{error:'too_many_attempts'}`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -3232,49 +3238,36 @@ git commit -m "feat(chukta): owner and staff auth service with offline-safe rest
 
 This task changes production, and Claude Code's auto mode blocks `db push` and `functions deploy`. **The user runs the marked commands.** Claude runs the read-only checks and the test wrapper.
 
-- [ ] **Step 1 (user):** push the migrations from the repo root:
+- [ ] **Step 1 (user):** `supabase db push --linked` from the **worktree/branch** that has the migrations.
+
+- [ ] **Step 2 (user, immediately):** log in as an existing ShopAI owner in the app or web, and read one ShopAI screen. If login fails, restore the Phase 0 hook body (`supabase/migrations/20260928100100_account_token_hook.sql` function) via SQL right away.
+
+- [ ] **Step 3:** (user) Dashboard → API → Exposed schemas: add `chukta`. Then (Claude) run `notify pgrst, 'reload schema'` via `supabase db query --linked`.
+
+- [ ] **Step 4 (Claude):** run the pgTAP files through the tapwrap wrapper. Expect: `chukta_schema` 1..12, `chukta_access` 1..28, and Phase 0 `token_hook` 1..17 (re-run because the hook changed). If `set local role supabase_auth_admin` is not permitted on hosted, record it and rely on Step 2 instead.
+
+- [ ] **Step 5 (user):** `supabase functions deploy chukta-staff chukta-login-staff --use-api`.
+
+- [ ] **Step 6 (Claude):** smoke tests:
+  - `chukta-login-staff` with an unknown phone → 401 `wrong_pin`;
+  - `chukta-staff/create` without auth → 401;
+  - anon REST with `Accept-Profile: chukta` → permission denied.
+
+- [ ] **Step 7 (user + Claude):** end to end with a Chukta-subscribed test owner:
+  - owner login `app:'chukta'`, then create a property via REST (`Content-Profile: chukta`);
+  - `chukta-staff/create`;
+  - staff login → decode the token to confirm `app=chukta`, `app_role=staff`, `property_id`;
+  - the **same staff member logs in twice within 60 s** (generateLink frequency) and a burst of 5 staff logins (GoTrue token-verification limit). Raise Dashboard → Auth → Rate limits if throttled;
+  - **11** wrong PINs → 429, then `select chukta.clear_pin_attempts('<shop id>')`;
+  - push/pull round trip of a property and a worker with `is_active` / `weekly_off_override` / `shift_hours`, confirming the booleans, numerics and server timestamp format parse;
+  - archive the property → the staff member's next refresh fails.
+
+- [ ] **Step 8: Record the results**
+
+Record the results in `docs/superpowers/notes/` (append under a new heading in `2026-09-29-phase0-preflight.md`, or a new note file), then commit:
 
 ```bash
-supabase db push --linked
-```
-Expected: it applies `20260930100000_chukta_schema.sql` and `20260930100100_chukta_access.sql`.
-
-- [ ] **Step 2 (user):** in Dashboard → Project Settings → API → **Exposed schemas**, add `chukta` and save.
-
-- [ ] **Step 3 (Claude):** run the pgTAP files against the live DB. The Phase 0 wrapper at `<scratchpad>/tapwrap.py` turns each assertion into `set_config('tap.out', coalesce(current_setting('tap.out', true), '') || E'\n' || (<assertion>), true)`, wraps `finish()` the same way, and reads `current_setting('tap.out')` before `rollback`. Recreate it if the scratchpad is gone:
-
-```bash
-python3 tapwrap.py supabase/tests/database/chukta_schema.test.sql > /tmp/c1.sql
-sed -i '' "s/current_setting('tap.out', true) ||/coalesce(current_setting('tap.out', true), '') ||/g" /tmp/c1.sql
-supabase db query --linked -f /tmp/c1.sql
-```
-Repeat for `chukta_access.test.sql`, and also re-run the Phase 0 `token_hook.test.sql` (the hook was redefined).
-Expected: `1..12` all ok; `1..17` all ok; Phase 0 token_hook `1..17` all ok.
-
-- [ ] **Step 4 (user):** deploy the functions:
-
-```bash
-supabase functions deploy chukta-staff chukta-login-staff --use-api
-```
-
-- [ ] **Step 5 (Claude):** smoke tests, using the anon key from `mobile-shopai/eas.json`:
-  - `POST /functions/v1/chukta-login-staff` with `{ownerPhone:"+910000000000", pin:"1234"}` → 401 `wrong_pin`.
-  - `POST /functions/v1/chukta-staff/create` without Authorization → 401.
-  - `GET /rest/v1/workers` with header `Accept-Profile: chukta` and the anon key → permission denied.
-
-- [ ] **Step 6 (user + Claude):** end-to-end staff flow with a Chukta-subscribed test owner:
-  1. Register Chukta for the test phone on the website, or add it via the `register` function with `apps: ['chukta']`.
-  2. Owner login via `login` with `app: 'chukta'` → owner session. Insert a property through REST (`Content-Profile: chukta`).
-  3. `POST chukta-staff/create` with the owner's access token → staff is created.
-  4. `POST chukta-login-staff` with the owner phone and the PIN → 200. Decode the access token and confirm `app=chukta`, `app_role=staff`, `property_id`. This also answers spec §12 open item 1: magic-link sessions work while signups are disabled.
-  5. Five wrong PINs → 429 `too_many_attempts`. Then deactivate the staff member via `chukta-staff/update`, and their refresh fails.
-
-- [ ] **Step 7: Record the results**
-
-Append the results to `docs/superpowers/notes/2026-09-29-phase0-preflight.md` under a new heading `## Chukta Phase 1A deploy`, then commit:
-
-```bash
-git add docs/superpowers/notes/2026-09-29-phase0-preflight.md
+git add docs/superpowers/notes/
 git commit -m "docs: record Chukta Phase 1A deploy verification"
 ```
 

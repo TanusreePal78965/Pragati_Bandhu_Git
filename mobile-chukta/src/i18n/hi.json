@@ -1,0 +1,24 @@
+{
+  "common": { "appName": "चुकता", "ok": "ठीक है", "cancel": "रद्द करें", "save": "सेव करें", "retry": "फिर से कोशिश करें" },
+  "language": { "title": "भाषा चुनें", "en": "English", "bn": "বাংলা", "hi": "हिन्दी" },
+  "auth": {
+    "error": {
+      "invalidCredentials": "फ़ोन नंबर या पासवर्ड गलत है।",
+      "passwordResetRequired": "पहले प्रगति बंधु वेबसाइट पर नया पासवर्ड सेट करें (Forgot password)।",
+      "notSubscribed": "यह नंबर चुकता के लिए रजिस्टर नहीं है। वेबसाइट पर चुकता के लिए रजिस्टर करें।",
+      "wrongPin": "पिन गलत है।",
+      "tooManyAttempts": "बहुत बार गलत पिन। स्टाफ लॉगिन कुछ समय के लिए रुका है — बाद में कोशिश करें या मालिक को बताएं।",
+      "ambiguousPin": "यह पिन दो जगह इस्तेमाल हो रहा है। मालिक से पिन बदलवाएँ।",
+      "network": "इंटरनेट नहीं है। फिर से कोशिश करें।",
+      "unknown": "कुछ गलत हो गया। फिर से कोशिश करें।"
+    }
+  },
+  "ledger": {
+    "explain": {
+      "hourly": "{{hours}} घंटे × {{rate}}",
+      "daily": "{{days}} दिन × {{rate}}",
+      "weekly": "{{days}} दिन × {{rate}} ÷ 7",
+      "monthly": "{{month}}: {{base}} − {{deductionDays}} दिन × {{perDay}}"
+    }
+  }
+}
