@@ -92,6 +92,14 @@ export function VersionProvider({ children }: { children: React.ReactNode }) {
         setIsMaintenance(false);
       }
 
+      // Development builds carry a local version code (e.g. 1) that is always
+      // below the store minimum — skip update gates so they stay usable.
+      if (__DEV__) {
+        setIsForceUpdate(false);
+        setIsSoftUpdate(false);
+        return;
+      }
+
       // 2. Force Update Check (build code < min_version_code)
       if (currentCode < minVersionCode) {
         setIsForceUpdate(true);
