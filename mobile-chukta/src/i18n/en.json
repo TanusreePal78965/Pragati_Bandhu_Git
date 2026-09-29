@@ -1,0 +1,24 @@
+{
+  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry" },
+  "language": { "title": "Choose language", "en": "English", "bn": "বাংলা", "hi": "हिन्दी" },
+  "auth": {
+    "error": {
+      "invalidCredentials": "Wrong phone number or password.",
+      "passwordResetRequired": "Please set a new password first on the Pragati Bandhu website (Forgot password).",
+      "notSubscribed": "This number is not registered for Chukta. Register on the website under Chukta.",
+      "wrongPin": "Wrong PIN.",
+      "tooManyAttempts": "Too many wrong PINs. Try again in 15 minutes.",
+      "ambiguousPin": "This PIN is used at two places. Ask the owner to change it.",
+      "network": "No internet. Please try again.",
+      "unknown": "Something went wrong. Please try again."
+    }
+  },
+  "ledger": {
+    "explain": {
+      "hourly": "{{hours}} hours × {{rate}}",
+      "daily": "{{days}} days × {{rate}}",
+      "weekly": "{{days}} days × {{rate}} ÷ 7",
+      "monthly": "{{month}}: {{base}} − {{deductionDays}} days × {{perDay}}"
+    }
+  }
+}
