@@ -22,6 +22,11 @@ const deps: StaffLoginDeps = {
     const { error } = await admin.schema('chukta').rpc('clear_pin_attempts', { p_shop_id: shopId })
     if (error) throw error
   },
+  async hasActiveSubscription(shopId) {
+    const { data, error } = await admin.from('app_subscriptions').select('is_active').eq('shop_id', shopId).eq('app', 'chukta').maybeSingle()
+    if (error) throw error
+    return data?.is_active === true
+  },
   async listStaffForShop(shopId) {
     const { data, error } = await admin.schema('chukta').from('staff_users')
       .select('id, name, property_id, auth_user_id, pin_hash, pin_salt, properties!inner(name, shop_id, is_active)')

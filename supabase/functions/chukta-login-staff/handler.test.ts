@@ -16,6 +16,7 @@ function makeDeps(staff: StaffCandidate[], over: Partial<StaffLoginDeps> = {}) {
     findShopIdByPhone: async (p) => (p === '+919800000001' ? 'shop1' : null),
     reserveAttempt: async (s) => { log.push(`reserve:${s}`); return 'ok' },
     clearAttempts: async (s) => { log.push(`clear:${s}`) },
+    hasActiveSubscription: async () => true,
     listStaffForShop: async () => { log.push('list'); return staff },
     createSession: async (uid) => { log.push(`session:${uid}`); return { access_token: tok({ session_id: 'sess1' }), refresh_token: 'r1' } },
     recordSession: async (sid, uid, dev) => { log.push(`record:${sid}:${uid}:${dev}`) },
@@ -67,4 +68,19 @@ Deno.test('match: reserve, list, clear, create + record session, refreshed sessi
   assertEquals((res.body.session as { refresh_token: string }).refresh_token, 'r2')
   assertEquals(res.body.staff, { id: 'a', name: 'N-a' })
   assertEquals(res.body.property, { id: 'p1', name: 'Main' })
+})
+
+Deno.test('correct pin but no active chukta subscription: 403 not_subscribed, attempts cleared, no session', async () => {
+  const { deps, log } = makeDeps([await cand('a', '4821')], { hasActiveSubscription: async () => false })
+  const res = await handleStaffLogin(input, deps)
+  assertEquals(res.status, 403)
+  assertEquals(res.body, { error: 'not_subscribed' })
+  assertEquals(log, ['reserve:shop1', 'list', 'clear:shop1'])
+})
+
+Deno.test('wrong pin never reveals subscription state', async () => {
+  let asked = false
+  const { deps } = makeDeps([await cand('a', '1111')], { hasActiveSubscription: async () => { asked = true; return false } })
+  assertEquals((await handleStaffLogin(input, deps)).body, { error: 'wrong_pin' })
+  assertEquals(asked, false)
 })

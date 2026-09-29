@@ -29,6 +29,7 @@ export interface StaffDeps {
   updateStaff(id: string, patch: StaffPatch): Promise<void>
   revokeSessions(authUserId: string): Promise<void>
   deleteAuthUser(authUserId: string): Promise<void>
+  clearPinAttempts(shopId: string): Promise<void>
   newId(): string
 }
 
@@ -44,7 +45,7 @@ async function pinTaken(pin: string, staff: StaffRecord[], exceptId?: string): P
 }
 
 export async function handleStaff(
-  action: 'create' | 'update',
+  action: 'create' | 'update' | 'unlock',
   jwt: string | null,
   input: Record<string, unknown>,
   deps: StaffDeps,
@@ -52,6 +53,11 @@ export async function handleStaff(
   const caller = jwt ? await deps.getCaller(jwt) : null
   if (!caller) return fail(401, 'unauthorized')
   if (caller.app !== 'chukta' || caller.appRole === 'staff' || !caller.shopId) return fail(403, 'forbidden')
+
+  if (action === 'unlock') {
+    await deps.clearPinAttempts(caller.shopId)
+    return { status: 200, body: { ok: true } }
+  }
 
   if (action === 'create') {
     const propertyId = str(input.propertyId)

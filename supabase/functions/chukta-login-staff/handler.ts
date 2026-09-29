@@ -16,6 +16,8 @@ export interface StaffLoginDeps {
   /** Atomically reserves one attempt for the shop before any PIN work: 'ok' | 'locked'. */
   reserveAttempt(shopId: string): Promise<'ok' | 'locked'>
   clearAttempts(shopId: string): Promise<void>
+  /** The shop's `app_subscriptions` row for chukta exists and is_active (same rule as owner login). */
+  hasActiveSubscription(shopId: string): Promise<boolean>
   listStaffForShop(shopId: string): Promise<StaffCandidate[]>
   createSession(authUserId: string): Promise<Session>
   recordSession(sessionId: string, userId: string, deviceId: string | null): Promise<void>
@@ -48,6 +50,7 @@ export async function handleStaffLogin(
 
   const match = matches[0]
   await deps.clearAttempts(shopId)
+  if (!(await deps.hasActiveSubscription(shopId))) return { status: 403, body: { error: 'not_subscribed' } }
   const first = await deps.createSession(match.auth_user_id)
   const sessionId = decodeJwtPayload(first.access_token).session_id
   if (typeof sessionId !== 'string') throw new Error('session_id claim missing from access token')

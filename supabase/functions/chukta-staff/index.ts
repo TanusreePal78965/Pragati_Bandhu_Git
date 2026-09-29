@@ -60,6 +60,10 @@ const deps: StaffDeps = {
     const { error } = await admin.auth.admin.deleteUser(authUserId)
     if (error) throw error
   },
+  async clearPinAttempts(shopId) {
+    const { error } = await chukta().rpc('clear_pin_attempts', { p_shop_id: shopId })
+    if (error) throw error
+  },
   newId: () => crypto.randomUUID(),
 }
 
@@ -68,7 +72,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
   try {
     const path = new URL(req.url).pathname
-    const action = path.endsWith('/create') ? 'create' : path.endsWith('/update') ? 'update' : null
+    const action = path.endsWith('/create') ? 'create' : path.endsWith('/update') ? 'update' : path.endsWith('/unlock') ? 'unlock' : null
     if (!action) return json(404, { error: 'not_found' })
     const body = await req.json().catch(() => null)
     if (body === null || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'invalid_json' })
