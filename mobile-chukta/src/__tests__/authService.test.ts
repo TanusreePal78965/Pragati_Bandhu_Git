@@ -82,6 +82,14 @@ test('restore: a slow getSession times out and keeps the user signed in', async 
   expect(await createAuthService(slow.d, 20).restore()).toEqual(owner);
 });
 
+test('malformed 200 bodies map to auth.error.unknown, never a TypeError', async () => {
+  for (const body of [{}, { session: { access_token: 'a', refresh_token: 'r' } }, { session: { access_token: 'a', refresh_token: 'r', user: { id: 'u' } } }]) {
+    const { d } = deps({ post: async () => ({ status: 200, body }) });
+    await expect(createAuthService(d).loginOwner('9800000001', 'x')).rejects.toMatchObject({ key: 'auth.error.unknown' });
+    await expect(createAuthService(d).loginStaff('9800000001', '4821')).rejects.toMatchObject({ key: 'auth.error.unknown' });
+  }
+});
+
 test('logout signs out locally, clears stored session and identity', async () => {
   const { d, log } = deps();
   await createAuthService(d).logout();

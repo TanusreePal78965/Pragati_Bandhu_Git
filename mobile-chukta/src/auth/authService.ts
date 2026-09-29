@@ -42,6 +42,7 @@ export function createAuthService(deps: AuthDeps, timeoutMs = 3000) {
       throw new AuthError('auth.error.network');
     }
     if (res.status !== 200) throw new AuthError(errors[res.body?.error] ?? 'auth.error.unknown');
+    if (typeof res.body?.session?.access_token !== 'string' || typeof res.body?.session?.refresh_token !== 'string') throw new AuthError('auth.error.unknown');
     await deps.setSession(res.body.session.access_token, res.body.session.refresh_token);
     return res.body;
   }
@@ -49,6 +50,7 @@ export function createAuthService(deps: AuthDeps, timeoutMs = 3000) {
   return {
     async loginOwner(phone10: string, password: string): Promise<Identity> {
       const body = await call('login', { phone: `+91${phone10}`, password, app: 'chukta', deviceId: await deps.deviceId() }, OWNER_ERRORS);
+      if (typeof body.session?.user?.id !== 'string' || typeof body.shop?.id !== 'string') throw new AuthError('auth.error.unknown');
       const identity: Identity = { kind: 'owner', userId: body.session.user.id, shopId: body.shop.id, phone: body.shop.phone };
       await deps.saveIdentity(identity);
       return identity;
@@ -56,6 +58,7 @@ export function createAuthService(deps: AuthDeps, timeoutMs = 3000) {
 
     async loginStaff(ownerPhone10: string, pin: string): Promise<Identity> {
       const body = await call('chukta-login-staff', { ownerPhone: `+91${ownerPhone10}`, pin, deviceId: await deps.deviceId() }, STAFF_ERRORS);
+      if (typeof body.session?.user?.id !== 'string' || typeof body.staff?.id !== 'string' || typeof body.property?.id !== 'string') throw new AuthError('auth.error.unknown');
       const identity: Identity = {
         kind: 'staff', userId: body.session.user.id, staffId: body.staff.id, staffName: body.staff.name,
         propertyId: body.property.id, propertyName: body.property.name,
