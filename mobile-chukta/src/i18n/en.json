@@ -7,7 +7,7 @@
       "passwordResetRequired": "Please set a new password first on the Pragati Bandhu website (Forgot password).",
       "notSubscribed": "This number is not registered for Chukta. Register on the website under Chukta.",
       "wrongPin": "Wrong PIN.",
-      "tooManyAttempts": "Too many wrong PINs. Try again in 15 minutes.",
+      "tooManyAttempts": "Too many wrong PINs. Staff login is paused for a while — try later or ask the owner.",
       "ambiguousPin": "This PIN is used at two places. Ask the owner to change it.",
       "network": "No internet. Please try again.",
       "unknown": "Something went wrong. Please try again."
