@@ -31,6 +31,7 @@ function eachDate(from: string, to: string): string[] {
 
 export function calculateWorkerLedger(input: Input): LedgerResult {
   const { settings: s, ratePaise: rate } = input;
+  const shift = s.shiftHours > 0 ? s.shiftHours : 8;
   const end = input.leftDate && compareDates(input.leftDate, input.today) < 0 ? input.leftDate : input.today;
   const dates = compareDates(input.joiningDate, end) <= 0 ? eachDate(input.joiningDate, end) : [];
   const byDate = effectiveAttendance(input.attendance);
@@ -43,18 +44,18 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
     let hours = 0;
     for (const d of dates) {
       if (isOff(d)) continue;
-      hours += credit(byDate.get(d), s.shiftHours) * s.shiftHours;
+      hours += credit(byDate.get(d), shift) * shift;
     }
     earned = hours * rate;
     explanation.push({ key: 'ledger.explain.hourly', params: { hours: round2(hours), rate } });
   } else if (s.payBasis === 'daily') {
     let days = 0;
-    for (const d of dates) if (!isOff(d)) days += credit(byDate.get(d), s.shiftHours);
+    for (const d of dates) if (!isOff(d)) days += credit(byDate.get(d), shift);
     earned = days * rate;
     explanation.push({ key: 'ledger.explain.daily', params: { days: round2(days), rate } });
   } else if (s.payBasis === 'weekly') {
     let days = 0;
-    for (const d of dates) days += isOff(d) ? 1 : credit(byDate.get(d), s.shiftHours);
+    for (const d of dates) days += isOff(d) ? 1 : credit(byDate.get(d), shift);
     earned = (days * rate) / 7;
     explanation.push({ key: 'ledger.explain.weekly', params: { days: round2(days), rate } });
   } else {
@@ -74,18 +75,18 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
       const whole = monthDates.length === dim;
       const workingDates = monthDates.filter((d) => !isOff(d));
       const eligible = s.monthlyDivisor === '26' ? workingDates.length : monthDates.length;
-      const baseAmount = whole ? rate : Math.min(rate, eligible * perDay);
+      const baseAmount = whole ? rate : Math.min(rate, (eligible * rate) / divisor);
       let deductionDays = 0;
-      for (const d of workingDates) deductionDays += 1 - credit(byDate.get(d), s.shiftHours);
-      earned += Math.max(0, baseAmount - deductionDays * perDay);
+      for (const d of workingDates) deductionDays += 1 - credit(byDate.get(d), shift);
+      earned += Math.max(0, baseAmount - (deductionDays * rate) / divisor);
       explanation.push({
         key: 'ledger.explain.monthly',
-        params: { month, base: Math.round(baseAmount), deductionDays: round2(deductionDays), perDay: Math.round(perDay) },
+        params: { month, base: Math.round(baseAmount), deductionDays: round2(deductionDays), perDay: Math.round(perDay), divisor, eligibleDays: eligible },
       });
     }
   }
 
-  const earnedPaise = Math.round(earned);
+  const earnedPaise = Math.round(earned + 1e-6);
   const paidPaise = activeMoneyRows(input.payments).reduce((sum, p) => sum + p.amount_paise, 0);
   const advanceOutstandingPaise = activeMoneyRows(input.advances).reduce(
     (sum, a) => sum + (a.type === 'advance' ? a.amount_paise : -a.amount_paise), 0);

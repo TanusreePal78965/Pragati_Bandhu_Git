@@ -106,3 +106,61 @@ test('correction: latest entry wins, and voided money rows are excluded', () => 
   expect(r.wageDuePaise).toBe(30000);
   expect(r.advanceOutstandingPaise).toBe(40000);
 });
+
+test('monthly divisor 26 partial month counts working days only', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly', monthlyDivisor: '26' }), ratePaise: 2600000, joiningDate: '2026-09-21', today: '2026-09-30', attendance: [],
+  });
+  expect(r.earnedPaise).toBe(900000); // 9 working days (Sun 27th off) × 1,00,000
+  expect(r.explanation[0].params).toMatchObject({ divisor: 26, eligibleDays: 9 });
+});
+
+test('monthly divisor 30 partial month', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly', monthlyDivisor: '30' }), ratePaise: 3000000, joiningDate: '2026-09-21', today: '2026-09-30', attendance: [],
+  });
+  expect(r.earnedPaise).toBe(1000000);
+});
+
+test('monthly floors at zero when every working day is absent', () => {
+  const absences: AttendanceEntry[] = [];
+  for (let d = 1; d <= 31; d++) absences.push(att(`2026-10-${String(d).padStart(2, '0')}`, 'absent'));
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly', monthlyDivisor: '26' }), ratePaise: 2600000, joiningDate: '2026-10-01', today: '2026-10-31', attendance: absences,
+  });
+  expect(r.earnedPaise).toBe(0);
+});
+
+test('weeklyOff null makes every day a working day', () => {
+  const r = calculateWorkerLedger({ ...base, settings: S({ weeklyOff: null }), ratePaise: 50000, joiningDate: '2026-09-01', today: '2026-09-07', attendance: [] });
+  expect(r.earnedPaise).toBe(350000);
+});
+
+test('hourly half_day pays half a shift', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'hourly', attendanceMode: 'hours' }), ratePaise: 6000, joiningDate: '2026-09-01', today: '2026-09-01',
+    attendance: [att('2026-09-01', 'half_day')],
+  });
+  expect(r.earnedPaise).toBe(24000);
+});
+
+test('monthly across several months', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly' }), ratePaise: 3100000, joiningDate: '2026-07-15', today: '2026-09-10', attendance: [],
+  });
+  expect(r.earnedPaise).toBe(5833333); // 17/31 + full Aug + 10/30
+});
+
+test('half-up rounding is exact for odd-paise rates (multiply before divide)', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly', monthlyDivisor: '26' }), ratePaise: 106513, joiningDate: '2026-09-16', today: '2026-09-30', attendance: [],
+  });
+  expect(r.earnedPaise).toBe(53257); // 13 working days × 106513 / 26 = 53256.5 → 53257
+});
+
+test('non-positive shift hours fall back to 8', () => {
+  const r = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'hourly', attendanceMode: 'hours', shiftHours: 0 }), ratePaise: 6000, joiningDate: '2026-09-01', today: '2026-09-01', attendance: [],
+  });
+  expect(r.earnedPaise).toBe(48000);
+});

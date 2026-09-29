@@ -1,11 +1,20 @@
 import type { AttendanceEntry } from './types';
 
-/** Effective entry per date: greatest (created_at, id). Rows are append-only; corrections are newer rows. */
+const ts = (s: string) => {
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+};
+
+/** Effective entry per date for ONE worker: greatest (created_at instant, id). Rows are append-only; corrections are newer rows. */
 export function effectiveAttendance(entries: AttendanceEntry[]): Map<string, AttendanceEntry> {
   const out = new Map<string, AttendanceEntry>();
+  const worker = entries[0]?.worker_id;
   for (const e of entries) {
+    if (e.worker_id !== worker) throw new Error('effectiveAttendance expects entries for a single worker');
     const cur = out.get(e.date);
-    if (!cur || e.created_at > cur.created_at || (e.created_at === cur.created_at && e.id > cur.id)) out.set(e.date, e);
+    if (!cur) { out.set(e.date, e); continue; }
+    const d = ts(e.created_at) - ts(cur.created_at);
+    if (d > 0 || (d === 0 && e.id > cur.id)) out.set(e.date, e);
   }
   return out;
 }

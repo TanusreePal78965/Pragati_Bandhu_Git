@@ -23,3 +23,18 @@ test('activeMoneyRows drops voids and voided rows', () => {
   ];
   expect(activeMoneyRows(rows).map((r) => r.id)).toEqual(['1']);
 });
+
+test('ordering uses the instant, not the string format', () => {
+  const m = effectiveAttendance([
+    e('a', '2026-09-02', 'absent', '2026-09-02T15:30:00+05:30'),
+    e('b', '2026-09-02', 'present', '2026-09-02T10:00:01Z'),
+  ]);
+  expect(m.get('2026-09-02')?.id).toBe('b');
+});
+
+test('rejects entries from more than one worker', () => {
+  expect(() => effectiveAttendance([
+    e('a', '2026-09-02', 'absent', '2026-09-02T10:00:00Z'),
+    { ...e('b', '2026-09-02', 'absent', '2026-09-02T10:00:00Z'), worker_id: 'other' },
+  ])).toThrow('single worker');
+});
