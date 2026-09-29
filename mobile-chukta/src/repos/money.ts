@@ -41,6 +41,8 @@ async function voidRow<T extends AdvanceEntry | WagePayment>(
   const target = await ctx.db.getFirstAsync<T>(`select * from ${table} where id = ?`, [targetId]);
   if (!target) throw new Error('entry not found');
   if (target.voids_id) throw new Error('cannot correct a correction');
+  const existing = await ctx.db.getFirstAsync<{ id: string }>(`select id from ${table} where voids_id = ?`, [targetId]);
+  if (existing) throw new Error('entry already corrected');
   const row = { ...target, id: ctx.newId(), voids_id: target.id, note: null, ...audit(ctx) } as T;
   await insertAndEnqueue(ctx, table, row as unknown as Record<string, unknown>);
   return row;

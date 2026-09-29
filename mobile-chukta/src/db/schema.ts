@@ -52,7 +52,7 @@ create table if not exists wage_payments (
 );
 create index if not exists idx_payments_worker on wage_payments(worker_id);
 create table if not exists sync_queue (
-  seq integer primary key autoincrement, table_name text not null, row_id text not null, payload text not null,
+  seq integer primary key autoincrement, table_name text not null, row_id text not null, op text not null default 'insert', payload text not null,
   status text not null default 'pending', attempts integer not null default 0, last_error text, created_at text not null
 );
 create index if not exists idx_sync_queue_status on sync_queue(status, seq);
