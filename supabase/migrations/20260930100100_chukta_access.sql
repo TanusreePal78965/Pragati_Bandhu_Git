@@ -179,3 +179,25 @@ create index if not exists idx_chukta_workers_sync on chukta.workers(server_upda
 create index if not exists idx_chukta_attendance_sync on chukta.attendance_entries(server_updated_at, id);
 create index if not exists idx_chukta_advance_sync on chukta.advance_entries(server_updated_at, id);
 create index if not exists idx_chukta_payments_sync on chukta.wage_payments(server_updated_at, id);
+
+-- 7. Archiving a property deactivates its staff and revokes their sessions (spec §10: removed staff are logged out).
+create or replace function chukta.on_property_archived() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid;
+begin
+  if old.is_active and not new.is_active then
+    for v_user in
+      update chukta.staff_users set is_active = false
+       where property_id = new.id and is_active
+      returning auth_user_id
+    loop
+      perform public.revoke_user_sessions(v_user);
+    end loop;
+  end if;
+  return new;
+end $$;
+revoke execute on function chukta.on_property_archived() from public, anon, authenticated;
+
+create trigger trg_property_archived after update of is_active on chukta.properties
+  for each row execute function chukta.on_property_archived();

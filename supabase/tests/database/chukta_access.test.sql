@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_access.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(28);
 
 -- fixtures (as postgres)
 insert into auth.users (id, email) values
@@ -40,6 +40,13 @@ select ok(
   (public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000052',
     'claims', jsonb_build_object('role', 'authenticated'))) -> 'claims' ->> 'app_role') is null,
   'inactive staff gets no staff claims');
+
+set local role supabase_auth_admin;
+select lives_ok($$ select public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-00000000000a',
+  'claims', jsonb_build_object('role', 'authenticated'))) $$, 'hook runs as supabase_auth_admin for an owner');
+select lives_ok($$ select public.custom_access_token_hook(jsonb_build_object('user_id', 'd0000000-0000-0000-0000-000000000051',
+  'claims', jsonb_build_object('session_id', 'd6000000-0000-0000-0000-000000000001', 'role', 'authenticated'))) $$, 'hook runs as supabase_auth_admin for staff');
+reset role;
 
 -- owner A
 set local role authenticated;
@@ -94,6 +101,13 @@ select is(
   '10 attempts per window, the 11th locks');
 select chukta.clear_pin_attempts('d1000000-0000-0000-0000-00000000000b');
 select is(chukta.reserve_pin_attempt('d1000000-0000-0000-0000-00000000000b'), 'ok', 'clear_pin_attempts unlocks');
+
+reset role;
+update chukta.properties set is_active = false where id = 'd2000000-0000-0000-0000-00000000000a';
+select is((select is_active from chukta.staff_users where id = 'd3000000-0000-0000-0000-000000000001'), false,
+  'archiving a property deactivates its staff');
+select is((select count(*)::int from public.app_sessions where user_id = 'd0000000-0000-0000-0000-000000000051'), 0,
+  'archiving a property revokes staff sessions');
 
 select * from finish();
 rollback;
