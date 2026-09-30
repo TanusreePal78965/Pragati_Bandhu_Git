@@ -6,6 +6,7 @@ import { useT } from '../i18n/useT';
 import { Button, Muted, Row, Screen, Section } from '../ui/components';
 import { formatTime } from '../utils/format';
 import { PropertySection } from './settings/PropertySection';
+import { StaffSection } from './settings/StaffSection';
 
 export function SettingsScreen() {
   const t = useT();
@@ -33,11 +34,13 @@ export function SettingsScreen() {
     <Screen>
       <Muted>{t('settings.loggedInAs', { name: who })}</Muted>
       <PropertySection />
-      {/* SECTIONS */}
+      <StaffSection />
       <Section title={t('settings.sync')}>
         <Muted testID="sync-line">{syncLine}</Muted>
         {syncStatus.pending > 0 ? <Muted>{t('settings.pending', { count: syncStatus.pending })}</Muted> : null}
-        {/* SYNC-ISSUES */}
+        {syncStatus.dead > 0 ? (
+          <Row title={t('settings.issues', { count: syncStatus.dead })} onPress={() => navigation.navigate('SyncIssues')} testID="sync-issues" />
+        ) : null}
         <Button kind="secondary" title={t('settings.syncNow')} onPress={() => void session.runSync()} loading={syncStatus.running} testID="sync-now" />
       </Section>
       <Section title={t('settings.language')}>

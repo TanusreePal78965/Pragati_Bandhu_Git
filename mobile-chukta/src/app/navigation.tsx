@@ -9,6 +9,8 @@ import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { StaffFormScreen } from '../screens/StaffFormScreen';
+import { SyncIssuesScreen } from '../screens/SyncIssuesScreen';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkerDetailScreen } from '../screens/WorkerDetailScreen';
 import { WorkerFormScreen } from '../screens/WorkerFormScreen';
@@ -30,7 +32,6 @@ function Tabs() {
       <Tab.Screen name="Today" component={TodayScreen} options={{ title: t('tabs.today'), tabBarIcon: icon('calendar-outline') }} />
       <Tab.Screen name="Workers" component={WorkersScreen} options={{ title: t('tabs.workers'), tabBarIcon: icon('people-outline') }} />
       <Tab.Screen name="Advances" component={AdvancesScreen} options={{ title: t('tabs.advances'), tabBarIcon: icon('wallet-outline') }} />
-      {/* TABS */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
   );
@@ -49,7 +50,8 @@ export function SessionNavigator() {
         <Stack.Screen name="WorkerDetail" component={WorkerDetailScreen} />
         <Stack.Screen name="WorkerForm" component={WorkerFormScreen} />
         <Stack.Screen name="MoneyEntry" component={MoneyEntryScreen} />
-        {/* ROUTES */}
+        <Stack.Screen name="StaffForm" component={StaffFormScreen} />
+        <Stack.Screen name="SyncIssues" component={SyncIssuesScreen} options={{ title: t('syncIssues.title') }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
