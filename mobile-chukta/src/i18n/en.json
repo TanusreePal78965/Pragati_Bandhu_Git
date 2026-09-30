@@ -56,7 +56,9 @@
   "mode": { "cash": "Cash", "upi": "UPI", "bank": "Bank" },
   "workerForm": {
     "titleNew": "Add worker", "titleEdit": "Edit worker", "name": "Name", "phone": "Phone (optional)", "joiningDate": "Joining date",
-    "overrides": "Different from property settings", "useDefault": "Property setting", "ownWeeklyOff": "Own weekly off",
+    "overrides": "Customize for this worker",
+    "overridesHint": "Set attendance, shift hours, weekly off or monthly pay differently for just this worker.",
+    "useDefault": "Property setting", "ownWeeklyOff": "Own weekly off",
     "hasLeft": "Worker has left", "leftDate": "Last working day",
     "nameRequired": "Enter a name.", "rateInvalid": "Enter an amount above ₹0.", "phoneInvalid": "Enter a 10-digit mobile number.",
     "leftBeforeJoin": "Last working day can't be before joining."

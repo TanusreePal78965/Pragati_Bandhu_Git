@@ -5,7 +5,7 @@ import { sessionToday, useLocalData, useSession } from '../app/session';
 import type { AttendanceMode, MonthlyDivisor, Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { createWorker, getWorker, updateWorker } from '../repos/workers';
-import { Button, ErrorText, Field, Label, Loading, Screen, Section, Segmented, SwitchRow, WeekdayPicker } from '../ui/components';
+import { Button, Card, ErrorText, Field, Label, Loading, Muted, Screen, Section, Segmented, SwitchRow, WeekdayPicker } from '../ui/components';
 import { DateField } from '../ui/DateField';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { RequireProperty } from '../ui/RequireProperty';
@@ -96,7 +96,10 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
       <Field label={t(`rateLabel.${values.payBasis}`)} value={values.rate} onChangeText={(rate) => set({ rate })} keyboardType="decimal-pad"
         error={err('rate')} testID="rate" />
       <DateField label={t('workerForm.joiningDate')} value={values.joiningDate} onChange={(joiningDate) => set({ joiningDate })} testID="joining" />
-      <SwitchRow label={t('workerForm.overrides')} value={showOverrides} onChange={toggleOverrides} testID="overrides" />
+      <Card>
+        <SwitchRow label={t('workerForm.overrides')} value={showOverrides} onChange={toggleOverrides} testID="overrides" />
+        <Muted>{t('workerForm.overridesHint')}</Muted>
+      </Card>
       {showOverrides ? (
         <Section title={t('workerForm.overrides')}>
           {values.payBasis !== 'hourly' ? (
