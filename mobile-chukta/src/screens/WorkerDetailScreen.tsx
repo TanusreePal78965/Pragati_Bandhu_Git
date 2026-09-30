@@ -106,7 +106,13 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
         </Pressable>
         {showExplain ? ledger.explanation.map((line, i) => <Text key={i} style={styles.explain}>{explanationText(line, t)}</Text>) : null}
       </Card>
-      {/* MONEY-ACTIONS */}
+      <View style={styles.actions}>
+        {(['advance', 'repayment', 'writeoff', 'payment'] as const).map((kind) => (
+          <View key={kind} style={styles.action}>
+            <Button kind="secondary" title={t(`entryType.${kind}`)} onPress={() => navigation.navigate('MoneyEntry', { workerId, kind })} testID={`add-${kind}`} />
+          </View>
+        ))}
+      </View>
       <Section title={t('worker.calendar')}>
         <MonthCalendar grid={grid} onPrev={() => setYm(shiftMonth(ym.year, ym.month, -1))} onNext={() => setYm(shiftMonth(ym.year, ym.month, 1))} />
       </Section>
@@ -145,4 +151,6 @@ const styles = StyleSheet.create({
   historyRight: { alignItems: 'flex-end', gap: space.xs },
   amount: { fontSize: 15, fontWeight: '600', color: colors.text },
   struck: { textDecorationLine: 'line-through', color: colors.muted },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  action: { flexGrow: 1, flexBasis: '45%' },
 });

@@ -3,7 +3,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useT } from '../i18n/useT';
+import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { LanguageRoute } from '../screens/LanguageScreen';
+import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
@@ -27,6 +29,7 @@ function Tabs() {
     <Tab.Navigator screenOptions={{ tabBarActiveTintColor: colors.primary }}>
       <Tab.Screen name="Today" component={TodayScreen} options={{ title: t('tabs.today'), tabBarIcon: icon('calendar-outline') }} />
       <Tab.Screen name="Workers" component={WorkersScreen} options={{ title: t('tabs.workers'), tabBarIcon: icon('people-outline') }} />
+      <Tab.Screen name="Advances" component={AdvancesScreen} options={{ title: t('tabs.advances'), tabBarIcon: icon('wallet-outline') }} />
       {/* TABS */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
@@ -45,6 +48,7 @@ export function SessionNavigator() {
         <Stack.Screen name="PropertyForm" component={PropertyFormScreen} />
         <Stack.Screen name="WorkerDetail" component={WorkerDetailScreen} />
         <Stack.Screen name="WorkerForm" component={WorkerFormScreen} />
+        <Stack.Screen name="MoneyEntry" component={MoneyEntryScreen} />
         {/* ROUTES */}
       </Stack.Navigator>
     </NavigationContainer>
