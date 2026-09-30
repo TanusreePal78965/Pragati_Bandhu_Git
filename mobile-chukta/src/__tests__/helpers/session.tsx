@@ -44,12 +44,16 @@ function Blank({ route }: { route: { name: string } }) {
   return <Text testID="current-route">{route.name}</Text>;
 }
 
-/** Renders one screen under its real route name; every other route is a stub that shows its name (testID "current-route"). */
+/**
+ * Renders one screen under its real route name; every other route is a stub that shows its name (testID "current-route").
+ * A pushed screen (anything but Tabs) sits on top of a stub Tabs route, so its `goBack()` lands on "Tabs" as in the app.
+ */
 export function renderScreen(name: keyof RootStackParamList, Screen: ComponentType<any>, session: Session, params?: object) {
   const Stack = createNativeStackNavigator();
+  const initialState = name === 'Tabs' ? undefined : { index: 1, routes: [{ name: 'Tabs' }, { name, params }] };
   const tree = (s: Session) => (
     <SessionContext.Provider value={s}>
-      <NavigationContainer>
+      <NavigationContainer initialState={initialState}>
         <Stack.Navigator initialRouteName={name}>
           {ALL_ROUTES.map((r) => (
             <Stack.Screen key={r} name={r} component={r === name ? Screen : Blank} initialParams={r === name ? params : undefined} />

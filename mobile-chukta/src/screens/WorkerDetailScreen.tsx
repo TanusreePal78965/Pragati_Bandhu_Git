@@ -79,6 +79,8 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           if (item.table === 'advance_entries') await voidAdvance(session.repo, item.id);
           else await voidPayment(session.repo, item.id);
           session.afterWrite();
+        } catch {
+          Alert.alert(t('common.saveFailed'));
         } finally {
           correcting.current = false;
         }

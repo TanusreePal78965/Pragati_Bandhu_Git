@@ -1,5 +1,5 @@
 {
-  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry", "loading": "Loading…", "confirm": "Confirm", "edit": "Edit", "add": "Add", "needsInternet": "Needs internet." },
+  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry", "loading": "Loading…", "confirm": "Confirm", "edit": "Edit", "add": "Add", "needsInternet": "Needs internet.", "saveFailed": "Could not save on this phone. Please try again." },
   "language": { "title": "Choose language", "en": "English", "bn": "বাংলা", "hi": "हिन्दी" },
   "months": {
     "long": { "m1": "January", "m2": "February", "m3": "March", "m4": "April", "m5": "May", "m6": "June", "m7": "July", "m8": "August", "m9": "September", "m10": "October", "m11": "November", "m12": "December" },

@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
+import * as moneyRepo from '../repos/money';
 import { upsertLocal } from '../repos/write';
 import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
@@ -37,6 +38,29 @@ test('write-off requires a note', async () => {
   fireEvent.press(screen.getByTestId('save'));
   expect(await screen.findByText('A note is required for a write-off.')).toBeTruthy();
   expect(await s.db.getAllAsync('select 1 from advance_entries')).toEqual([]);
+});
+
+test('write-off hides the mode picker and saves mode null', async () => {
+  const s = await seeded();
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'writeoff' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '100');
+  expect(screen.queryByTestId('mode-cash')).toBeNull();
+  fireEvent.changeText(screen.getByTestId('note'), 'left town');
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select type, mode, note from advance_entries'))
+    .toEqual({ type: 'writeoff', mode: null, note: 'left town' }));
+});
+
+test('a failed local save shows an error and enables Save again', async () => {
+  const s = await seeded();
+  const spy = jest.spyOn(moneyRepo, 'addAdvance').mockRejectedValueOnce(new Error('disk'));
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'advance' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '100');
+  fireEvent.press(screen.getByTestId('save'));
+  expect(await screen.findByText('Could not save on this phone. Please try again.')).toBeTruthy();
+  expect(screen.getByTestId('save').props.accessibilityState.disabled).toBe(false);
+  expect(s.afterWrite).not.toHaveBeenCalled();
+  spy.mockRestore();
 });
 
 test('a wage payment goes to wage_payments', async () => {

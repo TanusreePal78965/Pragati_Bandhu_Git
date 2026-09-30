@@ -11,10 +11,15 @@ export function SyncIssuesScreen() {
   const { data, reload } = useLocalData((s) => listDeadGroups(s.db));
 
   async function retry(g: DeadGroup) {
-    await requeueDead(session.db, g.seqs);
+    try {
+      await requeueDead(session.db, g.seqs);
+    } catch {
+      Alert.alert(t('common.saveFailed'));
+      return;
+    }
     session.afterWrite();
     reload();
-    void session.runSync();
+    session.runSync().catch(() => {});
   }
 
   const discard = (g: DeadGroup) => Alert.alert(t('syncIssues.discard'), t('syncIssues.discardConfirm'), [
@@ -23,7 +28,12 @@ export function SyncIssuesScreen() {
       text: t('syncIssues.discard'),
       style: 'destructive',
       onPress: async () => {
-        await discardDead(session.db, g.seqs);
+        try {
+          await discardDead(session.db, g.seqs);
+        } catch {
+          Alert.alert(t('common.saveFailed'));
+          return;
+        }
         session.afterWrite();
         reload();
       },

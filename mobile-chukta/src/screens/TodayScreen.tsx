@@ -31,8 +31,15 @@ function TodayBody({ property }: { property: Property }) {
   const t = useT();
   const session = useSession();
   const today = sessionToday(session);
-  const [date, setDate] = useState(today);
+  // Only a date the user picked is stored; otherwise follow `today`, so a tab left open
+  // overnight (bottom tabs never unmount) moves to the new day instead of writing to yesterday.
+  const [picked, setPicked] = useState<string | null>(null);
+  const date = picked ?? today;
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setPicked(null);
+    setSelected(new Set());
+  }, [today]);
   const { data: rows } = useLocalData(
     async (s) => buildTodayRows(await listWorkers(s.db, property.id, true), property, await listAttendanceForDate(s.db, property.id, date), date),
     [property, date],
@@ -80,7 +87,7 @@ function TodayBody({ property }: { property: Property }) {
   if (!rows) return <Loading />;
   return (
     <Screen refreshControl={<RefreshControl refreshing={session.syncStatus.running} onRefresh={() => void session.runSync()} />}>
-      <DateField label={t('today.title')} value={date} max={today} onChange={(d) => { setDate(d); setSelected(new Set()); }} testID="today-date" />
+      <DateField label={t('today.title')} value={date} max={today} onChange={(d) => { setPicked(d === today ? null : d); setSelected(new Set()); }} testID="today-date" />
       <Muted>{t('today.hint')}</Muted>
       {rows.length === 0 ? <Muted>{t('today.noWorkers')}</Muted> : <Muted>{t('today.selectHint')}</Muted>}
       {selected.size > 0 ? (

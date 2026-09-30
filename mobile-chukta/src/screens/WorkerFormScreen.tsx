@@ -35,6 +35,7 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
   const [showOverrides, setShowOverrides] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (values !== null || existing === undefined) return;
@@ -62,8 +63,15 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
       return;
     }
     setBusy(true);
-    if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value));
-    else await createWorker(session.repo, toNewWorker(property.id, r.value));
+    setSaveError(null);
+    try {
+      if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value));
+      else await createWorker(session.repo, toNewWorker(property.id, r.value));
+    } catch {
+      setSaveError('common.saveFailed');
+      setBusy(false);
+      return;
+    }
     session.afterWrite();
     navigation.goBack();
   }
@@ -122,6 +130,7 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
           <ErrorText>{err('leftDate')}</ErrorText>
         </>
       ) : null}
+      <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
       <Button title={t('common.save')} onPress={() => void save()} loading={busy} testID="save" />
     </Screen>
   );

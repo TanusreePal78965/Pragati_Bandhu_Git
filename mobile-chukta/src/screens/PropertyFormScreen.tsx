@@ -5,7 +5,7 @@ import { useStackNav, type RootStackParamList } from '../app/routes';
 import { useLocalData, useSession } from '../app/session';
 import { useT } from '../i18n/useT';
 import { createProperty, getProperty, updatePropertySettings } from '../repos/properties';
-import { Button, Field, Label, Loading, Screen, Section, Segmented, WeekdayPicker } from '../ui/components';
+import { Button, ErrorText, Field, Label, Loading, Screen, Section, Segmented, WeekdayPicker } from '../ui/components';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { propertyToFormValues, validatePropertyForm, type FieldErrors, type PropertyFormValues } from '../view/forms';
 
@@ -19,6 +19,7 @@ export function PropertyFormScreen() {
   const [values, setValues] = useState<PropertyFormValues | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (values === null && existing !== undefined) setValues(propertyToFormValues(existing));
@@ -38,21 +39,28 @@ export function PropertyFormScreen() {
       return;
     }
     setBusy(true);
-    if (editingId) {
-      await updatePropertySettings(session.repo, editingId, r.value);
+    setSaveError(null);
+    try {
+      if (editingId) {
+        await updatePropertySettings(session.repo, editingId, r.value);
+        session.afterWrite();
+        navigation.goBack();
+        return;
+      }
+      if (session.identity.kind !== 'owner') return;
+      const p = await createProperty(session.repo, { shopId: session.identity.shopId, name: r.value.name, address: r.value.address ?? undefined });
+      await updatePropertySettings(session.repo, p.id, r.value);
       session.afterWrite();
-      navigation.goBack();
-      return;
-    }
-    if (session.identity.kind !== 'owner') return;
-    const p = await createProperty(session.repo, { shopId: session.identity.shopId, name: r.value.name, address: r.value.address ?? undefined });
-    await updatePropertySettings(session.repo, p.id, r.value);
-    session.afterWrite();
-    if (!session.propertyId) {
-      await session.setPropertyId(p.id);
-      navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
-    } else {
-      navigation.goBack();
+      if (!session.propertyId) {
+        await session.setPropertyId(p.id);
+        navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+      } else {
+        navigation.goBack();
+      }
+    } catch {
+      setSaveError('common.saveFailed');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -63,13 +71,17 @@ export function PropertyFormScreen() {
         text: t('properties.archive'),
         style: 'destructive',
         onPress: async () => {
-          await updatePropertySettings(session.repo, editingId as string, { is_active: 0 });
-          session.afterWrite();
-          if (session.propertyId === editingId) {
-            await session.setPropertyId(null);
-            navigation.reset({ index: 0, routes: [{ name: 'Properties' }] });
-          } else {
-            navigation.goBack();
+          try {
+            await updatePropertySettings(session.repo, editingId as string, { is_active: 0 });
+            session.afterWrite();
+            if (session.propertyId === editingId) {
+              await session.setPropertyId(null);
+              navigation.reset({ index: 0, routes: [{ name: 'Properties' }] });
+            } else {
+              navigation.goBack();
+            }
+          } catch {
+            Alert.alert(t('common.saveFailed'));
           }
         },
       },
@@ -95,6 +107,7 @@ export function PropertyFormScreen() {
         <Segmented options={DIVISORS.map((d) => ({ value: d, label: t(`divisor.${d}`) }))} value={values.monthlyDivisor}
           onChange={(monthlyDivisor) => set({ monthlyDivisor })} testIDPrefix="divisor" />
       </Section>
+      <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
       <Button title={t('common.save')} onPress={() => void save()} loading={busy} testID="save" />
       {editingId && existing?.is_active === 1 ? <Button kind="danger" title={t('properties.archive')} onPress={archive} testID="archive" /> : null}
     </Screen>

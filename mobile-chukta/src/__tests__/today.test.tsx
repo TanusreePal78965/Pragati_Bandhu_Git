@@ -94,3 +94,13 @@ test('double-pressing the same status before the write settles writes only one e
   await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
   expect((await rowsFor(s, 'w1')).map((r) => r.status)).toEqual(['absent']);
 });
+
+test('after midnight Today moves to the new day, so a tap writes to the new date', async () => {
+  const s = await seeded();
+  const { rerenderWith } = renderScreen('Tabs', TodayScreen, s);
+  await screen.findByTestId('status-w1-absent');
+  const next = { ...s, version: s.version + 1, repo: { ...s.repo, now: () => new Date(2026, 8, 8, 0, 5) } };
+  rerenderWith(next);
+  fireEvent.press(await screen.findByTestId('status-w1-absent'));
+  await waitFor(async () => expect((await rowsFor(s, 'w1')).map((r) => r.date)).toEqual(['2026-09-08']));
+});

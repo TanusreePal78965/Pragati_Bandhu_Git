@@ -29,8 +29,12 @@ export function PropertiesScreen() {
     {
       text: t('properties.restore'),
       onPress: async () => {
-        await updatePropertySettings(session.repo, id, { is_active: 1 });
-        session.afterWrite();
+        try {
+          await updatePropertySettings(session.repo, id, { is_active: 1 });
+          session.afterWrite();
+        } catch {
+          Alert.alert(t('common.saveFailed'));
+        }
       },
     },
   ]);
