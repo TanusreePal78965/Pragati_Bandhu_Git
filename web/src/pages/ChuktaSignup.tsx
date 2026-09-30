@@ -29,6 +29,8 @@ export default function ChuktaSignup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  // Separate from `error` so it can carry a link: a lapsed plan also lands here, and must be able to renew.
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => () => {
@@ -40,6 +42,7 @@ export default function ChuktaSignup() {
 
   const handleSendOtp = async () => {
     setError('');
+    setAlreadyRegistered(false);
     if (phone.replace(/\D/g, '').length !== 10) {
       setError('Enter a valid 10-digit mobile number');
       return;
@@ -49,7 +52,7 @@ export default function ChuktaSignup() {
       const check = await postJson('register/check-phone', { phone: e164() });
       if (!check.ok) throw new Error(check.body.error ?? 'Could not check phone number');
       if (check.body.apps?.includes('chukta')) {
-        setError('This number is already registered for Chukta. Open the Chukta app and log in.');
+        setAlreadyRegistered(true);
         return;
       }
       setExists(check.body.exists === true);
@@ -134,7 +137,7 @@ export default function ChuktaSignup() {
                 <div className="phone-input">
                   <span className="phone-prefix">+91</span>
                   <input type="tel" maxLength={10} value={phone} autoFocus placeholder="10-digit mobile number"
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
+                    onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setAlreadyRegistered(false); }} />
                 </div>
               </div>
               <button className="btn-primary" disabled={isLoading || phone.length < 10} onClick={handleSendOtp}>
@@ -221,6 +224,12 @@ export default function ChuktaSignup() {
             </div>
           )}
 
+          {alreadyRegistered && (
+            <div className="error-msg step-enter">
+              This number is already registered for Chukta. Open the Chukta app and log in. If your plan has ended,{' '}
+              <Link to="/renew">renew it here</Link>.
+            </div>
+          )}
           {error && <div className="error-msg step-enter">{error}</div>}
         </div>
         <div id="recaptcha-container" />
