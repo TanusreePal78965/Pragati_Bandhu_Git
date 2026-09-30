@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { initI18n, setLanguage, type Language } from '../i18n';
 import { useT } from '../i18n/useT';
@@ -26,15 +27,23 @@ export function LanguageRoute() {
   const navigation = useNavigation();
   return (
     <LanguageScreen
-      onChosen={async (l) => {
-        try {
-          await setLanguage(l);
-        } catch {
-          // Saving the choice for next launch failed (e.g. storage write error); still switch the
-          // screen's language now, so the tap isn't silently lost or an unhandled rejection.
-          await initI18n(l).catch(() => {});
-        }
+      onChosen={(l) => {
+        // Pop first. Changing the language re-renders every mounted screen's header (translated
+        // titles), and doing that while this screen's native fragment is still being removed from
+        // the stack races react-native-screens ("ScreenStackFragment added into a non-stack
+        // container"). Deferring the change to after the pop's interactions finish avoids it.
         navigation.goBack();
+        InteractionManager.runAfterInteractions(() => {
+          void (async () => {
+            try {
+              await setLanguage(l);
+            } catch {
+              // Saving the choice for next launch failed (e.g. storage write error); still switch
+              // the app's language now, so the tap isn't silently lost.
+              await initI18n(l).catch(() => {});
+            }
+          })();
+        });
       }}
     />
   );
