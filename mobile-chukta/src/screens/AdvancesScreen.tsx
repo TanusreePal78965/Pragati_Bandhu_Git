@@ -1,6 +1,6 @@
 import { RefreshControl } from 'react-native';
 import { useStackNav } from '../app/routes';
-import { sessionToday, useLocalData, useSession } from '../app/session';
+import { sessionToday, useLocalData, useManualRefresh } from '../app/session';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { Card, Loading, Muted, Row, Screen, Title } from '../ui/components';
@@ -14,15 +14,15 @@ export function AdvancesScreen() {
 
 function AdvancesBody({ property }: { property: Property }) {
   const t = useT();
-  const session = useSession();
   const navigation = useStackNav();
   const { data } = useLocalData(async (s) => (await listWorkerSummaries(s.db, property, sessionToday(s), true))
     .filter((x) => x.ledger.advanceOutstandingPaise !== 0)
     .sort((a, b) => b.ledger.advanceOutstandingPaise - a.ledger.advanceOutstandingPaise), [property]);
+  const { refreshing, onRefresh } = useManualRefresh();
   if (!data) return <Loading />;
   const total = data.reduce((sum, x) => sum + x.ledger.advanceOutstandingPaise, 0);
   return (
-    <Screen refreshControl={<RefreshControl refreshing={session.syncStatus.running} onRefresh={() => void session.runSync()} />}>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <Card>
         <Muted>{t('advances.total')}</Muted>
         <Title testID="advances-total">{formatRupees(total)}</Title>

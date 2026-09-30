@@ -63,7 +63,10 @@
     "nameRequired": "नाम लिखें।", "rateInvalid": "₹0 से ज़्यादा रकम लिखें।", "phoneInvalid": "10 अंकों का मोबाइल नंबर लिखें।",
     "leftBeforeJoin": "आखिरी दिन जुड़ने की तारीख से पहले नहीं हो सकता।"
   },
-  "money": { "amount": "रकम (₹)", "date": "तारीख", "mode": "कैसे दिया", "note": "नोट", "noteRequired": "माफ़ी के लिए नोट ज़रूरी है।", "amountInvalid": "₹0 से ज़्यादा रकम लिखें।" },
+  "money": {
+    "amount": "रकम (₹)", "date": "तारीख", "mode": "कैसे दिया", "note": "नोट", "noteRequired": "माफ़ी के लिए नोट ज़रूरी है।",
+    "amountInvalid": "₹0 से ज़्यादा रकम लिखें।", "exceedsAdvance": "यह बाकी एडवांस {{outstanding}} से ज़्यादा है।"
+  },
   "advances": { "title": "बाकी एडवांस", "total": "कुल बाकी", "empty": "कोई एडवांस बाकी नहीं।" },
   "settings": {
     "property": "प्रॉपर्टी", "staff": "स्टाफ", "addStaff": "स्टाफ जोड़ें", "staffHelp": "स्टाफ आपके मोबाइल नंबर ({{phone}}) और अपने पिन से लॉगिन करेगा।",

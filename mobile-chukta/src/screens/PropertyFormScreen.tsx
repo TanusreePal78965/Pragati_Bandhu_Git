@@ -20,6 +20,9 @@ export function PropertyFormScreen() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Remembers a property created by an earlier, failed Save attempt, so a retry finishes writing
+  // its settings instead of creating a second property.
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (values === null && existing !== undefined) setValues(propertyToFormValues(existing));
@@ -48,11 +51,16 @@ export function PropertyFormScreen() {
         return;
       }
       if (session.identity.kind !== 'owner') return;
-      const p = await createProperty(session.repo, { shopId: session.identity.shopId, name: r.value.name, address: r.value.address ?? undefined });
-      await updatePropertySettings(session.repo, p.id, r.value);
+      let id = createdId;
+      if (!id) {
+        const p = await createProperty(session.repo, { shopId: session.identity.shopId, name: r.value.name, address: r.value.address ?? undefined });
+        id = p.id;
+        setCreatedId(id); // a retry after this point reuses this property instead of creating another
+      }
+      await updatePropertySettings(session.repo, id, r.value);
       session.afterWrite();
       if (!session.propertyId) {
-        await session.setPropertyId(p.id);
+        await session.setPropertyId(id);
         navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
       } else {
         navigation.goBack();

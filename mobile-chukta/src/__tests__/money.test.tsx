@@ -89,3 +89,24 @@ test('advances tab lists outstanding advances, largest first, with the total', a
   const order = screen.getAllByTestId(/^advance-/).map((n) => n.props.testID);
   expect(order).toEqual(['advance-w2', 'advance-w1']);
 });
+
+test('a repayment above the outstanding advance shows a non-blocking warning', async () => {
+  const s = await seeded();
+  await upsertLocal(s.db, 'advance_entries', adv('a1', { amount_paise: 100000 })); // ₹1,000 outstanding
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'repayment' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '500');
+  expect(screen.queryByTestId('exceeds-advance')).toBeNull();
+  fireEvent.changeText(screen.getByTestId('amount'), '1500');
+  expect(await screen.findByTestId('exceeds-advance')).toHaveTextContent('This is more than the ₹1,000 advance outstanding.');
+  fireEvent.press(screen.getByTestId('save')); // still allowed — it's a warning, not a block
+  await waitFor(async () => expect(await s.db.getFirstAsync('select amount_paise from advance_entries where type = ?', ['repayment']))
+    .toEqual({ amount_paise: 150000 }));
+});
+
+test('the warning never shows for an advance or a payment', async () => {
+  const s = await seeded();
+  await upsertLocal(s.db, 'advance_entries', adv('a1', { amount_paise: 100000 }));
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'advance' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '99999999');
+  expect(screen.queryByTestId('exceeds-advance')).toBeNull();
+});

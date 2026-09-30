@@ -33,9 +33,11 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
   useEffect(() => {
     let disposed = false;
     let engine: SyncEngine | null = null;
+    let dbToClose: SqlDb | null = null;
     const cleanups: (() => void)[] = [];
     (async () => {
       const db = await openChuktaDb(identityKey(identity));
+      dbToClose = db;
       if (identity.kind === 'owner') {
         const saved = await AsyncStorage.getItem(propertyKey(identity));
         if (!disposed) setPropertyIdState(saved);
@@ -74,6 +76,9 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
       disposed = true;
       cleanups.forEach((c) => c());
       engine?.dispose();
+      // Releases the SQLite file handle on logout or identity switch, so it isn't left open for
+      // the lifetime of the app.
+      dbToClose?.closeAsync?.().catch(() => {});
     };
   }, [identity]);
 

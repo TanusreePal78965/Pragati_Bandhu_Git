@@ -4,6 +4,7 @@ import { initI18n } from '../i18n';
 import { upsertLocal } from '../repos/write';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
+import * as repos from '../repos/properties';
 import { property } from './helpers/fixtures';
 import { makeSession, OWNER, renderScreen } from './helpers/session';
 
@@ -72,4 +73,20 @@ test('archiving the current property clears the selection and returns to Propert
   fireEvent.press(await screen.findByTestId('archive'));
   await waitFor(() => expect(s.setPropertyId).toHaveBeenCalledWith(null));
   expect((await s.db.getFirstAsync<{ is_active: number }>("select is_active from properties where id = 'p1'"))?.is_active).toBe(0);
+});
+
+test('a failed settings save after a successful create does not create a second property on retry', async () => {
+  const s = await makeSession(OWNER, { propertyId: null });
+  const spy = jest.spyOn(repos, 'updatePropertySettings').mockRejectedValueOnce(new Error('offline'));
+  renderScreen('PropertyForm', PropertyFormScreen, s);
+  fireEvent.changeText(await screen.findByTestId('name'), 'Hotel');
+  fireEvent.press(screen.getByTestId('save'));
+  await screen.findByText('Could not save on this phone. Please try again.');
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(() => expect(s.setPropertyId).toHaveBeenCalled());
+  spy.mockRestore();
+  const rows = await s.db.getAllAsync<{ name: string }>('select name from properties');
+  expect(rows).toEqual([{ name: 'Hotel' }]);
+  const ops = await s.db.getAllAsync<{ op: string }>('select op from sync_queue order by seq');
+  expect(ops.map((o) => o.op)).toEqual(['insert', 'update']);
 });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useStackNav } from '../app/routes';
-import { sessionToday, useLocalData, useSession } from '../app/session';
+import { sessionToday, useLocalData, useManualRefresh } from '../app/session';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { Button, Loading, Muted, Row, Screen, SwitchRow } from '../ui/components';
@@ -16,13 +16,13 @@ export function WorkersScreen() {
 
 function WorkersBody({ property }: { property: Property }) {
   const t = useT();
-  const session = useSession();
   const navigation = useStackNav();
   const [showLeft, setShowLeft] = useState(false);
   const { data } = useLocalData((s) => listWorkerSummaries(s.db, property, sessionToday(s), showLeft), [property, showLeft]);
+  const { refreshing, onRefresh } = useManualRefresh();
   if (!data) return <Loading />;
   return (
-    <Screen refreshControl={<RefreshControl refreshing={session.syncStatus.running} onRefresh={() => void session.runSync()} />}>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <Button title={t('workers.add')} onPress={() => navigation.navigate('WorkerForm')} testID="add-worker" />
       {data.length === 0 ? <Muted>{t('workers.empty')}</Muted> : null}
       {data.map(({ worker, ledger }) => {

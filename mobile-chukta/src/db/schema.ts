@@ -59,11 +59,21 @@ create index if not exists idx_sync_queue_status on sync_queue(status, seq);
 create table if not exists sync_cursor (table_name text primary key, cursor text not null);
 `;
 
+// listAttendanceForDate (Today screen) filters attendance_entries by (property_id, date); the only
+// index at v1 was (worker_id, date), so that query did a full table scan.
+const SCHEMA_V2 = `
+create index if not exists idx_attendance_property_date on attendance_entries(property_id, date);
+`;
+
 export async function migrate(db: SqlDb): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>('pragma user_version');
   const version = row?.user_version ?? 0;
   if (version < 1) {
     await db.execAsync(SCHEMA_V1);
     await db.execAsync('pragma user_version = 1');
+  }
+  if (version < 2) {
+    await db.execAsync(SCHEMA_V2);
+    await db.execAsync('pragma user_version = 2');
   }
 }

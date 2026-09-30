@@ -1,7 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl } from 'react-native';
 import { useStackNav } from '../app/routes';
-import { useLocalData, useSession } from '../app/session';
+import { useLocalData, useManualRefresh, useSession } from '../app/session';
 import { useT } from '../i18n/useT';
 import { listAllProperties, updatePropertySettings } from '../repos/properties';
 import { Button, Loading, Muted, Row, Screen, Section } from '../ui/components';
@@ -11,6 +11,8 @@ export function PropertiesScreen() {
   const session = useSession();
   const navigation = useStackNav();
   const { data } = useLocalData((s) => listAllProperties(s.db));
+  const { refreshing, onRefresh } = useManualRefresh();
+  const [restoring, setRestoring] = useState<Set<string>>(new Set());
   const active = (data ?? []).filter((p) => p.is_active === 1);
   const archived = (data ?? []).filter((p) => p.is_active === 0);
 
@@ -29,11 +31,15 @@ export function PropertiesScreen() {
     {
       text: t('properties.restore'),
       onPress: async () => {
+        if (restoring.has(id)) return;
+        setRestoring((prev) => new Set(prev).add(id));
         try {
           await updatePropertySettings(session.repo, id, { is_active: 1 });
           session.afterWrite();
         } catch {
           Alert.alert(t('common.saveFailed'));
+        } finally {
+          setRestoring((prev) => { const next = new Set(prev); next.delete(id); return next; });
         }
       },
     },
@@ -41,7 +47,7 @@ export function PropertiesScreen() {
 
   if (data === undefined) return <Loading />;
   return (
-    <Screen refreshControl={<RefreshControl refreshing={session.syncStatus.running} onRefresh={() => void session.runSync()} />}>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       {data.length === 0 ? <Muted>{session.syncStatus.lastSyncedAt ? t('properties.empty') : t('properties.waitingForSync')}</Muted> : null}
       {active.map((p) => (
         <Row key={p.id} title={p.name} subtitle={p.address ?? undefined} selected={p.id === session.propertyId}
@@ -52,7 +58,7 @@ export function PropertiesScreen() {
         <Section title={t('properties.archived')}>
           {archived.map((p) => (
             <Row key={p.id} title={p.name}
-              right={<Button kind="secondary" title={t('properties.restore')} onPress={() => restore(p.id)} testID={`restore-${p.id}`} />} />
+              right={<Button kind="secondary" title={t('properties.restore')} onPress={() => restore(p.id)} loading={restoring.has(p.id)} testID={`restore-${p.id}`} />} />
           ))}
         </Section>
       ) : null}

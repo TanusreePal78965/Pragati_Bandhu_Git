@@ -19,5 +19,6 @@ export function openTestDb(): SqlDb {
       raw.exec('begin');
       try { await fn(); raw.exec('commit'); } catch (e) { raw.exec('rollback'); throw e; }
     },
+    async closeAsync() { raw.close(); },
   };
 }

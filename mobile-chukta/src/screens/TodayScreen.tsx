@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
-import { sessionToday, useLocalData, useSession } from '../app/session';
+import { sessionToday, useLocalData, useManualRefresh, useSession } from '../app/session';
 import { effectiveAttendance } from '../domain/attendance';
 import type { AttendanceStatus, Property } from '../domain/types';
 import { useT } from '../i18n/useT';
@@ -31,6 +31,7 @@ function TodayBody({ property }: { property: Property }) {
   const t = useT();
   const session = useSession();
   const today = sessionToday(session);
+  const { refreshing, onRefresh } = useManualRefresh();
   // Only a date the user picked is stored; otherwise follow `today`, so a tab left open
   // overnight (bottom tabs never unmount) moves to the new day instead of writing to yesterday.
   const [picked, setPicked] = useState<string | null>(null);
@@ -86,7 +87,7 @@ function TodayBody({ property }: { property: Property }) {
 
   if (!rows) return <Loading />;
   return (
-    <Screen refreshControl={<RefreshControl refreshing={session.syncStatus.running} onRefresh={() => void session.runSync()} />}>
+    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <DateField label={t('today.title')} value={date} max={today} onChange={(d) => { setPicked(d === today ? null : d); setSelected(new Set()); }} testID="today-date" />
       <Muted>{t('today.hint')}</Muted>
       {rows.length === 0 ? <Muted>{t('today.noWorkers')}</Muted> : <Muted>{t('today.selectHint')}</Muted>}

@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { initI18n } from '../i18n';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SyncIssuesScreen } from '../screens/SyncIssuesScreen';
+import * as deadLetters from '../sync/deadLetters';
 import { IDLE_STATUS } from '../sync/engine';
 import { makeSession, OWNER, renderScreen } from './helpers/session';
 
@@ -50,4 +51,20 @@ test('discard asks first, then removes the rows', async () => {
   fireEvent.press(await screen.findByTestId('discard-0'));
   await waitFor(async () => expect(await s.db.getAllAsync('select 1 from sync_queue')).toHaveLength(0));
   expect(s.afterWrite).toHaveBeenCalled();
+});
+
+test('a second tap on Retry while the first is in flight is ignored', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const spy = jest.spyOn(deadLetters, 'requeueDead').mockImplementation(async () => { await gate; });
+  const s = await withDead();
+  renderScreen('SyncIssues', SyncIssuesScreen, s);
+  const retry = await screen.findByTestId('retry-0');
+  fireEvent.press(retry);
+  fireEvent.press(retry);
+  fireEvent.press(retry);
+  release();
+  await waitFor(() => expect(retry.props.accessibilityState.disabled).toBe(false));
+  expect(spy).toHaveBeenCalledTimes(1);
+  spy.mockRestore();
 });

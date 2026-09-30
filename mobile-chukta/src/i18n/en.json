@@ -63,7 +63,10 @@
     "nameRequired": "Enter a name.", "rateInvalid": "Enter an amount above ₹0.", "phoneInvalid": "Enter a 10-digit mobile number.",
     "leftBeforeJoin": "Last working day can't be before joining."
   },
-  "money": { "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.", "amountInvalid": "Enter an amount above ₹0." },
+  "money": {
+    "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.",
+    "amountInvalid": "Enter an amount above ₹0.", "exceedsAdvance": "This is more than the {{outstanding}} advance outstanding."
+  },
   "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding." },
   "settings": {
     "property": "Property", "staff": "Staff", "addStaff": "Add staff", "staffHelp": "Staff log in with your mobile number ({{phone}}) and their own PIN.",

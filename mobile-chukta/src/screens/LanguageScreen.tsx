@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { setLanguage, type Language } from '../i18n';
+import { initI18n, setLanguage, type Language } from '../i18n';
 import { useT } from '../i18n/useT';
 import { Button, Screen, Title } from '../ui/components';
 import { colors } from '../ui/theme';
@@ -24,5 +24,18 @@ export function LanguageScreen({ onChosen }: { onChosen: (lang: Language) => voi
 /** In-session route (Settings → Language). */
 export function LanguageRoute() {
   const navigation = useNavigation();
-  return <LanguageScreen onChosen={async (l) => { await setLanguage(l); navigation.goBack(); }} />;
+  return (
+    <LanguageScreen
+      onChosen={async (l) => {
+        try {
+          await setLanguage(l);
+        } catch {
+          // Saving the choice for next launch failed (e.g. storage write error); still switch the
+          // screen's language now, so the tap isn't silently lost or an unhandled rejection.
+          await initI18n(l).catch(() => {});
+        }
+        navigation.goBack();
+      }}
+    />
+  );
 }
