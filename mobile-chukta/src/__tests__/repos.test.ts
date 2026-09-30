@@ -1,10 +1,11 @@
 import { openTestDb } from '../db/testing/betterSqliteDb';
 import { migrate } from '../db/schema';
 import type { RepoContext } from '../repos/context';
-import { createProperty, listProperties, updatePropertySettings } from '../repos/properties';
+import { createProperty, listAllProperties, listProperties, updatePropertySettings } from '../repos/properties';
 import { createWorker, listWorkers, updateWorker } from '../repos/workers';
-import { listAttendance, markAttendance } from '../repos/attendance';
+import { listAttendance, listAttendanceForDate, markAttendance } from '../repos/attendance';
 import { addAdvance, listAdvances, voidAdvance } from '../repos/money';
+import { listStaff } from '../repos/staff';
 
 async function ctx(role: RepoContext['role'] = 'owner'): Promise<RepoContext> {
   const db = openTestDb();
@@ -100,4 +101,30 @@ test('an entry can only be corrected once', async () => {
   const a = await addAdvance(c, { propertyId: 'p', workerId: 'w', type: 'advance', amountPaise: 1000, date: '2026-09-02' });
   await voidAdvance(c, a.id);
   await expect(voidAdvance(c, a.id)).rejects.toThrow('already corrected');
+});
+
+test('listAttendanceForDate returns all rows for the property on that date only', async () => {
+  const c = await ctx();
+  const p = await createProperty(c, { shopId: 'shop1', name: 'Main' });
+  const w = await createWorker(c, { propertyId: p.id, name: 'Ram', payBasis: 'daily', ratePaise: 50000, joiningDate: '2026-09-01' });
+  await markAttendance(c, { propertyId: p.id, workerId: w.id, date: '2026-09-03', status: 'absent' });
+  await markAttendance(c, { propertyId: p.id, workerId: w.id, date: '2026-09-04', status: 'absent' });
+  expect((await listAttendanceForDate(c.db, p.id, '2026-09-03')).map((a) => a.date)).toEqual(['2026-09-03']);
+  expect(await listAttendanceForDate(c.db, 'other', '2026-09-03')).toEqual([]);
+});
+
+test('listAllProperties lists active first, then archived, each by name', async () => {
+  const c = await ctx();
+  const b = await createProperty(c, { shopId: 'shop1', name: 'B' });
+  await createProperty(c, { shopId: 'shop1', name: 'C' });
+  await createProperty(c, { shopId: 'shop1', name: 'A' });
+  await updatePropertySettings(c, b.id, { is_active: 0 });
+  expect((await listAllProperties(c.db)).map((p) => p.name)).toEqual(['A', 'C', 'B']);
+});
+
+test('listStaff returns the property staff, active first', async () => {
+  const c = await ctx();
+  await c.db.runAsync(`insert into staff_users (id, property_id, name, auth_user_id, is_active, created_at) values
+    ('s1', 'p1', 'Zed', 'a1', 1, 't'), ('s2', 'p1', 'Amy', 'a2', 0, 't'), ('s3', 'p2', 'Bob', 'a3', 1, 't')`);
+  expect((await listStaff(c.db, 'p1')).map((s) => s.name)).toEqual(['Zed', 'Amy']);
 });

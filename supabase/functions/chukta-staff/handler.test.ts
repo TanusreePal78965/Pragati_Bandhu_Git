@@ -28,6 +28,7 @@ function makeDeps(over: Partial<StaffDeps> = {}) {
     updateStaff: async (id, patch) => { log.push(`update:${id}:${Object.keys(patch).sort().join(',')}`) },
     revokeSessions: async (uid) => { log.push(`revoke:${uid}`) },
     deleteAuthUser: async (id) => { log.push(`deleteAuth:${id}`) },
+    clearPinAttempts: async (s) => { log.push(`clearPins:${s}`) },
     newId: () => 'st1',
     ...over,
   }
@@ -138,4 +139,21 @@ Deno.test('update: reactivation requires a new unique pin', async () => {
   const ok = await handleStaff('update', 'jwt', { staffId: S1, isActive: true, pin: '5555' }, deps)
   assertEquals(ok.status, 200)
   assertEquals(log, [`update:${S1}:is_active,pin_hash,pin_salt`, `revoke:auth-${S1}`])
+})
+
+Deno.test('unlock: owner clears the shop pin throttle', async () => {
+  const { deps, log } = makeDeps()
+  const res = await handleStaff('unlock', 'jwt', {}, deps)
+  assertEquals(res.status, 200)
+  assertEquals(res.body, { ok: true })
+  assertEquals(log, ['clearPins:shop1'])
+})
+
+Deno.test('unlock: 401 without caller, 403 for staff or shopai callers', async () => {
+  assertEquals((await handleStaff('unlock', 'jwt', {}, makeDeps({ getCaller: async () => null }).deps)).status, 401)
+  const staff = makeDeps({ getCaller: async () => ({ ...owner, appRole: 'staff' }) })
+  assertEquals((await handleStaff('unlock', 'jwt', {}, staff.deps)).status, 403)
+  assertEquals(staff.log, [])
+  const shopai = makeDeps({ getCaller: async () => ({ ...owner, app: 'shopai' }) })
+  assertEquals((await handleStaff('unlock', 'jwt', {}, shopai.deps)).status, 403)
 })

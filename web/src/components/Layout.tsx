@@ -62,6 +62,7 @@ export default function Layout() {
         color: 'var(--text-muted)'
       }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1.5rem', fontSize: '0.9rem' }}>
+          <Link to="/chukta" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Chukta</Link>
           <Link to="/features" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>App Features</Link>
           <Link to="/help" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Help Center</Link>
           <Link to="/renew" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Renew Subscription</Link>

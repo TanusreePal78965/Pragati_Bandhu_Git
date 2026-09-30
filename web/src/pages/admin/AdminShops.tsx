@@ -13,6 +13,7 @@ type Shop = {
   is_active: boolean;
   created_at: string;
   app_subscriptions?: { app: 'shopai' | 'chukta'; plan_type: string; is_active: boolean; expires_at: string | null }[];
+  chukta_counts?: { properties: number; workers: number } | null;
 };
 
 const shopaiSub = (shop: Shop) => shop.app_subscriptions?.find((s) => s.app === 'shopai');
@@ -226,6 +227,11 @@ export default function AdminShops() {
                       )}
                       {shop.app_subscriptions?.some((s) => s.app === 'chukta') && (
                         <span className="badge badge-success" style={{ marginLeft: 4 }}>Chukta</span>
+                      )}
+                      {shop.chukta_counts && (
+                        <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 4 }}>
+                          {shop.chukta_counts.properties} properties · {shop.chukta_counts.workers} workers
+                        </div>
                       )}
                     </td>
                     <td>

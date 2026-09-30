@@ -164,3 +164,14 @@ test('non-positive shift hours fall back to 8', () => {
   });
   expect(r.earnedPaise).toBe(48000);
 });
+
+test('explanation key: whole month vs partial month', () => {
+  const whole = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly' }), ratePaise: 3000000, joiningDate: '2026-09-01', today: '2026-09-30', attendance: [],
+  });
+  expect(whole.explanation.map((e) => e.key)).toEqual(['ledger.explain.monthly']);
+  const partial = calculateWorkerLedger({
+    ...base, settings: S({ payBasis: 'monthly' }), ratePaise: 3000000, joiningDate: '2026-09-21', today: '2026-09-30', attendance: [],
+  });
+  expect(partial.explanation[0]).toMatchObject({ key: 'ledger.explain.monthlyPartial', params: { eligibleDays: 10 } });
+});
