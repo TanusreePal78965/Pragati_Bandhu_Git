@@ -44,7 +44,7 @@ export default function AppRoot() {
   const onLoggedOut = useCallback((reason: LogoutReason) => {
     void (async () => {
       // A revoked session leaves the identity and stored tokens behind; clear them. A user logout already did.
-      if (reason === 'revoked') await authService.logout();
+      if (reason === 'revoked') await authService.logout().catch((e) => console.warn('logout failed', e));
       setPhase({ name: 'login', notice: reason === 'revoked' ? 'auth.login.sessionEnded' : null });
     })();
   }, []);
@@ -53,7 +53,16 @@ export default function AppRoot() {
     case 'boot':
       return <Loading />;
     case 'language':
-      return <LanguageScreen onChosen={async (l) => { await setLanguage(l); await restore(); }} />;
+      return (
+        <LanguageScreen onChosen={async (l) => {
+          try {
+            await setLanguage(l);
+            await restore();
+          } catch {
+            setPhase({ name: 'login', notice: null });
+          }
+        }} />
+      );
     case 'login':
       return <LoginScreen notice={phase.notice} onLoggedIn={(identity) => setPhase({ name: 'session', identity })} />;
     case 'session':

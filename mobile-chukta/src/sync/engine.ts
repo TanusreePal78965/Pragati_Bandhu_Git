@@ -44,7 +44,14 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
 
   const emit = (patch: Partial<SyncStatus>) => {
     status = { ...status, ...patch };
-    for (const l of listeners) l(status);
+    for (const l of listeners) {
+      // One broken subscriber must not break the pass or starve the others.
+      try {
+        l(status);
+      } catch (e) {
+        console.warn('sync listener failed', e);
+      }
+    }
   };
 
   function schedule(ms: number) {
@@ -52,7 +59,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     if (timer !== null) clearTimer(timer);
     timer = setTimer(() => {
       timer = null;
-      void run();
+      run().catch(() => {});
     }, ms);
   }
 
@@ -68,26 +75,49 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     return r?.last_error ?? null;
   }
 
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  /**
+   * One push + pull. Any throw — including from hasSession(), counts() or headError() — counts as a
+   * stall, so the backoff timer is always rescheduled. If counts() fails the previous counts are kept.
+   */
   async function pass(): Promise<void> {
-    if (!(await deps.hasSession())) {
-      emit(await counts());
-      return;
-    }
     let error: string | null = null;
     let stalled = false;
+    let signedOut = false;
     try {
-      const push = await flushPush(deps.db, deps.remote, deps.hasSession);
-      stalled = push.stopped;
-      await pullAll(deps.db, deps.remote);
+      if (!(await deps.hasSession())) {
+        signedOut = true;
+      } else {
+        const push = await flushPush(deps.db, deps.remote, deps.hasSession);
+        stalled = push.stopped;
+        await pullAll(deps.db, deps.remote);
+      }
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = message(e);
       stalled = true;
     }
-    const c = await counts();
+    let c: Partial<SyncStatus> = {};
+    try {
+      c = await counts();
+    } catch (e) {
+      error ??= message(e);
+      stalled = true;
+    }
     if (stalled) {
       failures++;
       schedule(backoffDelay(failures));
-      emit({ ...c, lastError: error ?? (await headError()) ?? 'sync stalled' });
+      let head: string | null = null;
+      if (error === null) {
+        try {
+          head = await headError();
+        } catch (e) {
+          head = message(e);
+        }
+      }
+      emit({ ...c, lastError: error ?? head ?? 'sync stalled' });
+    } else if (signedOut) {
+      emit(c);
     } else {
       failures = 0;
       emit({ ...c, lastError: null, lastSyncedAt: now().toISOString() });
@@ -104,9 +134,9 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       clearTimer(timer);
       timer = null;
     }
-    emit({ running: true });
     inflight = (async () => {
       try {
+        emit({ running: true });
         do {
           again = false;
           await pass();

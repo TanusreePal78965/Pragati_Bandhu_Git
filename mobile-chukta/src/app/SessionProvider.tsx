@@ -62,7 +62,14 @@ export function SessionProvider({ identity, onLoggedOut, children }: {
       cleanups.push(() => data.subscription.unsubscribe());
       setReady({ db, engine: e });
       void e.run();
-    })().catch((err) => console.warn('session start failed', err));
+    })().catch((err) => {
+      console.warn('session start failed', err);
+      // Without a database there is nothing to show; send the user back to login instead of a
+      // spinner that never ends.
+      if (disposed || ending.current) return;
+      ending.current = true;
+      onLoggedOutRef.current('revoked');
+    });
     return () => {
       disposed = true;
       cleanups.forEach((c) => c());

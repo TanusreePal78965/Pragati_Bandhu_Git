@@ -129,6 +129,43 @@ test('subscribers see running flip and the final status; dispose stops timers', 
   expect(t.live()).toEqual([]);
 });
 
+test('a throw outside push/pull (the counts query) still backs off and clears running', async () => {
+  const db = await dbWithQueue(0);
+  const real = db.getFirstAsync.bind(db);
+  let broken = true;
+  jest.spyOn(db, 'getFirstAsync').mockImplementation(((sql: string, params?: unknown[]) => {
+    if (broken && sql.includes('sum(status')) return Promise.reject(new Error('db locked'));
+    return real(sql, params as never);
+  }) as typeof db.getFirstAsync);
+  const { remote } = fakeRemote(() => null);
+  const t = fakeTimers();
+  const engine = createSyncEngine({ db, remote, hasSession: async () => true, now: () => NOW, setTimer: t.setTimer, clearTimer: t.clearTimer });
+  await engine.run();
+  expect(t.live().map((x) => x.ms)).toEqual([5000]);
+  expect(engine.getStatus()).toMatchObject({ running: false, lastError: 'db locked', lastSyncedAt: null });
+  broken = false;
+  t.live()[0].fn();
+  await idle(engine);
+  expect(t.live()).toEqual([]);
+  expect(engine.getStatus()).toMatchObject({ running: false, lastError: null, lastSyncedAt: NOW.toISOString() });
+});
+
+test('a throwing subscriber does not break the pass or other subscribers', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const db = await dbWithQueue(1);
+  const { remote } = fakeRemote(() => null);
+  const engine = createSyncEngine({ db, remote, hasSession: async () => true, now: () => NOW });
+  engine.subscribe(() => { throw new Error('bad listener'); });
+  const seen: boolean[] = [];
+  engine.subscribe((s) => seen.push(s.running));
+  await engine.run();
+  expect(engine.getStatus()).toMatchObject({ running: false, pending: 0, lastSyncedAt: NOW.toISOString() });
+  expect(seen[0]).toBe(true);
+  expect(seen.at(-1)).toBe(false);
+  expect(warn).toHaveBeenCalled();
+  warn.mockRestore();
+});
+
 test('backoffDelay doubles from 5s and caps at 5 minutes', () => {
   expect([1, 2, 3, 4].map(backoffDelay)).toEqual([5000, 10000, 20000, 40000]);
   expect(backoffDelay(20)).toBe(300000);

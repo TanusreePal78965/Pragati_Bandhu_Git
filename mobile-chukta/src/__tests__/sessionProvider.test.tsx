@@ -26,7 +26,7 @@ jest.mock('../app/services', () => ({
   staffApi: {},
 }));
 
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import { SessionProvider } from '../app/SessionProvider';
 import { useSession, type Session } from '../app/session';
@@ -89,4 +89,19 @@ test('session.logout() fires onLoggedOut("user") once; a SIGNED_OUT during/after
   expect(authService.logout).toHaveBeenCalledTimes(1);
   expect(onLoggedOut).toHaveBeenCalledTimes(1);
   expect(onLoggedOut).toHaveBeenCalledWith('user');
+});
+
+test('a failed session start (database will not open) logs out once instead of spinning forever', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  (openChuktaDb as jest.Mock).mockRejectedValue(new Error('cannot open'));
+  const onLoggedOut = jest.fn();
+  render(
+    <SessionProvider identity={OWNER} onLoggedOut={onLoggedOut}>
+      <Text testID="child">ready</Text>
+    </SessionProvider>,
+  );
+  await waitFor(() => expect(onLoggedOut).toHaveBeenCalledTimes(1));
+  expect(onLoggedOut).toHaveBeenCalledWith('revoked');
+  expect(screen.queryByTestId('child')).toBeNull();
+  warn.mockRestore();
 });
