@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
@@ -34,6 +34,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
   const today = sessionToday(session);
   const [ym, setYm] = useState({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) });
   const [showExplain, setShowExplain] = useState(false);
+  const correcting = useRef(false);
 
   const { data } = useLocalData(async (s) => {
     const worker = await getWorker(s.db, workerId);
@@ -72,9 +73,15 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
       text: t('worker.correct'),
       style: 'destructive',
       onPress: async () => {
-        if (item.table === 'advance_entries') await voidAdvance(session.repo, item.id);
-        else await voidPayment(session.repo, item.id);
-        session.afterWrite();
+        if (correcting.current) return;
+        correcting.current = true;
+        try {
+          if (item.table === 'advance_entries') await voidAdvance(session.repo, item.id);
+          else await voidPayment(session.repo, item.id);
+          session.afterWrite();
+        } finally {
+          correcting.current = false;
+        }
       },
     },
   ]);

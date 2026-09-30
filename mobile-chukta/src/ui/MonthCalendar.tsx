@@ -38,7 +38,7 @@ export function MonthCalendar({ grid, onPrev, onNext }: { grid: MonthGrid; onPre
           <View key={c.date} testID={`day-${c.date}`} accessibilityLabel={`${c.day} ${cellLabel(c, t)}`}
             style={[styles.cell, styles.day, { backgroundColor: cellColor(c) }, (c.kind === 'future' || c.kind === 'outside') && styles.faded]}>
             <Text style={styles.dayNum}>{c.day}</Text>
-            {c.entry?.status === 'hours' ? <Text style={styles.small}>{c.entry.hours}h</Text> : null}
+            {c.entry?.status === 'hours' ? <Text style={styles.small}>{t('today.hoursValue', { hours: c.entry.hours })}</Text> : null}
           </View>
         ))}
       </View>

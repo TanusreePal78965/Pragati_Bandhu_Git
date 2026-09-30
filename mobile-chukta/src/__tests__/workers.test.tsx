@@ -36,11 +36,16 @@ test('workers list shows wage due and advance; left workers only on request', as
 
 test('worker detail: balances, explanation, calendar and history', async () => {
   const s = await seeded();
+  // Full-shift hours (8/8 = credit 1, same as an implicit "present" day) so this doesn't
+  // perturb the "5 days × ₹500" / "₹2,000 due" assertions below.
+  await upsertLocal(s.db, 'attendance_entries', att('2026-09-04', 'hours', { hours: 8 }));
   renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
   expect(await screen.findByTestId('due')).toHaveTextContent('₹2,000');
   fireEvent.press(screen.getByTestId('explain-toggle'));
   expect(screen.getByText('5 days × ₹500')).toBeTruthy();
   expect(screen.getByTestId('day-2026-09-03').props.accessibilityLabel).toMatch(/Absent/);
+  // The hours badge goes through t('today.hoursValue'), not a hardcoded "h" suffix.
+  expect(screen.getByText('8 h')).toBeTruthy();
   // History rows (Task 14 adds buttons with the same labels, hence getAll).
   expect(screen.getAllByText('Advance').length).toBeGreaterThan(0);
   expect(screen.getAllByText('Wage payment').length).toBeGreaterThan(0);
