@@ -27,7 +27,14 @@
     "plugins": [
       "expo-sqlite",
       "expo-localization",
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1d639090-82c3-48b2-bb11-1a456bc20e22"
+      }
+    },
+    "owner": "shubhadeep29"
   }
 }
