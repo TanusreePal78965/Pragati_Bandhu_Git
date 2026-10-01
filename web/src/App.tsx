@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 
 import Layout from './components/Layout';
+import Home from './pages/Home';
 import ShopAIRegister from './pages/ShopAIRegister';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -22,7 +23,7 @@ export default function App() {
     <BrowserRouter basename="/Pragati_Bandhu_Git">
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/" element={<ShopAIRegister />} />
+          <Route path="/" element={<Home />} />
           <Route path="/shopai" element={<ShopAIRegister />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
