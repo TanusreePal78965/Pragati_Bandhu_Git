@@ -1,12 +1,25 @@
-import { useState } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Outlet, Link, useLocation, useNavigationType } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
-import logoUrl from '../assets/icon.png';
+import logoUrl from '../assets/shopai-icon-256.png';
 import '../landing.css';
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const location = useLocation();
+  const navigationType = useNavigationType();
+
+  // location.key changes on every navigation, so repeat clicks on the same hash link scroll again.
+  useEffect(() => {
+    setMenuOpen(false);
+    const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    if (location.hash) {
+      document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior });
+    } else if (navigationType !== 'POP') {
+      window.scrollTo(0, 0);
+    }
+  }, [location.key, location.hash, navigationType]);
 
   return (
     <div className="page-container lp-page" style={{ display: 'flex', flexDirection: 'column' }}>

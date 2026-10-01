@@ -14,7 +14,7 @@ import {
   Sparkles,
   WifiOff,
 } from 'lucide-react';
-import shopaiIcon from '../assets/icon.png';
+import shopaiIcon from '../assets/shopai-icon-256.png';
 import chuktaIcon from '../assets/chukta-icon.png';
 
 export type AppId = 'shopai' | 'chukta';
@@ -48,6 +48,8 @@ export interface AppInfo {
   playUrl: string | null;
   featuresLink: string | null;
   features: AppFeature[];
+  /** Bullets in the pricing card; per app because renewal differs (Chukta has no web renewal yet). */
+  included: string[];
 }
 
 export const SHOPAI: AppInfo = {
@@ -65,6 +67,7 @@ export const SHOPAI: AppInfo = {
   signupLabel: 'Register ShopAI',
   playUrl: 'https://play.google.com/store/apps/details?id=com.pragatibandhu.app',
   featuresLink: '/features',
+  included: ['30-day free trial', 'Renew any time by UPI'],
   features: [
     { icon: ReceiptText, title: 'Billing', text: 'Cash or udhar bills in seconds.' },
     { icon: Package, title: 'Inventory', text: 'Stock goes down automatically with every bill.' },
@@ -87,6 +90,7 @@ export const CHUKTA: AppInfo = {
   signupLabel: 'Sign up for Chukta',
   playUrl: null,
   featuresLink: null,
+  included: ['30-day free trial', 'One price for the whole year'],
   features: [
     { icon: CalendarCheck, title: 'Daily attendance', text: 'Present, half day, absent, or hours worked.' },
     { icon: Calculator, title: 'Automatic wages', text: 'With a plain-words breakdown like "4.5 days × ₹500".' },

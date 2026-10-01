@@ -11,7 +11,7 @@ export default function Faq() {
         </details>
         <details>
           <summary>How do I pay?</summary>
-          <p>By UPI. Scan the QR code on the <Link to="/renew">Renew page</Link>.</p>
+          <p>ShopAI: by UPI — scan the QR code on the <Link to="/renew">Renew page</Link>. Chukta: online renewal is coming soon; your 30-day free trial starts when you sign up.</p>
         </details>
         <details>
           <summary>What happens after the free trial?</summary>

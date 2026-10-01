@@ -2,8 +2,6 @@ import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { APPS } from '../../content/apps';
 
-const INCLUDED = ['30-day free trial', 'Renew any time by UPI'];
-
 export default function Pricing() {
   return (
     <section className="lp-block">
@@ -22,7 +20,7 @@ export default function Pricing() {
               ))}
             </div>
             <ul className="lp-checks">
-              {INCLUDED.map((item) => (
+              {app.included.map((item) => (
                 <li key={item}>
                   <Check size={18} />
                   {item}

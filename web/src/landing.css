@@ -5,7 +5,7 @@
   --lp-accent-dark: #1442a8;
   --lp-accent-soft: #e8efff;
   --lp-section-bg: #f5f8ff;
-  --lp-gradient: linear-gradient(135deg, #3b82f6 0%, #1a57db 100%);
+  --lp-gradient: linear-gradient(135deg, #1a57db 0%, #1442a8 100%);
 }
 
 .lp-theme-chukta {
@@ -13,7 +13,7 @@
   --lp-accent-dark: #b45309;
   --lp-accent-soft: #fef3c7;
   --lp-section-bg: #fffbf5;
-  --lp-gradient: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  --lp-gradient: linear-gradient(135deg, #b45309 0%, #92400e 100%);
 }
 
 .lp-home {
