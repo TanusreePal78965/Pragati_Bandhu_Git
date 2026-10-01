@@ -260,6 +260,179 @@
   color: var(--text-muted);
 }
 
+/* Pricing, How it works, FAQ */
+.lp-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.lp-block > h2 {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.lp-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1.5rem;
+  text-align: left;
+}
+
+.lp-plan-card {
+  background: #fff;
+  border-radius: var(--border-radius);
+  border-top: 6px solid var(--lp-accent);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lp-plan-card h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--text-main);
+}
+
+.lp-plan-card .lp-actions {
+  margin-top: auto;
+}
+
+.lp-plan-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lp-plan-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.lp-plan-price {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.lp-plan-period {
+  color: var(--text-muted);
+}
+
+.lp-plan-badge {
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.lp-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--text-main);
+}
+
+.lp-checks li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lp-checks svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.lp-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 1rem;
+}
+
+.lp-step {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lp-step-num {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lp-step h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.lp-step p,
+.lp-note {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+.lp-faq {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.lp-faq details {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 1.25rem;
+}
+
+.lp-faq summary {
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.lp-faq details p {
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+}
+
+.lp-faq a {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
   .lp-home {
     gap: 2.5rem;
