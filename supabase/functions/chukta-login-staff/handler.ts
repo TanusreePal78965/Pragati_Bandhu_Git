@@ -31,7 +31,7 @@ export async function handleStaffLogin(
   deps: StaffLoginDeps,
 ): Promise<HandlerResult> {
   const ownerPhone = typeof input.ownerPhone === 'string' ? input.ownerPhone.trim() : ''
-  if (!ownerPhone || !isValidPin(input.pin)) return { status: 400, body: { error: 'ownerPhone and a 4-6 digit pin are required' } }
+  if (!ownerPhone || !isValidPin(input.pin)) return { status: 400, body: { error: 'ownerPhone and a 4 digit pin are required' } }
   const pin = input.pin
   const deviceId = typeof input.deviceId === 'string' ? input.deviceId : null
 

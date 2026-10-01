@@ -1,22 +1,51 @@
 import { useNavigation } from '@react-navigation/native';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { initI18n, setLanguage, type Language } from '../i18n';
 import { useT } from '../i18n/useT';
-import { Button, Screen, Title } from '../ui/components';
-import { colors } from '../ui/theme';
+import { Button, Card, Screen, ScreenHeader } from '../ui/components';
+import { colors, radius, shadows, space } from '../ui/theme';
 
-const LANGUAGES: Language[] = ['en', 'bn', 'hi'];
+const LANGUAGES: { code: Language; native: string; subtitle: string }[] = [
+  { code: 'en', native: 'English', subtitle: 'Default' },
+  { code: 'bn', native: 'বাংলা', subtitle: 'Bengali' },
+  { code: 'hi', native: 'हिन्दी', subtitle: 'Hindi' },
+];
 
-export function LanguageScreen({ onChosen }: { onChosen: (lang: Language) => void | Promise<void> }) {
+// Rendered both inside the navigator (LanguageRoute, from Settings) and before it exists (AppRoot's
+// first-run picker), so it must not touch navigation itself — the caller passes onBack when there is one.
+export function LanguageScreen({
+  onChosen,
+  onBack,
+}: {
+  onChosen: (lang: Language) => void | Promise<void>;
+  onBack?: () => void;
+}) {
   const t = useT();
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <ScreenHeader
+        title={t('language.title')}
+        showBack={!!onBack}
+        onBack={onBack}
+      />
       <Screen>
-        <Title>{t('language.title')}</Title>
-        {LANGUAGES.map((l) => (
-          <Button key={l} kind="secondary" title={t(`language.${l}`)} onPress={() => void onChosen(l)} testID={`lang-${l}`} />
-        ))}
+        <Card style={styles.card}>
+          <Text style={styles.heading}>{t('language.title')}</Text>
+          <View style={styles.list}>
+            {LANGUAGES.map((item) => (
+              <View key={item.code} style={styles.itemWrap}>
+                <Button
+                  kind="secondary"
+                  title={`${item.native} (${item.subtitle})`}
+                  onPress={() => void onChosen(item.code)}
+                  testID={`lang-${item.code}`}
+                />
+              </View>
+            ))}
+          </View>
+        </Card>
       </Screen>
     </SafeAreaView>
   );
@@ -27,19 +56,14 @@ export function LanguageRoute() {
   const navigation = useNavigation();
   return (
     <LanguageScreen
+      onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
       onChosen={(l) => {
-        // Pop first. Changing the language re-renders every mounted screen's header (translated
-        // titles), and doing that while this screen's native fragment is still being removed from
-        // the stack races react-native-screens ("ScreenStackFragment added into a non-stack
-        // container"). Deferring the change to after the pop's interactions finish avoids it.
         navigation.goBack();
         InteractionManager.runAfterInteractions(() => {
           void (async () => {
             try {
               await setLanguage(l);
             } catch {
-              // Saving the choice for next launch failed (e.g. storage write error); still switch
-              // the app's language now, so the tap isn't silently lost.
               await initI18n(l).catch(() => {});
             }
           })();
@@ -48,3 +72,22 @@ export function LanguageRoute() {
     />
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.bg },
+  card: {
+    padding: space.lg,
+    gap: space.md,
+  },
+  heading: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  list: {
+    gap: space.sm,
+  },
+  itemWrap: {
+    width: '100%',
+  },
+});

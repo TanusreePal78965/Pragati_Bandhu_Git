@@ -77,10 +77,10 @@
     "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}"
   },
   "staff": {
-    "titleNew": "Add staff", "titleEdit": "Edit staff", "name": "Name", "pin": "PIN (4–6 digits)", "pinConfirm": "Repeat PIN",
+    "titleNew": "Add staff", "titleEdit": "Edit staff", "name": "Name", "pin": "PIN (4 digits)", "pinConfirm": "Repeat PIN",
     "newPin": "New PIN (leave empty to keep)", "active": "Can log in", "inactive": "Deactivated",
     "error": {
-      "nameRequired": "Enter a name.", "pinInvalid": "PIN must be 4–6 digits.", "pinMismatch": "PINs don't match.",
+      "nameRequired": "Enter a name.", "pinInvalid": "PIN must be 4 digits.", "pinMismatch": "PINs don't match.",
       "pinInUse": "Another staff member already uses this PIN.", "reactivateNeedsPin": "Set a new PIN to reactivate.",
       "network": "No internet. Staff changes need internet.", "sessionExpired": "Please log in again.", "unknown": "Could not save. Please try again."
     }

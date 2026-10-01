@@ -961,6 +961,17 @@ CREATE TABLE IF NOT EXISTS sync_queue (
 
 ---
 
+### 14.29 Chukta Mobile App Visual & UI Kit Redesign (v5.11)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 168 | Chukta Deep Indigo & Lavender Design System | ✅ | Refreshed brand identity with rich Deep Indigo (`#4F46E5` / `#4338CA`), Lavender wash (`#EEF2FF`), warm amber accents, crisp slate-50 background (`#F8FAFC`), semantic status colors, and indigo shadow elevations in `mobile-chukta/src/ui/theme.ts`. |
+| 169 | Shared Richness Components | ✅ | Implemented `ScreenHeader`, `StatusChip`, deterministic worker `Avatar`, illustrated `EmptyState`, and `HeroCard` (`expo-linear-gradient`) in `src/ui/components.tsx` and `src/ui/Icon.tsx`. |
+| 170 | Screen Refresh & Calendar Polish | ✅ | Updated all 15 screens with custom headers, avatar badges, status chips, and color-coded attendance grid (`MonthCalendar.tsx`). All 172 tests green. |
+| 171 | Gradle JVM Memory & EAS Build Stability | ✅ | Added `withJvmArgs.js` config plugin in `mobile-chukta` (`app.json`) injecting `-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:-TieredCompilation` to resolve Metaspace OOM crashes during EAS local builds. |
+
+---
+
 ## 15. Future Scope — v2 and Beyond
 
 | Feature | Version | Notes |
@@ -1023,6 +1034,16 @@ Add small customisations per vertical (expiry dates for medical, variants for cl
 ---
 
 ## 19. Changelog
+
+### v5.11 — September 30, 2026
+
+**Chukta Mobile App Visual & UI Kit Redesign (`mobile-chukta/`)**
+- **Deep Indigo & Lavender Brand Identity (`theme.ts`)**: Upgraded color scheme to modern Deep Indigo primary (`#4F46E5` / `#4338CA`), Lavender soft washes (`#EEF2FF`), warm amber accents, crisp slate-50 background (`#F8FAFC`), slate-900 typography (`#0F172A`), and tailored shadow elevations.
+- **UI Kit Richness (`components.tsx`, `Icon.tsx`)**: Introduced `ScreenHeader` with left back arrow, title, subtitle, and action element; `StatusChip` with semantic colors (success, danger, warning, info, off); deterministic worker `Avatar` with harmonious initials palette; `EmptyState` with large vector icons; and `HeroCard` using `expo-linear-gradient`.
+- **Screen-wide Refresh**: Applied custom headers, gradient cards, worker avatars, and status chips across all 15 Chukta screens (`TodayScreen`, `WorkersScreen`, `WorkerDetailScreen`, `WorkerFormScreen`, `AdvancesScreen`, `MoneyEntryScreen`, `SettingsScreen`, `PropertiesScreen`, `PropertyFormScreen`, `StaffFormScreen`, `SyncIssuesScreen`, `LanguageScreen`, `LoginScreen`).
+- **Calendar & Form Polish**: Color-coded month calendar attendance days (`MonthCalendar.tsx`) and enhanced `DateField.tsx` with clean calendar action trigger.
+- **Test Suite Verification**: Maintained 100% test coverage with all 172 unit/integration tests passing cleanly (`npx jest`) and clean TypeScript checks (`npx tsc --noEmit`).
+- **EAS & Gradle Build Optimization (`withJvmArgs.js`, `app.json`)**: Configured Expo config plugin to automatically inject `-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:-TieredCompilation` into `gradle.properties` on prebuild, permanently preventing JVM Metaspace OOM crashes during EAS local and production builds.
 
 ### v5.5 — August 23, 2026
 
@@ -1600,6 +1621,6 @@ Same day as v3.8, above — decided the Firebase/Google/Supabase-session stack j
 
 ---
 
-*Document prepared: April 2026 | Last updated: August 23, 2026*
-*Version: 5.10 — Clear Test Data / Start Fresh Action Feature*
+*Document prepared: April 2026 | Last updated: September 30, 2026*
+*Version: 5.11 — Chukta Mobile App Visual & UI Kit Redesign*
 

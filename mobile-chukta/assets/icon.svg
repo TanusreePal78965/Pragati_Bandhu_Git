@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#3730A3"/></linearGradient></defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <defs>
+    <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCD34D"/><stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="19.8" stdDeviation="24.200000000000003" flood-color="#1E1B4B" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g transform="translate(512 512) scale(1.1)">
+    <circle r="300" fill="url(#coin)" filter="url(#sh)"/>
+    <circle r="252" fill="none" stroke="#B45309" stroke-opacity="0.35" stroke-width="14"/>
+    <path d="M-128 8 L-34 102 L138 -84" fill="none" stroke="#3730A3" stroke-width="74" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg>

@@ -1,6 +1,6 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { i18n, initI18n } from '../i18n';
-import { LanguageRoute } from '../screens/LanguageScreen';
+import { LanguageRoute, LanguageScreen } from '../screens/LanguageScreen';
 import { makeSession, OWNER, renderScreen } from './helpers/session';
 
 beforeAll(() => initI18n('en'));
@@ -13,4 +13,12 @@ test('changing language pops the screen immediately; the language change lands a
   // ordering is what avoids racing react-native-screens' fragment removal (see LanguageScreen.tsx).
   expect((await screen.findByTestId('current-route')).props.children).toBe('Tabs');
   await waitFor(() => expect(i18n.language).toBe('bn'));
+});
+
+test('first-run language picker renders outside any NavigationContainer', async () => {
+  // AppRoot shows LanguageScreen before the navigator mounts (fresh install, no saved language).
+  const onChosen = jest.fn();
+  render(<LanguageScreen onChosen={onChosen} />);
+  fireEvent.press(await screen.findByTestId('lang-hi'));
+  expect(onChosen).toHaveBeenCalledWith('hi');
 });

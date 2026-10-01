@@ -62,7 +62,7 @@ export async function handleStaff(
   if (action === 'create') {
     const propertyId = str(input.propertyId)
     const name = str(input.name)
-    if (!propertyId || !name || !isValidPin(input.pin)) return fail(400, 'propertyId, name and a 4-6 digit pin are required')
+    if (!propertyId || !name || !isValidPin(input.pin)) return fail(400, 'propertyId, name and a 4 digit pin are required')
     if (!UUID.test(propertyId)) return fail(400, 'invalid propertyId')
     const shop = await deps.getPropertyShop(propertyId)
     if (!shop) return fail(404, 'property_not_found')
@@ -98,7 +98,7 @@ export async function handleStaff(
     patch.name = name
   }
   if (input.pin !== undefined) {
-    if (!isValidPin(input.pin)) return fail(400, 'pin must be 4-6 digits')
+    if (!isValidPin(input.pin)) return fail(400, 'pin must be 4 digits')
     if (await pinTaken(input.pin, await deps.listActiveShopStaff(caller.shopId), staff.id)) return fail(409, 'pin_in_use')
     const { hash, salt } = await hashPin(input.pin)
     Object.assign(patch, { pin_hash: hash, pin_salt: salt })

@@ -27,7 +27,7 @@ test('staff mode sends the owner phone + digits-only PIN and shows the mapped er
   render(<LoginScreen notice={null} onLoggedIn={jest.fn()} />);
   fireEvent.press(screen.getByTestId('mode-staff'));
   fireEvent.changeText(screen.getByTestId('phone'), '9800000001');
-  fireEvent.changeText(screen.getByTestId('secret'), '48a21');
+  fireEvent.changeText(screen.getByTestId('secret'), '48a2159');
   fireEvent.press(screen.getByTestId('submit'));
   expect(await screen.findByText(/ask the owner to unlock it in Settings/)).toBeTruthy();
   expect(mocked.loginStaff).toHaveBeenCalledWith('9800000001', '4821');

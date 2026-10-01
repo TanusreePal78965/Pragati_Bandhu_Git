@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useLocalData, useSession } from '../app/session';
 import { useT } from '../i18n/useT';
-import { Button, Card, Loading, Muted, Screen } from '../ui/components';
-import { colors, space } from '../ui/theme';
 import { discardDead, listDeadGroups, requeueDead, type DeadGroup } from '../sync/deadLetters';
+import { Button, Card, EmptyState, Loading, Muted, Screen, ScreenHeader, StatusChip } from '../ui/components';
+import { colors, space } from '../ui/theme';
 
 export function SyncIssuesScreen() {
   const t = useT();
@@ -64,17 +64,33 @@ export function SyncIssuesScreen() {
 
   if (!data) return <Loading />;
   return (
-    <Screen>
+    <Screen header={<ScreenHeader title={t('syncIssues.title')} showBack />}>
+      {data.length === 0 ? (
+        <EmptyState
+          icon="cloud-done-outline"
+          title={t('syncIssues.empty')}
+          message="All changes from this device have safely reached the server."
+        />
+      ) : null}
+
       <Muted>{data.length ? t('syncIssues.explain') : t('syncIssues.empty')}</Muted>
+
       {data.map((g, i) => {
         const rowBusy = busy.has(keyOf(g));
         return (
-          <Card key={g.error}>
-            <Text style={styles.error}>{g.error}</Text>
-            <Muted>{`${t('syncIssues.count', { count: g.count })} · ${g.tables.map((tb) => t(`tables.${tb}`)).join(', ')}`}</Muted>
+          <Card key={g.error} style={styles.issueCard}>
+            <View style={styles.errorHeader}>
+              <StatusChip label="Sync failed" tone="danger" />
+              <Muted>{`${t('syncIssues.count', { count: g.count })} · ${g.tables.map((tb) => t(`tables.${tb}`)).join(', ')}`}</Muted>
+            </View>
+            <Text style={styles.errorText}>{g.error}</Text>
             <View style={styles.actions}>
-              <View style={styles.action}><Button title={t('syncIssues.retry')} onPress={() => void retry(g)} loading={rowBusy} testID={`retry-${i}`} /></View>
-              <View style={styles.action}><Button kind="danger" title={t('syncIssues.discard')} onPress={() => discard(g)} loading={rowBusy} testID={`discard-${i}`} /></View>
+              <View style={styles.action}>
+                <Button title={t('syncIssues.retry')} onPress={() => void retry(g)} loading={rowBusy} testID={`retry-${i}`} />
+              </View>
+              <View style={styles.action}>
+                <Button kind="danger" title={t('syncIssues.discard')} onPress={() => discard(g)} loading={rowBusy} testID={`discard-${i}`} />
+              </View>
             </View>
           </Card>
         );
@@ -84,7 +100,21 @@ export function SyncIssuesScreen() {
 }
 
 const styles = StyleSheet.create({
-  error: { fontSize: 14, color: colors.text },
-  actions: { flexDirection: 'row', gap: space.sm },
+  issueCard: {
+    gap: space.sm,
+    borderColor: colors.dangerBorder,
+  },
+  errorHeader: {
+    gap: space.xs,
+  },
+  errorText: {
+    fontSize: 14,
+    color: colors.dangerText,
+    backgroundColor: colors.dangerSoft,
+    padding: space.sm,
+    borderRadius: 8,
+    fontWeight: '500',
+  },
+  actions: { flexDirection: 'row', gap: space.sm, marginTop: space.xs },
   action: { flex: 1 },
 });

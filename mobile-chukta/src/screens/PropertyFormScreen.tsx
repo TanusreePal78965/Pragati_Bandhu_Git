@@ -1,12 +1,25 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { useLocalData, useSession } from '../app/session';
 import { useT } from '../i18n/useT';
 import { createProperty, getProperty, updatePropertySettings } from '../repos/properties';
-import { Button, ErrorText, Field, Label, Loading, Screen, Section, Segmented, WeekdayPicker } from '../ui/components';
+import {
+  Button,
+  Card,
+  ErrorText,
+  Field,
+  Label,
+  Loading,
+  Screen,
+  ScreenHeader,
+  Section,
+  Segmented,
+  WeekdayPicker,
+} from '../ui/components';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
+import { space } from '../ui/theme';
 import { propertyToFormValues, validatePropertyForm, type FieldErrors, type PropertyFormValues } from '../view/forms';
 
 export function PropertyFormScreen() {
@@ -96,28 +109,53 @@ export function PropertyFormScreen() {
     ]);
   }
 
+  const title = t(editingId ? 'properties.edit' : 'properties.add');
+
   return (
-    <Screen>
-      <Field label={t('properties.name')} value={values.name} onChangeText={(name) => set({ name })} error={err('name')} testID="name" />
-      <Field label={t('properties.address')} value={values.address} onChangeText={(address) => set({ address })} testID="address" />
+    <Screen header={<ScreenHeader title={title} showBack />}>
+      <Card style={styles.card}>
+        <Field label={t('properties.name')} value={values.name} onChangeText={(name) => set({ name })} error={err('name')} testID="name" />
+        <Field label={t('properties.address')} value={values.address} onChangeText={(address) => set({ address })} testID="address" />
+      </Card>
+
       <Section title={t('properties.defaults')}>
         <Label>{t('fields.payBasis')}</Label>
         <Segmented options={PAY_BASES.map((b) => ({ value: b, label: t(`payBasis.${b}`) }))} value={values.defaultPayBasis}
           onChange={(defaultPayBasis) => set({ defaultPayBasis })} testIDPrefix="basis" />
+
         <Label>{t('fields.attendanceMode')}</Label>
         <Segmented options={ATTENDANCE_MODES.map((m) => ({ value: m, label: t(`attendanceMode.${m}`) }))} value={values.defaultAttendanceMode}
           onChange={(defaultAttendanceMode) => set({ defaultAttendanceMode })} testIDPrefix="mode" />
+
         <Field label={t('fields.shiftHours')} value={values.shiftHours} onChangeText={(shiftHours) => set({ shiftHours })}
           keyboardType="decimal-pad" error={err('shiftHours')} testID="shift" />
+
         <Label>{t('fields.weeklyOff')}</Label>
         <WeekdayPicker value={values.weeklyOff} onChange={(weeklyOff) => set({ weeklyOff })} />
+
         <Label>{t('fields.monthlyDivisor')}</Label>
         <Segmented options={DIVISORS.map((d) => ({ value: d, label: t(`divisor.${d}`) }))} value={values.monthlyDivisor}
           onChange={(monthlyDivisor) => set({ monthlyDivisor })} testIDPrefix="divisor" />
       </Section>
+
       <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
-      <Button title={t('common.save')} onPress={() => void save()} loading={busy} testID="save" />
-      {editingId && existing?.is_active === 1 ? <Button kind="danger" title={t('properties.archive')} onPress={archive} testID="archive" /> : null}
+
+      <View style={styles.actions}>
+        <Button title={t('common.save')} onPress={() => void save()} loading={busy} testID="save" />
+        {editingId && existing?.is_active === 1 ? (
+          <Button kind="danger" title={t('properties.archive')} onPress={archive} testID="archive" />
+        ) : null}
+      </View>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    gap: space.md,
+  },
+  actions: {
+    gap: space.sm,
+    marginTop: space.xs,
+  },
+});

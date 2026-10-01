@@ -98,7 +98,7 @@ export function validateStaffForm(v: StaffFormValues): Validation<{ name: string
   const name = v.name.trim();
   if (!name) errors.name = 'staff.error.nameRequired';
   const pin = v.pin.trim();
-  if ((v.isNew || pin) && !/^\d{4,6}$/.test(pin)) errors.pin = 'staff.error.pinInvalid';
+  if ((v.isNew || pin) && !/^\d{4}$/.test(pin)) errors.pin = 'staff.error.pinInvalid';
   else if (pin && pin !== v.pinConfirm.trim()) errors.pinConfirm = 'staff.error.pinMismatch';
   return done(errors, () => ({ name, pin: pin || null }));
 }

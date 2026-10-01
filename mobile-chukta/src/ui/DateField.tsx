@@ -5,7 +5,8 @@ import { useT } from '../i18n/useT';
 import { todayLocal } from '../utils/dates';
 import { formatDate } from '../utils/format';
 import { Label } from './components';
-import { colors, radius, space } from './theme';
+import { Icon } from './Icon';
+import { colors, radius, shadows, space } from './theme';
 
 const toDate = (s: string) => {
   const [y, m, d] = s.split('-').map(Number);
@@ -13,16 +14,34 @@ const toDate = (s: string) => {
 };
 
 /** A YYYY-MM-DD value shown in the current language; opens the native date picker. */
-export function DateField({ label, value, onChange, max, testID }: {
-  label: string; value: string; onChange: (date: string) => void; max?: string; testID?: string;
+export function DateField({
+  label,
+  value,
+  onChange,
+  max,
+  testID,
+}: {
+  label: string;
+  value: string;
+  onChange: (date: string) => void;
+  max?: string;
+  testID?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+
   return (
     <View style={styles.wrap}>
       <Label>{label}</Label>
-      <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={() => setOpen(true)} style={styles.input}>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [styles.input, pressed && styles.inputPressed]}
+      >
         <Text style={styles.text}>{formatDate(value, t)}</Text>
+        <Icon name="calendar-outline" size={20} color={colors.primary} />
       </Pressable>
       {open ? (
         <DateTimePicker
@@ -41,6 +60,20 @@ export function DateField({ label, value, onChange, max, testID }: {
 
 const styles = StyleSheet.create({
   wrap: { gap: space.xs },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius, backgroundColor: colors.card, paddingHorizontal: space.md, minHeight: 46, justifyContent: 'center' },
-  text: { fontSize: 16, color: colors.text },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius,
+    backgroundColor: colors.card,
+    paddingHorizontal: space.md,
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadows.sm,
+  },
+  inputPressed: {
+    backgroundColor: colors.surfaceHover,
+  },
+  text: { fontSize: 16, color: colors.text, fontWeight: '500' },
 });

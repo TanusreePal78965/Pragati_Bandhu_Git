@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertNotEquals } from 'jsr:@std/assert@1'
 import { hashPin, isValidPin, randomPassword, staffAuthEmail, verifyPin } from './pin.ts'
 
-Deno.test('isValidPin accepts 4-6 digits only', () => {
-  assertEquals(['1234', '123456', '0000'].map(isValidPin), [true, true, true])
-  assertEquals(['123', '1234567', '12a4', 1234, null].map(isValidPin), [false, false, false, false, false])
+Deno.test('isValidPin accepts exactly 4 digits only', () => {
+  assertEquals(['1234', '0000'].map(isValidPin), [true, true])
+  assertEquals(['123', '12345', '123456', '12a4', 1234, null].map(isValidPin), [false, false, false, false, false, false])
 })
 
 Deno.test('hashPin/verifyPin round-trip with random salt', async () => {

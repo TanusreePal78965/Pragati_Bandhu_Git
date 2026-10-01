@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { StaffApiError } from '../../api/staffApi';
 import { useStackNav } from '../../app/routes';
 import { staffApi } from '../../app/services';
 import { useLocalData, useSession } from '../../app/session';
 import { useT } from '../../i18n/useT';
 import { listStaff } from '../../repos/staff';
-import { Button, Muted, Row, Section } from '../../ui/components';
+import { Avatar, Button, Muted, Row, Section, StatusChip } from '../../ui/components';
+import { space } from '../../ui/theme';
 
 export function StaffSection() {
   const t = useT();
@@ -33,11 +34,43 @@ export function StaffSection() {
     <Section title={t('settings.staff')}>
       <Muted>{t('settings.staffHelp', { phone })}</Muted>
       {(data ?? []).map((st) => (
-        <Row key={st.id} title={st.name} subtitle={st.is_active ? t('staff.active') : t('staff.inactive')}
-          onPress={() => navigation.navigate('StaffForm', { staffId: st.id })} testID={`staff-${st.id}`} />
+        <Row
+          key={st.id}
+          title={st.name}
+          subtitle={st.is_active ? t('staff.active') : t('staff.inactive')}
+          left={<Avatar name={st.name} id={st.id} size={36} />}
+          right={
+            <StatusChip
+              label={st.is_active ? t('staff.active') : t('staff.inactive')}
+              tone={st.is_active ? 'success' : 'off'}
+            />
+          }
+          onPress={() => navigation.navigate('StaffForm', { staffId: st.id })}
+          testID={`staff-${st.id}`}
+        />
       ))}
-      <Button kind="secondary" title={t('settings.addStaff')} onPress={() => navigation.navigate('StaffForm')} testID="add-staff" />
-      <Button kind="secondary" title={t('settings.unlock')} onPress={() => void unlock()} loading={unlocking} testID="unlock" />
+      <View style={styles.actions}>
+        <Button
+          kind="secondary"
+          title={t('settings.addStaff')}
+          onPress={() => navigation.navigate('StaffForm')}
+          testID="add-staff"
+        />
+        <Button
+          kind="secondary"
+          title={t('settings.unlock')}
+          onPress={() => void unlock()}
+          loading={unlocking}
+          testID="unlock"
+        />
+      </View>
     </Section>
   );
 }
+
+const styles = StyleSheet.create({
+  actions: {
+    gap: space.sm,
+    marginTop: space.xs,
+  },
+});

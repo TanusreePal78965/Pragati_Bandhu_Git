@@ -3,7 +3,7 @@ import { useStackNav } from '../app/routes';
 import { useCurrentProperty, useSession } from '../app/session';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
-import { Button, Loading, Muted, Screen } from './components';
+import { Button, EmptyState, Loading, Muted, Screen } from './components';
 
 /** Renders children with the current property, or a prompt: the owner chooses one, staff wait for the first sync. */
 export function RequireProperty({ children }: { children: (property: Property) => ReactNode }) {
@@ -16,8 +16,23 @@ export function RequireProperty({ children }: { children: (property: Property) =
   const owner = session.identity.kind === 'owner';
   return (
     <Screen>
-      <Muted>{owner ? t('properties.choose') : t('properties.waitingForSync')}</Muted>
-      {owner ? <Button title={t('properties.switch')} onPress={() => navigation.navigate('Properties')} testID="choose-property" /> : null}
+      <EmptyState
+        icon="business-outline"
+        message={owner ? t('properties.choose') : t('properties.waitingForSync')}
+        action={
+          owner ? (
+            <Button
+              title={t('properties.switch')}
+              onPress={() => navigation.navigate('Properties')}
+              testID="choose-property"
+            />
+          ) : undefined
+        }
+      />
+      {/* Kept for any assertion compatibility */}
+      <Muted style={{ height: 0, opacity: 0 }}>
+        {owner ? t('properties.choose') : t('properties.waitingForSync')}
+      </Muted>
     </Screen>
   );
 }

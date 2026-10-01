@@ -4,7 +4,7 @@ const DEFAULT_AUTH_EMAIL_DOMAIN = 'accounts.pragatibandhu.internal'
 const toB64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
 
 export function isValidPin(pin: unknown): pin is string {
-  return typeof pin === 'string' && /^\d{4,6}$/.test(pin)
+  return typeof pin === 'string' && /^\d{4}$/.test(pin)
 }
 
 export async function hashPin(

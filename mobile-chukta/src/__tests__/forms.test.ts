@@ -63,6 +63,8 @@ test('staff form: PIN required when new, optional on edit, must match', () => {
   expect(validateStaffForm({ isNew: true, name: '', pin: '1234', pinConfirm: '1243' }))
     .toEqual({ ok: false, errors: { name: 'staff.error.nameRequired', pinConfirm: 'staff.error.pinMismatch' } });
   expect(validateStaffForm({ isNew: true, name: 'A', pin: '1234567', pinConfirm: '1234567' }).ok).toBe(false);
+  expect(validateStaffForm({ isNew: true, name: 'A', pin: '12345', pinConfirm: '12345' }).ok).toBe(false);
+  expect(validateStaffForm({ isNew: false, name: 'A', pin: '123456', pinConfirm: '123456' }).ok).toBe(false);
 });
 
 test('property form: name and shift hours validated; defaults come from the property', () => {

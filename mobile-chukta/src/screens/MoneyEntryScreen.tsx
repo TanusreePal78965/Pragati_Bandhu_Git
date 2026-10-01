@@ -1,14 +1,29 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useLayoutEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
 import { activeMoneyRows } from '../domain/attendance';
 import { useT } from '../i18n/useT';
 import { addAdvance, addPayment, listAdvances } from '../repos/money';
 import { getWorker } from '../repos/workers';
-import { Button, ErrorText, Field, Label, Loading, Muted, Screen, Segmented } from '../ui/components';
+import {
+  Avatar,
+  Button,
+  Card,
+  ErrorText,
+  Field,
+  Label,
+  Loading,
+  Muted,
+  Screen,
+  ScreenHeader,
+  Segmented,
+  StatusChip,
+} from '../ui/components';
 import { DateField } from '../ui/DateField';
 import { PAYMENT_MODES } from '../ui/options';
+import { colors, radius, shadows, space } from '../ui/theme';
 import { formatRupees, rupeesToPaise } from '../utils/money';
 import { validateMoneyForm, type FieldErrors, type MoneyFormValues } from '../view/forms';
 
@@ -69,25 +84,106 @@ export function MoneyEntryScreen() {
     navigation.goBack();
   }
 
+  const title = t(`entryType.${params.kind}`);
+
   return (
-    <Screen>
-      {worker ? <Muted>{worker.name}</Muted> : null}
-      <Field label={t('money.amount')} value={values.amount} onChangeText={(amount) => set({ amount })} keyboardType="decimal-pad"
-        error={err('amount')} testID="amount" />
-      {exceedsAdvance ? (
-        <Muted testID="exceeds-advance">{t('money.exceedsAdvance', { outstanding: formatRupees(outstandingPaise as number) })}</Muted>
+    <Screen header={<ScreenHeader title={title} showBack />}>
+      {worker ? (
+        <Card style={styles.workerHeaderCard}>
+          <Avatar name={worker.name} id={worker.id} size={42} />
+          <View style={styles.workerInfo}>
+            <Text style={styles.workerName}>{worker.name}</Text>
+            <Muted>{worker.phone || 'No phone'}</Muted>
+          </View>
+          <StatusChip label={title} tone="primary" />
+        </Card>
       ) : null}
-      <DateField label={t('money.date')} value={values.date} max={today} onChange={(date) => set({ date })} testID="money-date" />
-      {isWriteoff ? null : (
-        <>
-          <Label>{t('money.mode')}</Label>
-          <Segmented options={PAYMENT_MODES.map((m) => ({ value: m, label: t(`mode.${m}`) }))} value={values.mode}
-            onChange={(mode) => set({ mode })} testIDPrefix="mode" />
-        </>
-      )}
-      <Field label={t('money.note')} value={values.note} onChangeText={(note) => set({ note })} error={err('note')} testID="note" />
+
+      <Card style={styles.card}>
+        <Field
+          label={t('money.amount')}
+          value={values.amount}
+          onChangeText={(amount) => set({ amount })}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+          error={err('amount')}
+          testID="amount"
+        />
+
+        {exceedsAdvance ? (
+          <View style={styles.warningBox}>
+            <Muted testID="exceeds-advance" style={styles.warningText}>
+              {t('money.exceedsAdvance', { outstanding: formatRupees(outstandingPaise as number) })}
+            </Muted>
+          </View>
+        ) : null}
+
+        <DateField
+          label={t('money.date')}
+          value={values.date}
+          max={today}
+          onChange={(date) => set({ date })}
+          testID="money-date"
+        />
+
+        {isWriteoff ? null : (
+          <View style={styles.fieldWrap}>
+            <Label>{t('money.mode')}</Label>
+            <Segmented
+              options={PAYMENT_MODES.map((m) => ({ value: m, label: t(`mode.${m}`) }))}
+              value={values.mode}
+              onChange={(mode) => set({ mode })}
+              testIDPrefix="mode"
+            />
+          </View>
+        )}
+
+        <Field
+          label={t('money.note')}
+          value={values.note}
+          onChangeText={(note) => set({ note })}
+          placeholder="Optional notes"
+          error={err('note')}
+          testID="note"
+        />
+      </Card>
+
       <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
       <Button title={t('common.save')} onPress={() => void save()} loading={busy} testID="save" />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  workerHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: space.md,
+    gap: space.md,
+  },
+  workerInfo: {
+    flex: 1,
+  },
+  workerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  card: {
+    gap: space.md,
+  },
+  fieldWrap: {
+    gap: space.xs,
+  },
+  warningBox: {
+    backgroundColor: colors.warnSoft,
+    borderWidth: 1,
+    borderColor: colors.warnBorder,
+    borderRadius: radius,
+    padding: space.sm,
+  },
+  warningText: {
+    color: colors.warnText,
+    fontWeight: '600',
+  },
+});

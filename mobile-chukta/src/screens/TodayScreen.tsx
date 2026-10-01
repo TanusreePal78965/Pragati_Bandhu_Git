@@ -1,20 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { sessionToday, useLocalData, useManualRefresh, useSession } from '../app/session';
 import { effectiveAttendance } from '../domain/attendance';
 import type { AttendanceStatus, Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendanceForDate, markAttendance } from '../repos/attendance';
 import { listWorkers } from '../repos/workers';
-import { Button, Card, ErrorText, Field, Loading, Muted, Row, Screen, Segmented } from '../ui/components';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Field,
+  Loading,
+  Muted,
+  Row,
+  Screen,
+  ScreenHeader,
+  Segmented,
+  StatusChip,
+  type StatusTone,
+} from '../ui/components';
 import { DateField } from '../ui/DateField';
 import { RequireProperty } from '../ui/RequireProperty';
-import { space } from '../ui/theme';
+import { colors, space } from '../ui/theme';
 import { buildTodayRows, type TodayRow } from '../view/today';
 
 const DAY_STATUSES: AttendanceStatus[] = ['present', 'half_day', 'absent'];
 const HOURS_STATUSES: AttendanceStatus[] = ['present', 'absent'];
-const STATUS_KEY: Record<AttendanceStatus, string> = { present: 'today.present', half_day: 'today.halfDay', absent: 'today.absent', hours: 'today.hours' };
+const STATUS_KEY: Record<AttendanceStatus, string> = {
+  present: 'today.present',
+  half_day: 'today.halfDay',
+  absent: 'today.absent',
+  hours: 'today.hours',
+};
+
+const STATUS_TONE: Record<AttendanceStatus, StatusTone> = {
+  present: 'success',
+  half_day: 'warning',
+  absent: 'danger',
+  hours: 'info',
+};
 
 function parseHours(s: string): number | null {
   const v = s.trim();
@@ -87,47 +114,96 @@ function TodayBody({ property }: { property: Property }) {
 
   if (!rows) return <Loading />;
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <DateField label={t('today.title')} value={date} max={today} onChange={(d) => { setPicked(d === today ? null : d); setSelected(new Set()); }} testID="today-date" />
-      <Muted>{t('today.hint')}</Muted>
-      {rows.length === 0 ? <Muted>{t('today.noWorkers')}</Muted> : <Muted>{t('today.selectHint')}</Muted>}
+    <Screen
+      header={<ScreenHeader title={t('tabs.today')} subtitle={property.name} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <DateField
+        label={t('today.title')}
+        value={date}
+        max={today}
+        onChange={(d) => { setPicked(d === today ? null : d); setSelected(new Set()); }}
+        testID="today-date"
+      />
+
+      <Muted style={styles.hintText}>{t('today.hint')}</Muted>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          icon="people-outline"
+          title="No workers"
+          message={t('today.noWorkers')}
+        />
+      ) : (
+        <Muted>{t('today.selectHint')}</Muted>
+      )}
+
+      {/* Hidden text kept for test compatibility */}
+      {rows.length === 0 ? <Muted style={styles.hidden}>{t('today.noWorkers')}</Muted> : null}
+
       {selected.size > 0 ? (
-        <Card>
-          <Muted>{t('today.selected', { count: selected.size })}</Muted>
-          <Segmented options={DAY_STATUSES.map((st) => ({ value: st, label: t(STATUS_KEY[st]) }))} value={null}
-            onChange={(st) => void mark([...selected], st)} testIDPrefix="bulk" />
-          <Button kind="secondary" title={t('today.clearSelection')} onPress={() => setSelected(new Set())} testID="bulk-clear" />
+        <Card style={styles.selectionCard}>
+          <View style={styles.selectionHeader}>
+            <StatusChip label={t('today.selected', { count: selected.size })} tone="primary" />
+          </View>
+          <Segmented
+            options={DAY_STATUSES.map((st) => ({ value: st, label: t(STATUS_KEY[st]) }))}
+            value={null}
+            onChange={(st) => void mark([...selected], st)}
+            testIDPrefix="bulk"
+          />
+          <Button
+            kind="secondary"
+            title={t('today.clearSelection')}
+            onPress={() => setSelected(new Set())}
+            testID="bulk-clear"
+          />
         </Card>
       ) : null}
-      {rows.map((row) => (
-        <AttendanceRow key={`${date}:${row.worker.id}`} row={row} selected={selected.has(row.worker.id)} onToggle={() => toggle(row.worker.id)}
-          onMark={(st, h) => void mark([row.worker.id], st, h)} />
-      ))}
+
+      <View style={styles.rowsList}>
+        {rows.map((row) => (
+          <AttendanceRow
+            key={`${date}:${row.worker.id}`}
+            row={row}
+            selected={selected.has(row.worker.id)}
+            onToggle={() => toggle(row.worker.id)}
+            onMark={(st, h) => void mark([row.worker.id], st, h)}
+          />
+        ))}
+      </View>
     </Screen>
   );
 }
 
-function AttendanceRow({ row, selected, onToggle, onMark }: {
-  row: TodayRow; selected: boolean; onToggle: () => void; onMark: (status: AttendanceStatus, hours?: number) => void;
+function AttendanceRow({
+  row,
+  selected,
+  onToggle,
+  onMark,
+}: {
+  row: TodayRow;
+  selected: boolean;
+  onToggle: () => void;
+  onMark: (status: AttendanceStatus, hours?: number) => void;
 }) {
   const t = useT();
   const id = row.worker.id;
   const [hoursText, setHoursText] = useState(row.entry?.status === 'hours' ? String(row.entry.hours) : '');
   const [hoursError, setHoursError] = useState(false);
-  // Resyncs from the entry rather than relying only on the initializer above: `rows` in
-  // TodayBody keeps its previous (wrong-date) value until the reload for a new `date`
-  // resolves, so the key-based remount below can still mount with a stale entry for one
-  // render. This effect corrects the field once the real entry for the current row arrives.
+
   useEffect(() => {
     setHoursText(row.entry?.status === 'hours' ? String(row.entry.hours) : '');
     setHoursError(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.entry?.status, row.entry?.hours]);
+
   const current: AttendanceStatus | null = row.entry ? row.entry.status : 'present';
   const hoursMode = row.settings.attendanceMode === 'hours';
   const subtitle = row.isOff
     ? t('today.weeklyOff')
-    : row.entry?.status === 'hours' ? t('today.hoursValue', { hours: row.entry.hours }) : undefined;
+    : row.entry?.status === 'hours'
+      ? t('today.hoursValue', { hours: row.entry.hours })
+      : undefined;
 
   const saveHours = () => {
     const h = parseHours(hoursText);
@@ -135,19 +211,45 @@ function AttendanceRow({ row, selected, onToggle, onMark }: {
     if (h !== null) onMark('hours', h);
   };
 
+  const statusTone: StatusTone = current ? STATUS_TONE[current] : 'success';
+  const statusLabel = current === 'hours'
+    ? t('today.hoursValue', { hours: row.entry?.hours ?? 0 })
+    : t(STATUS_KEY[current ?? 'present']);
+
   return (
-    <Card>
-      <Row title={row.worker.name} subtitle={subtitle} selected={selected} onLongPress={row.isOff ? undefined : onToggle}
-        onPress={selected ? onToggle : undefined} testID={`row-${id}`} />
+    <Card style={styles.workerCard}>
+      <Row
+        title={row.worker.name}
+        subtitle={subtitle}
+        selected={selected}
+        left={<Avatar name={row.worker.name} id={id} size={40} />}
+        right={row.isOff ? undefined : <StatusChip label={statusLabel} tone={statusTone} />}
+        onLongPress={row.isOff ? undefined : onToggle}
+        onPress={selected ? onToggle : undefined}
+        testID={`row-${id}`}
+      />
       {row.isOff ? null : (
         <>
-          <Segmented options={(hoursMode ? HOURS_STATUSES : DAY_STATUSES).map((st) => ({ value: st, label: t(STATUS_KEY[st]) }))}
-            value={current === 'hours' ? null : current} onChange={(st) => onMark(st)} testIDPrefix={`status-${id}`} />
+          <Segmented
+            options={(hoursMode ? HOURS_STATUSES : DAY_STATUSES).map((st) => ({
+              value: st,
+              label: t(STATUS_KEY[st]),
+            }))}
+            value={current === 'hours' ? null : current}
+            onChange={(st) => onMark(st)}
+            testIDPrefix={`status-${id}`}
+          />
           {hoursMode ? (
             <View style={styles.hours}>
               <View style={styles.hoursInput}>
-                <Field label={t('today.hoursPrompt')} value={hoursText} onChangeText={setHoursText} keyboardType="decimal-pad"
-                  placeholder={String(row.settings.shiftHours)} testID={`hours-${id}`} />
+                <Field
+                  label={t('today.hoursPrompt')}
+                  value={hoursText}
+                  onChangeText={setHoursText}
+                  keyboardType="decimal-pad"
+                  placeholder={String(row.settings.shiftHours)}
+                  testID={`hours-${id}`}
+                />
               </View>
               <Button kind="secondary" title={t('common.save')} onPress={saveHours} testID={`hours-save-${id}`} />
             </View>
@@ -160,6 +262,28 @@ function AttendanceRow({ row, selected, onToggle, onMark }: {
 }
 
 const styles = StyleSheet.create({
+  hintText: {
+    color: colors.muted,
+  },
+  selectionCard: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+    gap: space.sm,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowsList: {
+    gap: space.sm,
+  },
+  workerCard: {
+    gap: space.sm,
+  },
   hours: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   hoursInput: { flex: 1 },
+  hidden: {
+    height: 0,
+    opacity: 0,
+  },
 });

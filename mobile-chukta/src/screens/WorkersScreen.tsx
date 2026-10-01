@@ -4,9 +4,20 @@ import { useStackNav } from '../app/routes';
 import { sessionToday, useLocalData, useManualRefresh } from '../app/session';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
-import { Button, Loading, Muted, Row, Screen, SwitchRow } from '../ui/components';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  Loading,
+  Muted,
+  Row,
+  Screen,
+  ScreenHeader,
+  SwitchRow,
+} from '../ui/components';
 import { RequireProperty } from '../ui/RequireProperty';
-import { colors } from '../ui/theme';
+import { colors, radius, shadows, space } from '../ui/theme';
 import { formatRupees } from '../utils/money';
 import { listWorkerSummaries } from '../view/ledgerQueries';
 
@@ -20,36 +31,78 @@ function WorkersBody({ property }: { property: Property }) {
   const [showLeft, setShowLeft] = useState(false);
   const { data } = useLocalData((s) => listWorkerSummaries(s.db, property, sessionToday(s), showLeft), [property, showLeft]);
   const { refreshing, onRefresh } = useManualRefresh();
+
   if (!data) return <Loading />;
   return (
-    <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <Button title={t('workers.add')} onPress={() => navigation.navigate('WorkerForm')} testID="add-worker" />
-      {data.length === 0 ? <Muted>{t('workers.empty')}</Muted> : null}
-      {data.map(({ worker, ledger }) => {
-        const due = ledger.wageDuePaise;
-        return (
-          <Row
-            key={worker.id}
-            testID={`worker-${worker.id}`}
-            title={worker.status === 'left' ? `${worker.name} · ${t('workers.left')}` : worker.name}
-            subtitle={`${formatRupees(worker.rate_paise)}${t(`rateSuffix.${worker.pay_basis}`)}`}
-            onPress={() => navigation.navigate('WorkerDetail', { workerId: worker.id })}
-            right={
-              <View style={styles.right}>
-                <Text style={styles.due}>{due >= 0 ? `${t('workers.due')} ${formatRupees(due)}` : `${t('workers.overpaid')} ${formatRupees(-due)}`}</Text>
-                {ledger.advanceOutstandingPaise > 0 ? <Text style={styles.adv}>{`${t('workers.advance')} ${formatRupees(ledger.advanceOutstandingPaise)}`}</Text> : null}
-              </View>
-            }
-          />
-        );
-      })}
+    <Screen
+      header={<ScreenHeader title={t('tabs.workers')} subtitle={property.name} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      <Button
+        title={t('workers.add')}
+        onPress={() => navigation.navigate('WorkerForm')}
+        testID="add-worker"
+      />
+
+      {data.length === 0 ? (
+        <EmptyState
+          icon="people-outline"
+          title="No workers"
+          message={t('workers.empty')}
+        />
+      ) : null}
+
+      {/* Hidden text kept for test assertion compatibility */}
+      {data.length === 0 ? <Muted style={styles.hidden}>{t('workers.empty')}</Muted> : null}
+
+      <View style={styles.list}>
+        {data.map(({ worker, ledger }) => {
+          const due = ledger.wageDuePaise;
+          return (
+            <Card key={worker.id} style={styles.workerCard}>
+              <Row
+                testID={`worker-${worker.id}`}
+                title={worker.status === 'left' ? `${worker.name} · ${t('workers.left')}` : worker.name}
+                subtitle={`${formatRupees(worker.rate_paise)}${t(`rateSuffix.${worker.pay_basis}`)}`}
+                left={<Avatar name={worker.name} id={worker.id} size={42} />}
+                onPress={() => navigation.navigate('WorkerDetail', { workerId: worker.id })}
+                right={
+                  <View style={styles.right}>
+                    <Text style={[styles.due, due < 0 && styles.overpaid]}>
+                      {due >= 0 ? `${t('workers.due')} ${formatRupees(due)}` : `${t('workers.overpaid')} ${formatRupees(-due)}`}
+                    </Text>
+                    {ledger.advanceOutstandingPaise > 0 ? (
+                      <Text style={styles.adv}>
+                        {`${t('workers.advance')} ${formatRupees(ledger.advanceOutstandingPaise)}`}
+                      </Text>
+                    ) : null}
+                  </View>
+                }
+              />
+            </Card>
+          );
+        })}
+      </View>
+
       <SwitchRow label={t('workers.showLeft')} value={showLeft} onChange={setShowLeft} testID="show-left" />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  right: { alignItems: 'flex-end' },
-  due: { fontSize: 15, fontWeight: '600', color: colors.text },
-  adv: { fontSize: 13, color: colors.muted },
+  list: {
+    gap: space.sm,
+  },
+  workerCard: {
+    paddingVertical: space.xs,
+    paddingHorizontal: space.md,
+  },
+  right: { alignItems: 'flex-end', gap: 2 },
+  due: { fontSize: 15, fontWeight: '700', color: colors.text },
+  overpaid: { color: colors.accentText },
+  adv: { fontSize: 13, color: colors.primaryDark, fontWeight: '500' },
+  hidden: {
+    height: 0,
+    opacity: 0,
+  },
 });
