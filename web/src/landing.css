@@ -442,3 +442,99 @@
     padding: 1.75rem 1.25rem;
   }
 }
+
+/* Site header (rendered by Layout on every public page) */
+
+/* The header is now in normal flow, so drop App.css's mobile padding-top that made room for the old absolute header.
+   Two classes beat App.css's single-class media rule. */
+.page-container.lp-page {
+  padding-top: 0;
+}
+
+.lp-header {
+  position: relative;
+  z-index: 50;
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  margin-bottom: 1rem;
+}
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.lp-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.lp-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.lp-nav a {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lp-nav a:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.lp-nav a.lp-nav-renew {
+  background: rgba(79, 70, 229, 0.1);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
+.lp-menu-btn {
+  display: none;
+  background: none;
+  border: 0;
+  padding: 0.5rem;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .lp-menu-btn {
+    display: flex;
+  }
+
+  .lp-nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    padding: 0.5rem;
+  }
+
+  .lp-nav.lp-nav-open {
+    display: flex;
+  }
+}

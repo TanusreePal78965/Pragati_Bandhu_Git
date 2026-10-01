@@ -1,48 +1,37 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet, Link } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+import logoUrl from '../assets/icon.png';
+import '../landing.css';
 
 export default function Layout() {
-  const location = useLocation();
-  const isHome = location.pathname === '/';
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="page-container lp-page" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="hero-blob-1"></div>
       <div className="hero-blob-2"></div>
-      
-      {/* Responsive Header */}
-      <header style={{
-        zIndex: 50,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        padding: '1rem 1.5rem',
-        display: 'flex',
-        justifyContent: isHome ? 'flex-end' : 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '1rem'
-      }}>
-        {!isHome && (
-          <Link to="/" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            Back to Home
-          </Link>
-        )}
 
-        <Link to="/renew" style={{ 
-          padding: '0.5rem 1rem', 
-          background: 'rgba(79, 70, 229, 0.1)', 
-          color: 'var(--primary-color)', 
-          borderRadius: '8px', 
-          textDecoration: 'none', 
-          fontWeight: 600, 
-          fontSize: '0.875rem',
-          border: '1px solid rgba(79, 70, 229, 0.2)',
-          whiteSpace: 'nowrap'
-        }}>
-          Renew Subscription
+      <header className="lp-header">
+        <Link to="/" className="lp-brand" onClick={closeMenu}>
+          <img src={logoUrl} alt="" />
+          Pragati Bandhu
         </Link>
+        <button
+          type="button"
+          className="lp-menu-btn"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+        <nav className={menuOpen ? 'lp-nav lp-nav-open' : 'lp-nav'}>
+          <Link to={{ pathname: '/', hash: '#shopai' }} onClick={closeMenu}>ShopAI</Link>
+          <Link to={{ pathname: '/', hash: '#chukta' }} onClick={closeMenu}>Chukta</Link>
+          <Link to="/renew" className="lp-nav-renew" onClick={closeMenu}>Renew Subscription</Link>
+        </nav>
       </header>
 
       <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1 }}>
@@ -62,6 +51,7 @@ export default function Layout() {
         color: 'var(--text-muted)'
       }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1.5rem', fontSize: '0.9rem' }}>
+          <Link to="/shopai" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Register ShopAI</Link>
           <Link to="/chukta" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Chukta</Link>
           <Link to="/features" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>App Features</Link>
           <Link to="/help" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Help Center</Link>
