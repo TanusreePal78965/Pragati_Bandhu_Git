@@ -39,10 +39,11 @@ const DEFAULT = 'default';
 const newWorkerValues = (p: Property, today: string): WorkerFormValues => ({
   name: '', phone: '', payBasis: p.default_pay_basis, rate: '', joiningDate: today, attendanceMode: null, shiftHours: '',
   weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null, hasLeft: false, leftDate: null,
-  offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '',
+  offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '', payCycle: null, cycleEndWeekday: null,
 });
 const hasOverrides = (v: WorkerFormValues) => v.attendanceMode !== null || v.shiftHours !== '' || v.weeklyOffOverride || v.monthlyDivisor !== null
-  || v.offdayMultiplier !== null || v.otMode !== null || v.otMultiplier !== null || v.otRate !== '';
+  || v.offdayMultiplier !== null || v.otMode !== null || v.otMultiplier !== null || v.otRate !== ''
+  || v.payCycle !== null || v.cycleEndWeekday !== null;
 
 export function WorkerFormScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'WorkerForm'>>();

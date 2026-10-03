@@ -7,7 +7,7 @@ import { property, worker } from './helpers/fixtures';
 const W: WorkerFormValues = {
   name: ' Ram ', phone: '', payBasis: 'daily', rate: '500', joiningDate: '2026-09-01', attendanceMode: null, shiftHours: '',
   weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null, hasLeft: false, leftDate: null,
-  offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '',
+  offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '', payCycle: null, cycleEndWeekday: null,
 };
 
 test('worker form: valid input is normalised', () => {
@@ -15,7 +15,7 @@ test('worker form: valid input is normalised', () => {
   expect(r).toEqual({ ok: true, value: {
     name: 'Ram', phone: null, payBasis: 'daily', ratePaise: 50000, joiningDate: '2026-09-01', attendanceMode: null, shiftHours: null,
     weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null, leftDate: null,
-    offdayMultiplier: null, otMode: null, otMultiplier: null, otRatePaise: null,
+    offdayMultiplier: null, otMode: null, otMultiplier: null, otRatePaise: null, payCycle: null, cycleEndWeekday: null,
   } });
 });
 
@@ -44,7 +44,7 @@ test('worker form maps to repo inputs', () => {
   expect(toWorkerPatch(r.value, true)).toEqual({
     name: 'Ram', phone: null, pay_basis: 'daily', rate_paise: 50000, joining_date: '2026-09-01', attendance_mode: null, shift_hours: 7.5,
     weekly_off_override: 1, weekly_off: 5, monthly_divisor: null, status: 'left', left_date: '2026-09-20',
-    offday_multiplier: null, ot_mode: null, ot_multiplier: null, ot_rate_paise: null,
+    offday_multiplier: null, ot_mode: null, ot_multiplier: null, ot_rate_paise: null, pay_cycle: null, cycle_end_weekday: null,
   });
 });
 
@@ -76,6 +76,7 @@ test('property form: name and shift hours validated; defaults come from the prop
   expect(validatePropertyForm(v)).toEqual({ ok: true, value: {
     name: 'Main', address: null, default_pay_basis: 'daily', default_attendance_mode: 'day', shift_hours: 9, weekly_off: 5, monthly_divisor: 'calendar',
     offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null,
+    pay_cycle: 'by_basis', cycle_end_weekday: 6,
   } });
   expect(validatePropertyForm({ ...propertyToFormValues(null), name: ' ', shiftHours: '0' }))
     .toEqual({ ok: false, errors: { name: 'properties.nameRequired', shiftHours: 'fields.shiftInvalid' } });
@@ -116,4 +117,12 @@ test('extra-pay keys are left out of worker inputs for staff, present for the ow
   for (const k of newKeys) expect(k in toNewWorker('p1', r.value, false)).toBe(false);
   expect(toWorkerPatch(r.value, true)).toMatchObject({ offday_multiplier: 2, ot_mode: 'fixed', ot_multiplier: null, ot_rate_paise: 7500 });
   for (const k of newKeys) expect(k in toNewWorker('p1', r.value, true)).toBe(true);
+});
+
+test('pay cycle reaches the patch only for owners', () => {
+  const r = validateWorkerForm({ ...W, payCycle: 'monthly', cycleEndWeekday: 3 });
+  if (!r.ok) throw new Error('invalid');
+  expect(toWorkerPatch(r.value, true)).toMatchObject({ pay_cycle: 'monthly', cycle_end_weekday: 3 });
+  const staff = toWorkerPatch(r.value, false);
+  expect('pay_cycle' in staff || 'cycle_end_weekday' in staff).toBe(false);
 });

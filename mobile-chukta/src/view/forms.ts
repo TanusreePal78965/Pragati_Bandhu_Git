@@ -1,5 +1,5 @@
 import type {
-  AttendanceMode, DayOff, DayOffKind, DayOffPayRule, DayOffPortion, MonthlyDivisor, OtMode, PayBasis, PaymentMode, Property, Worker,
+  AttendanceMode, DayOff, DayOffKind, DayOffPayRule, DayOffPortion, MonthlyDivisor, OtMode, PayBasis, PayCycle, PaymentMode, Property, Worker,
 } from '../domain/types';
 import type { PropertySettingsPatch } from '../repos/properties';
 import type { NewWorker, WorkerPatch } from '../repos/workers';
@@ -30,11 +30,13 @@ export type WorkerFormValues = {
   shiftHours: string; weeklyOffOverride: boolean; weeklyOff: number | null; monthlyDivisor: MonthlyDivisor | null;
   hasLeft: boolean; leftDate: string | null;
   offdayMultiplier: number | null; otMode: OtMode | null; otMultiplier: number | null; otRate: string;
+  payCycle: PayCycle | null; cycleEndWeekday: number | null;
 };
 export type WorkerFormResult = {
   name: string; phone: string | null; payBasis: PayBasis; ratePaise: number; joiningDate: string; attendanceMode: AttendanceMode | null;
   shiftHours: number | null; weeklyOffOverride: boolean; weeklyOff: number | null; monthlyDivisor: MonthlyDivisor | null; leftDate: string | null;
   offdayMultiplier: number | null; otMode: OtMode | null; otMultiplier: number | null; otRatePaise: number | null;
+  payCycle: PayCycle | null; cycleEndWeekday: number | null;
 };
 
 export function validateWorkerForm(v: WorkerFormValues): Validation<WorkerFormResult> {
@@ -58,6 +60,7 @@ export function validateWorkerForm(v: WorkerFormValues): Validation<WorkerFormRe
     monthlyDivisor: v.payBasis === 'monthly' ? v.monthlyDivisor : null, leftDate,
     offdayMultiplier: v.offdayMultiplier, otMode: v.otMode, otMultiplier: v.otMultiplier,
     otRatePaise: otRatePaise && otRatePaise > 0 ? otRatePaise : null,
+    payCycle: v.payCycle, cycleEndWeekday: v.cycleEndWeekday,
   }));
 }
 
@@ -70,6 +73,7 @@ export function toNewWorker(propertyId: string, r: WorkerFormResult, isOwner: bo
     ...(isOwner ? {
       offdayMultiplier: r.offdayMultiplier ?? undefined, otMode: r.otMode ?? undefined,
       otMultiplier: r.otMultiplier ?? undefined, otRatePaise: r.otRatePaise ?? undefined,
+      payCycle: r.payCycle ?? undefined, cycleEndWeekday: r.cycleEndWeekday ?? undefined,
     } : {}),
   };
 }
@@ -81,6 +85,7 @@ export function toWorkerPatch(r: WorkerFormResult, isOwner: boolean): WorkerPatc
     weekly_off: r.weeklyOff, monthly_divisor: r.monthlyDivisor, status: r.leftDate ? 'left' : 'active', left_date: r.leftDate,
     ...(isOwner ? {
       offday_multiplier: r.offdayMultiplier, ot_mode: r.otMode, ot_multiplier: r.otMultiplier, ot_rate_paise: r.otRatePaise,
+      pay_cycle: r.payCycle, cycle_end_weekday: r.cycleEndWeekday,
     } : {}),
   };
 }
@@ -93,6 +98,7 @@ export function workerToFormValues(w: Worker): WorkerFormValues {
     hasLeft: w.status === 'left', leftDate: w.left_date,
     offdayMultiplier: w.offday_multiplier ?? null, otMode: w.ot_mode ?? null, otMultiplier: w.ot_multiplier ?? null,
     otRate: w.ot_rate_paise ? paiseToInput(w.ot_rate_paise) : '',
+    payCycle: w.pay_cycle ?? null, cycleEndWeekday: w.cycle_end_weekday ?? null,
   };
 }
 
@@ -158,6 +164,7 @@ export type PropertyFormValues = {
   name: string; address: string; defaultPayBasis: PayBasis; defaultAttendanceMode: AttendanceMode; shiftHours: string;
   weeklyOff: number | null; monthlyDivisor: MonthlyDivisor;
   offdayMultiplier: number; otMode: OtMode; otMultiplier: number; otRate: string;
+  payCycle: PayCycle; cycleEndWeekday: number;
 };
 
 export function propertyToFormValues(p: Property | null): PropertyFormValues {
@@ -167,10 +174,11 @@ export function propertyToFormValues(p: Property | null): PropertyFormValues {
     weeklyOff: p ? p.weekly_off : 0, monthlyDivisor: p?.monthly_divisor ?? 'calendar',
     offdayMultiplier: p?.offday_multiplier ?? 1, otMode: p?.ot_mode ?? 'multiplier', otMultiplier: p?.ot_multiplier ?? 1,
     otRate: p?.ot_rate_paise ? paiseToInput(p.ot_rate_paise) : '',
+    payCycle: p?.pay_cycle ?? 'by_basis', cycleEndWeekday: p?.cycle_end_weekday ?? 6,
   };
 }
 
-export function validatePropertyForm(v: PropertyFormValues): Validation<Required<Omit<PropertySettingsPatch, 'is_active' | 'pay_cycle' | 'cycle_end_weekday'>>> {
+export function validatePropertyForm(v: PropertyFormValues): Validation<Required<Omit<PropertySettingsPatch, 'is_active'>>> {
   const errors: FieldErrors = {};
   const name = v.name.trim();
   if (!name) errors.name = 'properties.nameRequired';
@@ -183,5 +191,6 @@ export function validatePropertyForm(v: PropertyFormValues): Validation<Required
     shift_hours: shift as number, weekly_off: v.weeklyOff, monthly_divisor: v.monthlyDivisor,
     offday_multiplier: v.offdayMultiplier, ot_mode: v.otMode, ot_multiplier: v.otMultiplier,
     ot_rate_paise: otRatePaise && otRatePaise > 0 ? otRatePaise : null,
+    pay_cycle: v.payCycle, cycle_end_weekday: v.cycleEndWeekday,
   }));
 }

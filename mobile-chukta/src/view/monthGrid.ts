@@ -1,13 +1,14 @@
 import { effectiveAttendance } from '../domain/attendance';
 import { baseCredit, classifyDay } from '../domain/dayClass';
+import { isSettled } from '../domain/lock';
 import { effectiveDaysOff, latestByDate } from '../domain/latest';
-import type { AttendanceEntry, DayOff, OvertimeEntry, ResolvedSettings } from '../domain/types';
+import type { AttendanceEntry, DayOff, OvertimeEntry, ResolvedSettings, Settlement } from '../domain/types';
 import { compareDates, daysInMonth, weekday } from '../utils/dates';
 
 export type DayKind = 'outside' | 'future' | 'off' | 'working';
 export type DayCell = {
   date: string; day: number; kind: DayKind; entry: AttendanceEntry | null; credit: number | null;
-  dayOff: DayOff | null; halfOff: boolean; workedOnOff: boolean; otHours: number;
+  dayOff: DayOff | null; halfOff: boolean; workedOnOff: boolean; otHours: number; settled: boolean;
 };
 export type MonthGrid = { year: number; month: number; leadingBlanks: number; cells: DayCell[] };
 
@@ -21,7 +22,7 @@ export function shiftMonth(year: number, month: number, delta: number): { year: 
 /** Sunday-first calendar for one worker and month. Credit uses the same rule as the wage calculation. */
 export function buildMonthGrid(i: {
   year: number; month: number; settings: ResolvedSettings; joiningDate: string; leftDate: string | null; today: string; attendance: AttendanceEntry[];
-  daysOff?: DayOff[]; overtime?: OvertimeEntry[];
+  daysOff?: DayOff[]; overtime?: OvertimeEntry[]; workerId?: string; settlements?: Settlement[];
 }): MonthGrid {
   const byDate = effectiveAttendance(i.attendance);
   const offByDate = effectiveDaysOff(i.daysOff ?? []);
@@ -48,6 +49,7 @@ export function buildMonthGrid(i: {
       halfOff: cls.kind === 'off' && cls.portion === 'half',
       workedOnOff: isFullOff && !!entry && entry.status !== 'absent',
       otHours: kind === 'outside' || kind === 'future' ? 0 : explicitOt ? explicitOt.hours : autoOt,
+      settled: kind !== 'outside' && kind !== 'future' && !!i.workerId && isSettled(i.settlements ?? [], i.workerId, date),
     });
   }
   return { year: i.year, month: i.month, leadingBlanks: weekday(`${i.year}-${pad(i.month)}-01`), cells };
