@@ -4,7 +4,8 @@ import type { RepoContext } from './context';
 import { insertAndEnqueue, updateAndEnqueue } from './write';
 
 export type PropertySettingsPatch = Partial<Pick<Property,
-  'name' | 'address' | 'is_active' | 'default_pay_basis' | 'default_attendance_mode' | 'shift_hours' | 'weekly_off' | 'monthly_divisor'>>;
+  'name' | 'address' | 'is_active' | 'default_pay_basis' | 'default_attendance_mode' | 'shift_hours' | 'weekly_off' | 'monthly_divisor'
+  | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>;
 
 export async function createProperty(ctx: RepoContext, input: { shopId: string; name: string; address?: string }): Promise<Property> {
   if (ctx.role !== 'owner') throw new Error('only the owner can manage properties');

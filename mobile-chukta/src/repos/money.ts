@@ -1,5 +1,5 @@
 import type { SqlDb } from '../db/sqlDb';
-import type { AdvanceEntry, AdvanceType, PaymentMode, WagePayment } from '../domain/types';
+import type { AdjustmentType, AdvanceEntry, AdvanceType, EarningAdjustment, PaymentMode, WagePayment } from '../domain/types';
 import type { RepoContext } from './context';
 import { insertAndEnqueue } from './write';
 
@@ -34,8 +34,8 @@ export async function addPayment(ctx: RepoContext, input: Base): Promise<WagePay
   return row;
 }
 
-async function voidRow<T extends AdvanceEntry | WagePayment>(
-  ctx: RepoContext, table: 'advance_entries' | 'wage_payments', targetId: string,
+async function voidRow<T extends AdvanceEntry | WagePayment | EarningAdjustment>(
+  ctx: RepoContext, table: 'advance_entries' | 'wage_payments' | 'earning_adjustments', targetId: string,
 ): Promise<T> {
   if (ctx.role !== 'owner') throw new Error('only the owner can correct money entries');
   const target = await ctx.db.getFirstAsync<T>(`select * from ${table} where id = ?`, [targetId]);
@@ -57,4 +57,25 @@ export async function listAdvances(db: SqlDb, workerId: string): Promise<Advance
 
 export async function listPayments(db: SqlDb, workerId: string): Promise<WagePayment[]> {
   return db.getAllAsync<WagePayment>('select * from wage_payments where worker_id = ? order by date, created_at', [workerId]);
+}
+
+export async function addAdjustment(
+  ctx: RepoContext,
+  input: { propertyId: string; workerId: string; type: AdjustmentType; amountPaise: number; date: string; note?: string },
+): Promise<EarningAdjustment> {
+  if (ctx.role !== 'owner') throw new Error('only the owner can add a bonus or deduction');
+  assertAmount(input.amountPaise);
+  if (input.type === 'deduction' && !input.note?.trim()) throw new Error('a reason is required for a deduction');
+  const row: EarningAdjustment = {
+    id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, type: input.type, amount_paise: input.amountPaise,
+    date: input.date, note: input.note?.trim() || null, voids_id: null, ...audit(ctx),
+  };
+  await insertAndEnqueue(ctx, 'earning_adjustments', row);
+  return row;
+}
+
+export const voidAdjustment = (ctx: RepoContext, targetId: string) => voidRow<EarningAdjustment>(ctx, 'earning_adjustments', targetId);
+
+export async function listAdjustments(db: SqlDb, workerId: string): Promise<EarningAdjustment[]> {
+  return db.getAllAsync<EarningAdjustment>('select * from earning_adjustments where worker_id = ? order by date, created_at', [workerId]);
 }

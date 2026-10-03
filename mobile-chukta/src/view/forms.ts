@@ -117,7 +117,7 @@ export function propertyToFormValues(p: Property | null): PropertyFormValues {
   };
 }
 
-export function validatePropertyForm(v: PropertyFormValues): Validation<Required<Omit<PropertySettingsPatch, 'is_active'>>> {
+export function validatePropertyForm(v: PropertyFormValues): Validation<Required<Omit<PropertySettingsPatch, 'is_active' | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>> {
   const errors: FieldErrors = {};
   const name = v.name.trim();
   if (!name) errors.name = 'properties.nameRequired';

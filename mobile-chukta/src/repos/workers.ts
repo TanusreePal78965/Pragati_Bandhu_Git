@@ -1,15 +1,17 @@
 import type { SqlDb } from '../db/sqlDb';
-import type { AttendanceMode, MonthlyDivisor, PayBasis, Worker } from '../domain/types';
+import type { AttendanceMode, MonthlyDivisor, OtMode, PayBasis, Worker } from '../domain/types';
 import type { RepoContext } from './context';
 import { insertAndEnqueue, updateAndEnqueue } from './write';
 
 export type NewWorker = {
   propertyId: string; name: string; phone?: string; payBasis: PayBasis; ratePaise: number; joiningDate: string;
   attendanceMode?: AttendanceMode; shiftHours?: number; weeklyOff?: number | null; monthlyDivisor?: MonthlyDivisor;
+  offdayMultiplier?: number; otMode?: OtMode; otMultiplier?: number; otRatePaise?: number;
 };
 export type WorkerPatch = Partial<Pick<Worker,
   'name' | 'phone' | 'pay_basis' | 'rate_paise' | 'joining_date' | 'status' | 'left_date' | 'attendance_mode'
-  | 'shift_hours' | 'weekly_off_override' | 'weekly_off' | 'monthly_divisor'>>;
+  | 'shift_hours' | 'weekly_off_override' | 'weekly_off' | 'monthly_divisor'
+  | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>;
 
 export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<Worker> {
   if (!input.name.trim()) throw new Error('name is required');
@@ -22,6 +24,8 @@ export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<
     weekly_off_override: input.weeklyOff === undefined ? 0 : 1,
     weekly_off: input.weeklyOff ?? null,
     monthly_divisor: input.monthlyDivisor ?? null,
+    offday_multiplier: input.offdayMultiplier ?? null, ot_mode: input.otMode ?? null,
+    ot_multiplier: input.otMultiplier ?? null, ot_rate_paise: input.otRatePaise ?? null,
     created_by: ctx.userId, created_by_role: ctx.role, created_at: ctx.now().toISOString(), server_updated_at: null,
   };
   await insertAndEnqueue(ctx, 'workers', row);
