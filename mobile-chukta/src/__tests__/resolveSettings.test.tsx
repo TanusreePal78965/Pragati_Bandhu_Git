@@ -15,6 +15,16 @@ test('extra-pay settings come from the property unless the worker overrides them
   expect(resolveSettings(w, p)).toMatchObject({ offdayMultiplier: 2, otMode: 'multiplier', otMultiplier: 1.5, otRatePaise: 6000 });
 });
 
+test('pay cycle: monthly-paid is always monthly; by_basis means weekly otherwise; worker overrides property', () => {
+  expect(resolveSettings(worker({ pay_basis: 'monthly', pay_cycle: 'weekly' }), property()).payCycle).toBe('monthly');
+  expect(resolveSettings(worker({ pay_basis: 'daily' }), property()).payCycle).toBe('weekly');
+  expect(resolveSettings(worker({ pay_basis: 'daily' }), property({ pay_cycle: 'monthly' })).payCycle).toBe('monthly');
+  expect(resolveSettings(worker({ pay_basis: 'hourly', pay_cycle: 'monthly' }), property({ pay_cycle: 'weekly' })).payCycle).toBe('monthly');
+  expect(resolveSettings(worker(), property()).cycleEndWeekday).toBe(6);
+  expect(resolveSettings(worker({ cycle_end_weekday: 3 }), property({ cycle_end_weekday: 1 })).cycleEndWeekday).toBe(3);
+  expect(resolveSettings(worker(), property({ cycle_end_weekday: 1 })).cycleEndWeekday).toBe(1);
+});
+
 test('defaults when nothing is set', () => {
   expect(resolveSettings(worker(), property())).toMatchObject({ offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null });
 });

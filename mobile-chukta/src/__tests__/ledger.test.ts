@@ -3,7 +3,8 @@ import type { AttendanceEntry, ResolvedSettings } from '../domain/types';
 
 const S = (over: Partial<ResolvedSettings> = {}): ResolvedSettings => ({
   payBasis: 'daily', attendanceMode: 'day', shiftHours: 8, weeklyOff: 0, monthlyDivisor: 'calendar',
-  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null, ...over,
+  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null,
+  payCycle: 'weekly', cycleEndWeekday: 6, ...over,
 });
 let n = 0;
 const att = (date: string, status: AttendanceEntry['status'], hours: number | null = null): AttendanceEntry => ({
