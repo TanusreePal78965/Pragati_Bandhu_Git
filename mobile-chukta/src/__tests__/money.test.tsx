@@ -163,11 +163,14 @@ test('worker detail: correcting a bonus voids it', async () => {
   const s = await ownerWithBonus();
   const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
   renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
-  fireEvent.press(await screen.findByTestId('correct-b1'));
-  const buttons = alert.mock.calls[0][2] as { onPress?: () => void }[];
-  await buttons[1].onPress?.();
-  await waitFor(async () => expect(await s.db.getAllAsync('select voids_id from earning_adjustments where voids_id is not null')).toEqual([{ voids_id: 'b1' }]));
-  alert.mockRestore();
+  try {
+    fireEvent.press(await screen.findByTestId('correct-b1'));
+    const buttons = alert.mock.calls[0][2] as { onPress?: () => void }[];
+    await buttons[1].onPress?.();
+    await waitFor(async () => expect(await s.db.getAllAsync('select voids_id from earning_adjustments where voids_id is not null')).toEqual([{ voids_id: 'b1' }]));
+  } finally {
+    alert.mockRestore();
+  }
 });
 
 test('worker detail: staff do not see Bonus/Deduction', async () => {
@@ -197,4 +200,16 @@ test('calendar marks a day off, work on a day off, and overtime', async () => {
   expect((await day('03')).getByLabelText('sunny-outline')).toBeTruthy();
   expect((await day('04')).getByLabelText('add-outline')).toBeTruthy();
   expect((await day('02')).getByText('OT')).toBeTruthy();
+});
+
+test('calendar: a half day off shows the sun icon and a named label', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram', joining_date: '2026-09-01' }));
+  await upsertLocal(s.db, 'days_off', { id: 'd3', property_id: 'p1', date: '2026-09-02', name: 'Half closure', kind: 'closure', portion: 'half', pay_rule: 'by_basis',
+    is_active: 1, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-01T09:00:00Z', server_updated_at: null });
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  const cell = await screen.findByTestId('day-2026-09-02');
+  expect(within(cell).getByLabelText('sunny-outline')).toBeTruthy();
+  expect(cell.props.accessibilityLabel).toContain('Half closure');
 });

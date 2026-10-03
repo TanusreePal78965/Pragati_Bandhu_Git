@@ -6,6 +6,12 @@ import { Icon } from './Icon';
 import { colors, radius, shadows, space } from './theme';
 
 function cellLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => string): string {
+  const base = baseLabel(c, t);
+  const named = c.dayOff && (c.kind === 'off' || c.halfOff) ? (c.kind === 'off' ? c.dayOff.name : `${c.dayOff.name}, ${base}`) : base;
+  return c.otHours > 0 ? `${named}, ${t('today.overtimeValue', { hours: c.otHours })}` : named;
+}
+
+function baseLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => string): string {
   if (c.kind === 'off') return t('today.weeklyOff');
   if (c.kind !== 'working') return '';
   if (!c.entry || c.entry.status === 'present') return t('today.present');
@@ -14,6 +20,7 @@ function cellLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => st
 }
 
 function cellBgColor(c: DayCell): string {
+  if (c.halfOff) return colors.offSoft;
   if (c.kind === 'off') return colors.offSoft;
   if (c.kind !== 'working' || !c.entry) return colors.card;
   if (c.entry.status === 'absent') return colors.dangerSoft;
@@ -24,6 +31,7 @@ function cellBgColor(c: DayCell): string {
 }
 
 function cellTextColor(c: DayCell): string {
+  if (c.halfOff) return colors.offText;
   if (c.kind === 'off') return colors.offText;
   if (c.kind !== 'working' || !c.entry) return colors.text;
   if (c.entry.status === 'absent') return colors.dangerText;
@@ -34,6 +42,7 @@ function cellTextColor(c: DayCell): string {
 }
 
 function cellBorderColor(c: DayCell): string {
+  if (c.halfOff) return colors.offBorder;
   if (c.kind === 'off') return colors.offBorder;
   if (c.kind !== 'working' || !c.entry) return colors.border;
   if (c.entry.status === 'absent') return colors.dangerBorder;
@@ -100,12 +109,11 @@ export function MonthCalendar({
                 styles.cell,
                 styles.day,
                 { backgroundColor: bg, borderColor },
-                c.halfOff && styles.halfOff,
                 (c.kind === 'future' || c.kind === 'outside') && styles.faded,
               ]}
             >
               <Text style={[styles.dayNum, { color: textColor }]}>{c.day}</Text>
-              {c.dayOff && c.kind === 'off' ? <Icon name="sunny-outline" size={12} color={textColor} /> : null}
+              {c.dayOff && (c.kind === 'off' || c.halfOff) ? <Icon name="sunny-outline" size={12} color={textColor} /> : null}
               {c.workedOnOff ? <Icon name="add-outline" size={10} color={colors.primary} style={styles.badge} /> : null}
               {c.otHours > 0 ? <Text style={[styles.badge, styles.otBadge]}>{t('worker.otBadge')}</Text> : null}
               {c.entry?.status === 'hours' ? (
@@ -184,9 +192,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     margin: 1,
-  },
-  halfOff: {
-    opacity: 0.5,
   },
   badge: {
     position: 'absolute',
