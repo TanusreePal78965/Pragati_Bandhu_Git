@@ -1,7 +1,7 @@
 -- supabase/tests/database/chukta_phase2a.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 insert into auth.users (id, email) values
   ('e0000000-0000-0000-0000-00000000000a', 'p2a-owner-a@test.internal'),
@@ -95,6 +95,12 @@ select throws_ok($$ insert into chukta.overtime_entries (id, property_id, worker
   '42501', null, 'staff cannot add overtime to another property');
 select throws_ok($$ update chukta.workers set ot_mode = 'fixed', ot_rate_paise = 100 where id = 'e4000000-0000-0000-0000-00000000000a' $$,
   '42501', null, 'staff cannot change worker pay settings');
+select throws_ok($$ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, ot_mode, created_by_role)
+  values ('e4000000-0000-0000-0000-0000000000c1', 'e2000000-0000-0000-0000-00000000000a', 'WS1', 'daily', 50000, '2026-09-01', 'fixed', 'staff') $$,
+  '42501', null, 'staff cannot insert a worker with pay settings');
+select lives_ok($$ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by_role)
+  values ('e4000000-0000-0000-0000-0000000000c2', 'e2000000-0000-0000-0000-00000000000a', 'WS2', 'daily', 50000, '2026-09-01', 'staff') $$,
+  'staff can insert a worker without pay settings');
 select lives_ok($$ update chukta.workers set name = 'WA2' where id = 'e4000000-0000-0000-0000-00000000000a' $$, 'staff can still edit Phase 1 worker columns');
 select lives_ok($$ update chukta.properties set ot_mode = 'multiplier' $$, 'staff property pay-settings update is a silent no-op');
 select is((select ot_mode from chukta.properties where id = 'e2000000-0000-0000-0000-00000000000a'), 'fixed', 'staff cannot change property pay settings');

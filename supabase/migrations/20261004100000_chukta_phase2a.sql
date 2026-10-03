@@ -102,10 +102,18 @@ begin
   end loop;
 end $$;
 
--- Pay settings on workers are owner-only (the Phase 1 member_update policy also covers staff).
+-- Pay settings on workers are owner-only (the Phase 1 member_insert and member_update policies also cover staff).
 create or replace function chukta.guard_worker_pay_settings() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  if tg_op = 'INSERT' then
+    if chukta.jwt_role() = 'staff' and (
+         new.offday_multiplier is not null or new.ot_mode is not null
+      or new.ot_multiplier is not null or new.ot_rate_paise is not null) then
+      raise exception 'only the owner can set pay settings' using errcode = '42501';
+    end if;
+    return new;
+  end if;
   if chukta.jwt_role() = 'staff' and (
        new.offday_multiplier is distinct from old.offday_multiplier
     or new.ot_mode is distinct from old.ot_mode
@@ -115,7 +123,7 @@ begin
   end if;
   return new;
 end $$;
-create trigger trg_guard_pay_settings before update on chukta.workers
+create trigger trg_guard_pay_settings before insert or update on chukta.workers
   for each row execute function chukta.guard_worker_pay_settings();
 
 -- 4. Grants.

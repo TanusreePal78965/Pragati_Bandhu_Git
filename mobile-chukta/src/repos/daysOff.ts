@@ -24,6 +24,11 @@ export async function addDayOff(
 
 export async function updateDayOff(ctx: RepoContext, id: string, patch: DayOffPatch): Promise<void> {
   if (ctx.role !== 'owner') throw new Error('only the owner can edit days off');
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (!name) throw new Error('name is required');
+    patch = { ...patch, name };
+  }
   await updateAndEnqueue(ctx, 'days_off', id, patch);
 }
 

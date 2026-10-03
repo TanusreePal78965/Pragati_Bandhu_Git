@@ -5,6 +5,7 @@ import { addDayOff, listDaysOff, updateDayOff } from '../repos/daysOff';
 import { addOvertime, listOvertime, listOvertimeForDate } from '../repos/overtime';
 import { addAdjustment, listAdjustments, voidAdjustment } from '../repos/money';
 import { markAttendance } from '../repos/attendance';
+import { createWorker, updateWorker } from '../repos/workers';
 
 async function ctx(role: RepoContext['role'] = 'owner'): Promise<RepoContext> {
   const db = openTestDb();
@@ -62,4 +63,34 @@ test('attendance custom amount is owner only', async () => {
   const o = await ctx();
   const row = await markAttendance(o, { propertyId: 'p1', workerId: 'w1', date: '2026-09-06', status: 'present', customAmountPaise: 40000 });
   expect(row.custom_amount_paise).toBe(40000);
+});
+
+test('updateDayOff rejects a blank name and stores the trimmed one', async () => {
+  const c = await ctx();
+  const d = await addDayOff(c, D);
+  await expect(updateDayOff(c, d.id, { name: '   ' })).rejects.toThrow();
+  await updateDayOff(c, d.id, { name: '  Diwali ' });
+  expect((await listDaysOff(c.db, 'p1'))[0].name).toBe('Diwali');
+});
+
+describe('worker pay settings are owner only', () => {
+  const W = { propertyId: 'p1', name: 'Ram', payBasis: 'daily' as const, ratePaise: 50000, joiningDate: '2026-09-01' };
+  test('staff createWorker with an override throws; without one succeeds', async () => {
+    const s = await ctx('staff');
+    await expect(createWorker(s, { ...W, otMode: 'fixed' })).rejects.toThrow();
+    await expect(createWorker(s, W)).resolves.toMatchObject({ name: 'Ram', ot_mode: null });
+  });
+  test('staff updateWorker with a pay-setting key throws; other edits work', async () => {
+    const o = await ctx();
+    const w = await createWorker(o, W);
+    const s: RepoContext = { ...o, role: 'staff' };
+    await expect(updateWorker(s, w.id, { ot_mode: 'fixed' })).rejects.toThrow();
+    await expect(updateWorker(s, w.id, { name: 'Ramu' })).resolves.toBeUndefined();
+  });
+  test('owner may set them', async () => {
+    const o = await ctx();
+    const w = await createWorker(o, { ...W, otMode: 'fixed', otRatePaise: 7000 });
+    await updateWorker(o, w.id, { ot_mode: 'multiplier' });
+    expect(w.ot_rate_paise).toBe(7000);
+  });
 });

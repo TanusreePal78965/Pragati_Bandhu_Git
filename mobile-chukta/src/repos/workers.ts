@@ -13,7 +13,12 @@ export type WorkerPatch = Partial<Pick<Worker,
   | 'shift_hours' | 'weekly_off_override' | 'weekly_off' | 'monthly_divisor'
   | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>;
 
+const PAY_KEYS = ['offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'] as const;
+
 export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<Worker> {
+  if (ctx.role !== 'owner' && [input.offdayMultiplier, input.otMode, input.otMultiplier, input.otRatePaise].some((v) => v != null)) {
+    throw new Error('only the owner can set pay settings');
+  }
   if (!input.name.trim()) throw new Error('name is required');
   if (!Number.isInteger(input.ratePaise) || input.ratePaise <= 0) throw new Error('rate must be a positive amount');
   const row: Worker = {
@@ -33,6 +38,7 @@ export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<
 }
 
 export async function updateWorker(ctx: RepoContext, id: string, patch: WorkerPatch): Promise<void> {
+  if (ctx.role !== 'owner' && PAY_KEYS.some((k) => k in patch)) throw new Error('only the owner can change pay settings');
   if (patch.status === 'left' && !patch.left_date) throw new Error('left_date is required when a worker leaves');
   if (patch.pay_basis === 'hourly') patch = { ...patch, attendance_mode: 'hours' };
   await updateAndEnqueue(ctx, 'workers', id, patch);
