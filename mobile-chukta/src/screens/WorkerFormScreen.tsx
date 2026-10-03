@@ -38,6 +38,7 @@ const DEFAULT = 'default';
 const newWorkerValues = (p: Property, today: string): WorkerFormValues => ({
   name: '', phone: '', payBasis: p.default_pay_basis, rate: '', joiningDate: today, attendanceMode: null, shiftHours: '',
   weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null, hasLeft: false, leftDate: null,
+  offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '',
 });
 const hasOverrides = (v: WorkerFormValues) => v.attendanceMode !== null || v.shiftHours !== '' || v.weeklyOffOverride || v.monthlyDivisor !== null;
 
@@ -83,8 +84,8 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
     setBusy(true);
     setSaveError(null);
     try {
-      if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value));
-      else await createWorker(session.repo, toNewWorker(property.id, r.value));
+      if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value, session.identity.kind === 'owner'));
+      else await createWorker(session.repo, toNewWorker(property.id, r.value, session.identity.kind === 'owner'));
     } catch {
       setSaveError('common.saveFailed');
       setBusy(false);

@@ -5,7 +5,7 @@ import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
 import { activeMoneyRows } from '../domain/attendance';
 import { useT } from '../i18n/useT';
-import { addAdvance, addPayment, listAdvances } from '../repos/money';
+import { addAdjustment, addAdvance, addPayment, listAdvances } from '../repos/money';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -70,6 +70,7 @@ export function MoneyEntryScreen() {
     };
     try {
       if (params.kind === 'payment') await addPayment(session.repo, base);
+      else if (params.kind === 'bonus' || params.kind === 'deduction') await addAdjustment(session.repo, { ...base, type: params.kind });
       else await addAdvance(session.repo, { ...base, type: params.kind });
     } catch {
       setSaveError('common.saveFailed');
