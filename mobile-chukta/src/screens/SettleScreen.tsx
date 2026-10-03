@@ -161,7 +161,7 @@ function SettleForm({ worker, property, due, today, reload, notice, setNotice, r
 
   return (
     <Screen
-      header={<ScreenHeader title={t('settle.title')} subtitle={`${worker.name} · ${formatPeriod(period)}`} showBack />}
+      header={<ScreenHeader title={t('settle.title')} subtitle={`${worker.name} · ${formatPeriod(period, t)}`} showBack />}
       refreshControl={refreshControl}
     >
       <Card>

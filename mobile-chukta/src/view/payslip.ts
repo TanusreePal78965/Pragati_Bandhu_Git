@@ -1,8 +1,7 @@
 import type { Settlement, SettlementSummary } from '../domain/types';
-import { formatPeriod } from './dueList';
 
 export type PayslipLine = { key: string; params?: Record<string, string | number>; amountPaise?: number; negative?: boolean };
-export type PayslipView = { header: { period: string; settledOn: string; rateKey: string; ratePaise: number };
+export type PayslipView = { header: { settledOn: string; rateKey: string; ratePaise: number };
   attendance: PayslipLine[]; earnings: PayslipLine[]; deductions: PayslipLine[]; balance: PayslipLine[]; carry: PayslipLine;
   advanceLeft: PayslipLine; voided: boolean };
 
@@ -30,7 +29,7 @@ export function buildPayslipView(s: Settlement, voided: boolean): PayslipView {
     : s.closing_balance_paise < 0 ? { key: 'payslip.carryOverpaid', amountPaise: -s.closing_balance_paise }
       : { key: 'payslip.carryClear' };
   return {
-    header: { period: formatPeriod({ start: s.period_start, end: s.period_end }), settledOn: s.settled_on,
+    header: { settledOn: s.settled_on,
       rateKey: `payBasis.${s.pay_basis}`, ratePaise: s.rate_paise },
     attendance, earnings, deductions,
     balance: [

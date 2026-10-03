@@ -3,13 +3,14 @@ import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { initI18n } from '../i18n';
-import { settleWorker } from '../repos/settlements';
+import { settleWorker, unlockSettlement } from '../repos/settlements';
 import { upsertLocal } from '../repos/write';
 import { PayslipScreen } from '../screens/PayslipScreen';
 import { property, worker } from './helpers/fixtures';
 import { makeSession, OWNER, renderScreen, STAFF } from './helpers/session';
 
 beforeAll(() => initI18n('en'));
+beforeEach(() => jest.clearAllMocks());
 
 async function settled(identity = OWNER) {
   const owner = await makeSession(OWNER);
@@ -55,4 +56,37 @@ test('staff can view and share but not unlock', async () => {
   renderScreen('Payslip', PayslipScreen, s, { settlementId: st.id });
   expect(await screen.findByTestId('payslip-share')).toBeTruthy();
   expect(screen.queryByTestId('payslip-unlock')).toBeNull();
+});
+
+test('owner viewing an older active slip is told to unlock the newer one first', async () => {
+  const { s, st } = await settled();
+  await settleWorker(s.repo, { worker: worker({ joining_date: '2026-08-30' }), property: property(), today: '2026-09-14',
+    periodStart: '2026-09-06', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  renderScreen('Payslip', PayslipScreen, s, { settlementId: st.id });
+  expect(await screen.findByText('Unlock the newer payslip first.')).toBeTruthy();
+  expect(screen.queryByTestId('payslip-unlock')).toBeNull();
+});
+
+test('a voided slip shows Unlocked and offers no unlock', async () => {
+  const { s, st } = await settled();
+  await unlockSettlement(s.repo, st.id, '2026-09-07');
+  renderScreen('Payslip', PayslipScreen, s, { settlementId: st.id });
+  expect(await screen.findByText('Unlocked')).toBeTruthy();
+  expect(screen.queryByTestId('payslip-unlock')).toBeNull();
+});
+
+test('a failed or unavailable share shows an alert', async () => {
+  const { s, st } = await settled();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    (captureRef as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+    renderScreen('Payslip', PayslipScreen, s, { settlementId: st.id });
+    fireEvent.press(await screen.findByTestId('payslip-share'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Could not save on this phone. Please try again.'));
+    (Sharing.isAvailableAsync as jest.Mock).mockResolvedValueOnce(false);
+    fireEvent.press(screen.getByTestId('payslip-share'));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+  } finally {
+    alert.mockRestore();
+  }
 });

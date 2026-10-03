@@ -15,7 +15,11 @@ import { Button, EmptyState, ErrorText, Loading, Muted, Screen, ScreenHeader, St
 import { colors, space } from '../ui/theme';
 import { formatDate } from '../utils/format';
 import { formatRupees } from '../utils/money';
+import { formatPeriod } from '../view/dueList';
 import { buildPayslipView, type PayslipLine } from '../view/payslip';
+
+// Opaque white so the shared PNG is not transparent (do not use the themed surface colour here).
+const CAPTURE_BG = '#FFFFFF';
 
 type Loaded = { row: Settlement; voided: boolean; canUnlock: boolean; newerExists: boolean; worker: Worker | null; property: Property | null } | null;
 
@@ -60,6 +64,7 @@ export function PayslipScreen() {
     try {
       const uri = await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile' });
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: t('payslip.title') });
+      else Alert.alert(t('common.saveFailed'));
     } catch {
       Alert.alert(t('common.saveFailed'));
     } finally {
@@ -115,7 +120,7 @@ export function PayslipScreen() {
         </View>
         <View style={styles.line}>
           <Text style={styles.label}>{t('payslip.period')}</Text>
-          <Text style={styles.value}>{view.header.period}</Text>
+          <Text style={styles.value}>{formatPeriod({ start: data.row.period_start, end: data.row.period_end }, t)}</Text>
         </View>
         <View style={styles.line}>
           <Text style={styles.label}>{t('payslip.rate')}</Text>
@@ -124,7 +129,7 @@ export function PayslipScreen() {
         {group(t('payslip.attendance'), view.attendance)}
         {group(t('payslip.earnings'), view.earnings)}
         {group(t('payslip.deductions'), view.deductions)}
-        {group('', view.balance)}
+        <View style={styles.group}>{view.balance.map(line)}</View>
         <View style={styles.group}>
           <Text style={styles.carry}>{t(view.carry.key, { amount: formatRupees(view.carry.amountPaise ?? 0) })}</Text>
           <Text style={styles.lineText}>{t(view.advanceLeft.key, { amount: formatRupees(view.advanceLeft.amountPaise ?? 0) })}</Text>
@@ -144,7 +149,7 @@ export function PayslipScreen() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', padding: space.lg, gap: space.sm, borderRadius: 12 },
+  card: { backgroundColor: CAPTURE_BG, padding: space.lg, gap: space.sm, borderRadius: 12 },
   shop: { fontSize: 18, fontWeight: '800', color: colors.text },
   line: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md },
   lineText: { fontSize: 14, color: colors.text, flexShrink: 1 },

@@ -4,17 +4,18 @@ import type { Property, Worker } from '../domain/types';
 import { getDueSettlement } from '../repos/settlements';
 import { listWorkers } from '../repos/workers';
 import { compareDates } from '../utils/dates';
+import type { Translate } from '../utils/format';
 
 export type DueRow = { worker: Worker; period: Period; wageDuePaise: number };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-export function formatPeriod(p: Period): string {
+/** "1–5 Sep", "27 Sep–3 Oct" or "27 Dec 2026–2 Jan 2027"; month names come from i18n like formatDate. */
+export function formatPeriod(p: Period, t: Translate): string {
   const [ys, ms, ds] = p.start.split('-').map(Number);
   const [ye, me, de] = p.end.split('-').map(Number);
-  if (ys !== ye) return `${ds} ${MONTHS[ms - 1]} ${ys}–${de} ${MONTHS[me - 1]} ${ye}`;
-  if (ms !== me) return `${ds} ${MONTHS[ms - 1]}–${de} ${MONTHS[me - 1]}`;
-  return `${ds}–${de} ${MONTHS[ms - 1]}`;
+  const mon = (m: number) => t(`months.short.m${m}`);
+  if (ys !== ye) return `${ds} ${mon(ms)} ${ys}–${de} ${mon(me)} ${ye}`;
+  if (ms !== me) return `${ds} ${mon(ms)}–${de} ${mon(me)}`;
+  return `${ds}–${de} ${mon(ms)}`;
 }
 
 /** Workers (incl. those who left) with an ended, unsettled period: the oldest due period each.

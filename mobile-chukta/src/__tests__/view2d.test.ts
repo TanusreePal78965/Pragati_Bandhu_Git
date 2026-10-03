@@ -1,3 +1,4 @@
+import { i18n, initI18n } from '../i18n';
 import { openTestDb } from '../db/testing/betterSqliteDb';
 import { migrate } from '../db/schema';
 import type { Settlement } from '../domain/types';
@@ -8,10 +9,13 @@ import { buildPayslipView } from '../view/payslip';
 import { buildTodayRows } from '../view/today';
 import { property, worker } from './helpers/fixtures';
 
+beforeAll(() => initI18n('en'));
+const t = (key: string, params?: Record<string, unknown>) => i18n.t(key, params) as string;
+
 test('formatPeriod', () => {
-  expect(formatPeriod({ start: '2026-09-01', end: '2026-09-05' })).toBe('1–5 Sep');
-  expect(formatPeriod({ start: '2026-09-27', end: '2026-10-03' })).toBe('27 Sep–3 Oct');
-  expect(formatPeriod({ start: '2026-12-27', end: '2027-01-02' })).toBe('27 Dec 2026–2 Jan 2027');
+  expect(formatPeriod({ start: '2026-09-01', end: '2026-09-05' }, t)).toBe('1–5 Sep');
+  expect(formatPeriod({ start: '2026-09-27', end: '2026-10-03' }, t)).toBe('27 Sep–3 Oct');
+  expect(formatPeriod({ start: '2026-12-27', end: '2027-01-02' }, t)).toBe('27 Dec 2026–2 Jan 2027');
 });
 
 test('due list: one row per worker with an ended, unsettled period, oldest first', async () => {
@@ -45,7 +49,6 @@ const settlement = (over: Partial<Settlement> = {}): Settlement => ({
 
 test('payslip view: only non-zero lines, carry forward wording', () => {
   const v = buildPayslipView(settlement(), false);
-  expect(v.header.period).toBe('1–5 Sep');
   expect(v.attendance.map((l) => l.key)).toEqual(['payslip.present', 'payslip.half', 'payslip.absent', 'payslip.otHours']);
   expect(v.earnings.map((l) => [l.key, l.amountPaise])).toEqual([['payslip.base', 200000], ['payslip.overtime', 12500]]);
   expect(v.deductions.map((l) => [l.key, l.amountPaise])).toEqual([['payslip.deduction', 5000], ['payslip.advanceRecovered', 30000]]);
