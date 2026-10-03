@@ -1,7 +1,7 @@
 // SettingsScreen imports the Supabase-backed services; keep tests off the network client.
 jest.mock('../app/services', () => ({ authService: {}, staffApi: {} }));
 
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
 import * as daysOffRepo from '../repos/daysOff';
 import { upsertLocal } from '../repos/write';
@@ -98,7 +98,7 @@ test('editing a day off that does not exist keeps showing the loader, not a blan
   const s = await makeSession(OWNER);
   await upsertLocal(s.db, 'properties', property());
   renderScreen('HolidayForm', HolidayFormScreen, s, { dayOffId: 'missing' });
-  await new Promise((r) => setTimeout(r, 50));
+  await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
   expect(screen.queryByTestId('holiday-save')).toBeNull();
 });
 
