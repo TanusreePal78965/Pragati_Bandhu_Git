@@ -49,7 +49,7 @@
     "customAmount": "Custom amount (₹, optional)", "customAmountInvalid": "Enter a valid amount."
   },
   "workers": { "add": "Add worker", "due": "Wage due", "advance": "Advance", "overpaid": "Overpaid", "showLeft": "Show workers who left", "left": "Left", "empty": "No workers yet. Add one.", "emptyTitle": "No workers" },
-  "worker": {
+  "worker": { "otBadge": "OT",
     "due": "Wage due", "earned": "Earned", "paid": "Paid", "advance": "Advance outstanding", "howCalculated": "How this is calculated",
     "calendar": "Attendance", "history": "Money entries", "correct": "Correct",
     "correctConfirm": "This entry will be cancelled and removed from the totals. Continue?", "correction": "Correction", "cancelled": "Cancelled",
@@ -68,7 +68,7 @@
     "leftBeforeJoin": "Last working day can't be before joining."
   },
   "money": {
-    "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.", "noteRequiredDeduction": "A reason is required for a deduction.",
+    "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.", "noteRequiredDeduction": "A reason is required for a deduction.", "noteReason": "Reason (required)", "reasonPlaceholder": "Why is this being deducted?", "ownerOnly": "Only the owner can do this.",
     "amountInvalid": "Enter an amount above ₹0.", "exceedsAdvance": "This is more than the {{outstanding}} advance outstanding.", "notePlaceholder": "Optional notes"
   },
   "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding.", "emptyTitle": "No advances" },

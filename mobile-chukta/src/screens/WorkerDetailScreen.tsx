@@ -7,7 +7,9 @@ import { resolveSettings } from '../domain/settings';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendance } from '../repos/attendance';
-import { listAdvances, listPayments, voidAdvance, voidPayment } from '../repos/money';
+import { listAdjustments, listAdvances, listPayments, voidAdjustment, voidAdvance, voidPayment } from '../repos/money';
+import { listDaysOff } from '../repos/daysOff';
+import { listOvertime } from '../repos/overtime';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -55,17 +57,20 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
     if (!worker) return null;
     const from = `${ym.year}-${pad(ym.month)}-01`;
     const to = `${ym.year}-${pad(ym.month)}-${pad(daysInMonth(ym.year, ym.month))}`;
-    const [ledger, attendance, advances, payments] = await Promise.all([
+    const [ledger, attendance, advances, payments, adjustments, daysOff, overtime] = await Promise.all([
       getWorkerLedger(s.db, worker, property, today),
       listAttendance(s.db, worker.id, from, to),
       listAdvances(s.db, worker.id),
       listPayments(s.db, worker.id),
+      listAdjustments(s.db, worker.id),
+      listDaysOff(s.db, property.id),
+      listOvertime(s.db, worker.id),
     ]);
     const grid = buildMonthGrid({
       year: ym.year, month: ym.month, settings: resolveSettings(worker, property), joiningDate: worker.joining_date,
-      leftDate: worker.left_date, today, attendance,
+      leftDate: worker.left_date, today, attendance, daysOff, overtime,
     });
-    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments) };
+    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments) };
   }, [property, workerId, ym.year, ym.month, today]);
 
   const worker = data?.worker ?? null;
@@ -79,6 +84,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
         correcting.current = true;
         try {
           if (item.table === 'advance_entries') await voidAdvance(session.repo, item.id);
+          else if (item.table === 'earning_adjustments') await voidAdjustment(session.repo, item.id);
           else await voidPayment(session.repo, item.id);
           session.afterWrite();
         } catch {
@@ -184,7 +190,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
 
       {/* Money Action Buttons */}
       <View style={styles.actions}>
-        {(['advance', 'repayment', 'writeoff', 'payment'] as const).map((kind) => (
+        {([...(['advance', 'repayment', 'writeoff', 'payment'] as const), ...(isOwner ? (['bonus', 'deduction'] as const) : [])]).map((kind) => (
           <View key={kind} style={styles.action}>
             <Button
               kind="secondary"
@@ -231,7 +237,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
             right={
               <View style={styles.historyRight}>
                 <Text style={[styles.amount, (item.isVoided || item.isVoid) && styles.struck]}>
-                  {formatRupees(item.amountPaise)}
+                  {`${item.kind === 'deduction' ? '−' : ''}${formatRupees(item.amountPaise)}`}
                 </Text>
                 {isOwner && item.canCorrect ? (
                   <Button

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '../i18n/useT';
 import { formatMonth, weekdayName } from '../utils/format';
 import type { DayCell, MonthGrid } from '../view/monthGrid';
+import { Icon } from './Icon';
 import { colors, radius, shadows, space } from './theme';
 
 function cellLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => string): string {
@@ -99,10 +100,14 @@ export function MonthCalendar({
                 styles.cell,
                 styles.day,
                 { backgroundColor: bg, borderColor },
+                c.halfOff && styles.halfOff,
                 (c.kind === 'future' || c.kind === 'outside') && styles.faded,
               ]}
             >
               <Text style={[styles.dayNum, { color: textColor }]}>{c.day}</Text>
+              {c.dayOff && c.kind === 'off' ? <Icon name="sunny-outline" size={12} color={textColor} /> : null}
+              {c.workedOnOff ? <Icon name="add-outline" size={10} color={colors.primary} style={styles.badge} /> : null}
+              {c.otHours > 0 ? <Text style={[styles.badge, styles.otBadge]}>{t('worker.otBadge')}</Text> : null}
               {c.entry?.status === 'hours' ? (
                 <Text style={[styles.small, { color: textColor }]}>
                   {t('today.hoursValue', { hours: c.entry.hours })}
@@ -179,6 +184,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     margin: 1,
+  },
+  halfOff: {
+    opacity: 0.5,
+  },
+  badge: {
+    position: 'absolute',
+    top: 1,
+    right: 2,
+  },
+  otBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary,
+    top: 9,
   },
   faded: {
     opacity: 0.35,

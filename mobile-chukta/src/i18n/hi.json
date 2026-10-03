@@ -49,7 +49,7 @@
     "customAmount": "अपनी रकम (₹, वैकल्पिक)", "customAmountInvalid": "सही रकम लिखें।"
   },
   "workers": { "add": "कर्मचारी जोड़ें", "due": "बाकी वेतन", "advance": "एडवांस", "overpaid": "ज़्यादा दिया", "showLeft": "छोड़ चुके कर्मचारी दिखाएँ", "left": "छोड़ दिया", "empty": "अभी कोई कर्मचारी नहीं। एक जोड़ें।", "emptyTitle": "कोई कर्मचारी नहीं" },
-  "worker": {
+  "worker": { "otBadge": "ओटी",
     "due": "बाकी वेतन", "earned": "कमाई", "paid": "दिया गया", "advance": "बाकी एडवांस", "howCalculated": "हिसाब कैसे बना",
     "calendar": "हाज़िरी", "history": "पैसों का हिसाब", "correct": "सुधारें",
     "correctConfirm": "यह एंट्री रद्द होगी और कुल हिसाब से हट जाएगी। आगे बढ़ें?", "correction": "सुधार", "cancelled": "रद्द",
@@ -68,7 +68,7 @@
     "leftBeforeJoin": "आखिरी दिन जुड़ने की तारीख से पहले नहीं हो सकता।"
   },
   "money": {
-    "amount": "रकम (₹)", "date": "तारीख", "mode": "कैसे दिया", "note": "नोट", "noteRequired": "माफ़ी के लिए नोट ज़रूरी है।", "noteRequiredDeduction": "कटौती का कारण ज़रूरी है।",
+    "amount": "रकम (₹)", "date": "तारीख", "mode": "कैसे दिया", "note": "नोट", "noteRequired": "माफ़ी के लिए नोट ज़रूरी है।", "noteRequiredDeduction": "कटौती का कारण ज़रूरी है।", "noteReason": "कारण (ज़रूरी)", "reasonPlaceholder": "कटौती क्यों की जा रही है?", "ownerOnly": "यह सिर्फ़ मालिक कर सकता है।",
     "amountInvalid": "₹0 से ज़्यादा रकम लिखें।", "exceedsAdvance": "यह बाकी एडवांस {{outstanding}} से ज़्यादा है।", "notePlaceholder": "वैकल्पिक नोट"
   },
   "advances": { "title": "बाकी एडवांस", "total": "कुल बाकी", "empty": "कोई एडवांस बाकी नहीं।", "emptyTitle": "कोई एडवांस नहीं" },

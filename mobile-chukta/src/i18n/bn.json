@@ -49,7 +49,7 @@
     "customAmount": "নিজের টাকার পরিমাণ (₹, ঐচ্ছিক)", "customAmountInvalid": "সঠিক টাকার পরিমাণ লিখুন।"
   },
   "workers": { "add": "কর্মী যোগ করুন", "due": "বাকি মজুরি", "advance": "অগ্রিম", "overpaid": "বেশি দেওয়া", "showLeft": "চলে যাওয়া কর্মীদের দেখান", "left": "চলে গেছে", "empty": "এখনও কোনো কর্মী নেই। একজন যোগ করুন।", "emptyTitle": "কোনো কর্মী নেই" },
-  "worker": {
+  "worker": { "otBadge": "ওটি",
     "due": "বাকি মজুরি", "earned": "উপার্জন", "paid": "দেওয়া হয়েছে", "advance": "বাকি অগ্রিম", "howCalculated": "কীভাবে হিসাব হলো",
     "calendar": "হাজিরা", "history": "টাকার হিসাব", "correct": "সংশোধন",
     "correctConfirm": "এই এন্ট্রি বাতিল হবে এবং মোট হিসাব থেকে বাদ যাবে। এগোবেন?", "correction": "সংশোধন", "cancelled": "বাতিল",
@@ -68,7 +68,7 @@
     "leftBeforeJoin": "শেষ কাজের দিন যোগদানের আগে হতে পারে না।"
   },
   "money": {
-    "amount": "টাকা (₹)", "date": "তারিখ", "mode": "কীভাবে দেওয়া", "note": "নোট", "noteRequired": "মাফ করার জন্য নোট লিখতে হবে।", "noteRequiredDeduction": "কাটার কারণ লিখতে হবে।",
+    "amount": "টাকা (₹)", "date": "তারিখ", "mode": "কীভাবে দেওয়া", "note": "নোট", "noteRequired": "মাফ করার জন্য নোট লিখতে হবে।", "noteRequiredDeduction": "কাটার কারণ লিখতে হবে।", "noteReason": "কারণ (আবশ্যক)", "reasonPlaceholder": "কেন কাটা হচ্ছে?", "ownerOnly": "শুধু মালিক এটা করতে পারেন।",
     "amountInvalid": "₹০-এর বেশি টাকা লিখুন।", "exceedsAdvance": "বাকি অগ্রিম {{outstanding}}-এর চেয়ে এই টাকার পরিমাণ বেশি।", "notePlaceholder": "ঐচ্ছিক নোট"
   },
   "advances": { "title": "বাকি অগ্রিম", "total": "মোট বাকি", "empty": "কোনো অগ্রিম বাকি নেই।", "emptyTitle": "কোনো অগ্রিম নেই" },
