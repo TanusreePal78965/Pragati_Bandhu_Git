@@ -2,7 +2,7 @@ import type { SqlDb } from './sqlDb';
 
 export const SYNCED_TABLES = [
   'properties', 'staff_users', 'workers', 'days_off', 'attendance_entries', 'overtime_entries',
-  'advance_entries', 'wage_payments', 'earning_adjustments',
+  'settlements', 'advance_entries', 'wage_payments', 'earning_adjustments',
 ] as const;
 export type SyncedTable = (typeof SYNCED_TABLES)[number];
 
@@ -10,16 +10,20 @@ const ENTRY_AUDIT = ['created_by', 'created_by_role', 'created_at', 'server_upda
 
 export const TABLE_COLUMNS: Record<SyncedTable, readonly string[]> = {
   properties: ['id', 'shop_id', 'name', 'address', 'is_active', 'default_pay_basis', 'default_attendance_mode', 'shift_hours',
-    'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'created_at', 'server_updated_at'],
+    'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'pay_cycle', 'cycle_end_weekday', 'created_at', 'server_updated_at'],
   staff_users: ['id', 'property_id', 'name', 'auth_user_id', 'is_active', 'created_at', 'server_updated_at'],
   workers: ['id', 'property_id', 'name', 'phone', 'pay_basis', 'rate_paise', 'joining_date', 'status', 'left_date',
-    'attendance_mode', 'shift_hours', 'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', ...ENTRY_AUDIT],
+    'attendance_mode', 'shift_hours', 'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'pay_cycle', 'cycle_end_weekday', ...ENTRY_AUDIT],
   attendance_entries: ['id', 'property_id', 'worker_id', 'date', 'status', 'hours', 'note', 'custom_amount_paise', ...ENTRY_AUDIT],
-  advance_entries: ['id', 'property_id', 'worker_id', 'type', 'amount_paise', 'date', 'mode', 'note', 'voids_id', ...ENTRY_AUDIT],
+  advance_entries: ['id', 'property_id', 'worker_id', 'type', 'amount_paise', 'date', 'mode', 'note', 'voids_id', 'settlement_id', ...ENTRY_AUDIT],
   days_off: ['id', 'property_id', 'date', 'name', 'kind', 'portion', 'pay_rule', 'is_active', ...ENTRY_AUDIT],
   overtime_entries: ['id', 'property_id', 'worker_id', 'date', 'hours', 'custom_amount_paise', 'note', ...ENTRY_AUDIT],
   earning_adjustments: ['id', 'property_id', 'worker_id', 'type', 'amount_paise', 'date', 'note', 'voids_id', ...ENTRY_AUDIT],
-  wage_payments: ['id', 'property_id', 'worker_id', 'amount_paise', 'date', 'mode', 'note', 'voids_id', ...ENTRY_AUDIT],
+  wage_payments: ['id', 'property_id', 'worker_id', 'amount_paise', 'date', 'mode', 'note', 'voids_id', 'settlement_id', ...ENTRY_AUDIT],
+  settlements: ['id', 'property_id', 'worker_id', 'period_start', 'period_end', 'settled_on', 'pay_basis', 'rate_paise',
+    'opening_balance_paise', 'base_paise', 'offday_extra_paise', 'overtime_paise', 'bonus_paise', 'deduction_paise', 'earned_paise',
+    'paid_in_period_paise', 'paid_now_paise', 'advance_recovered_paise', 'advance_after_paise', 'closing_balance_paise',
+    'summary', 'note', 'voids_id', ...ENTRY_AUDIT],
 };
 
 const SCHEMA_V1 = `
@@ -103,6 +107,27 @@ create table if not exists earning_adjustments (
 create index if not exists idx_adjustments_worker on earning_adjustments(worker_id);
 `;
 
+// Phase 2D: pay cycles, settlements, money rows linked to a settlement (spec §4.6).
+const SCHEMA_V4 = `
+alter table properties add column pay_cycle text not null default 'by_basis';
+alter table properties add column cycle_end_weekday integer not null default 6;
+alter table workers add column pay_cycle text;
+alter table workers add column cycle_end_weekday integer;
+alter table wage_payments add column settlement_id text;
+alter table advance_entries add column settlement_id text;
+create table if not exists settlements (
+  id text primary key, property_id text not null, worker_id text not null, period_start text not null, period_end text not null,
+  settled_on text not null, pay_basis text not null, rate_paise integer not null, opening_balance_paise integer not null,
+  base_paise integer not null, offday_extra_paise integer not null, overtime_paise integer not null, bonus_paise integer not null,
+  deduction_paise integer not null, earned_paise integer not null, paid_in_period_paise integer not null, paid_now_paise integer not null,
+  advance_recovered_paise integer not null, advance_after_paise integer not null, closing_balance_paise integer not null,
+  summary text not null default '{}', note text, voids_id text,
+  created_by text not null, created_by_role text not null, created_at text not null, server_updated_at text
+);
+create index if not exists idx_settlements_worker on settlements(worker_id, period_start);
+create index if not exists idx_settlements_property on settlements(property_id);
+`;
+
 export async function migrate(db: SqlDb): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>('pragma user_version');
   const version = row?.user_version ?? 0;
@@ -120,6 +145,14 @@ export async function migrate(db: SqlDb): Promise<void> {
       // An older build dropped the new columns on pull; force one full re-pull of the tables that gained them.
       await db.execAsync("delete from sync_cursor where table_name in ('properties', 'workers', 'attendance_entries')");
       await db.execAsync('pragma user_version = 3');
+    });
+  }
+  if (version < 4) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(SCHEMA_V4);
+      // Rows pulled by an older build lack the new columns; re-pull the tables that gained them, once.
+      await db.execAsync("delete from sync_cursor where table_name in ('properties', 'workers', 'wage_payments', 'advance_entries')");
+      await db.execAsync('pragma user_version = 4');
     });
   }
 }
