@@ -21,7 +21,7 @@ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joinin
 -- Must exist before the first settlement, which would lock 2026-09-02.
 insert into chukta.days_off (id, property_id, date, name, kind, portion, pay_rule, created_by, created_by_role) values
   ('f6000000-0000-0000-0000-00000000000a', 'f2000000-0000-0000-0000-00000000000a', '2026-09-02', 'Fixture holiday', 'holiday', 'full', 'by_basis', 'f0000000-0000-0000-0000-00000000000a', 'owner');
-select plan(34);
+select plan(36);
 
 
 -- as postgres: order + overlap
@@ -98,6 +98,14 @@ select throws_ok($$ insert into chukta.advance_entries (id, property_id, worker_
 select throws_ok($$ insert into chukta.days_off (id, property_id, date, name, kind, portion, pay_rule, created_by_role)
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', '2026-09-04', 'H', 'holiday', 'full', 'by_basis', 'owner') $$,
   '23514', null, 'holiday on a settled date is locked');
+select lives_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
+    opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
+    paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, created_by_role)
+  values ('f7000000-0000-0000-0000-000000000001', 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    '2026-09-01', '2026-09-05', '2026-09-06', 'daily', 50000, 0, 250000, 0, 0, 0, 0, 250000, 0, 250000, 0, 0, 0,
+    'owner') on conflict (id) do nothing $$, 'a replayed settlement push is ignored, not rejected');
+select is((select count(*)::int from chukta.settlements where worker_id = 'f4000000-0000-0000-0000-00000000000a'), 1,
+  'the replay inserted nothing');
 select lives_ok($$ update chukta.properties set pay_cycle = 'monthly', cycle_end_weekday = 3 where id = 'f2000000-0000-0000-0000-00000000000a' $$,
   'owner sets the pay cycle');
 

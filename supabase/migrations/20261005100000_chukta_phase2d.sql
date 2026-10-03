@@ -130,6 +130,10 @@ declare
   v_last date;
   v_join date;
 begin
+  -- Replayed push (upsert ignoreDuplicates): the row already exists, so ON CONFLICT will ignore it. Do not judge it against later state.
+  if exists (select 1 from chukta.settlements where id = new.id) then
+    return new;
+  end if;
   -- Serialise settles/unlocks per worker so two concurrent inserts cannot both pass the contiguity check.
   perform pg_advisory_xact_lock(hashtextextended('chukta.settlement:' || new.worker_id::text, 0));
   if new.voids_id is not null then
@@ -169,11 +173,18 @@ language plpgsql set search_path = '' as $$
 declare
   v_id   uuid;
   v_link uuid;
+  v_exists boolean;
 begin
+  -- Replayed push (upsert ignoreDuplicates): the row already exists, so ON CONFLICT will ignore it. Do not judge it against later state.
+  execute format('select exists(select 1 from chukta.%I where id = $1)', tg_table_name) into v_exists using new.id;
+  if v_exists then
+    return new;
+  end if;
   if tg_table_name = 'days_off' then
     -- Shared lock per worker: waits for an in-flight settle, and blocks a settle until this insert commits.
-    perform pg_advisory_xact_lock_shared(hashtextextended('chukta.settlement:' || w.id::text, 0))
-      from chukta.workers w where w.property_id = new.property_id;
+    -- Locks are taken in id order so concurrent inserts cannot deadlock on each other.
+    perform pg_advisory_xact_lock_shared(hashtextextended('chukta.settlement:' || x.id::text, 0))
+      from (select w.id from chukta.workers w where w.property_id = new.property_id order by w.id) x;
     if exists (select 1 from chukta.workers w
                where w.property_id = new.property_id and chukta.settled_period_id(w.id, new.date) is not null) then
       raise exception 'period is settled' using errcode = '23514';
@@ -220,7 +231,14 @@ create trigger trg_day_off_settled before update on chukta.days_off
 -- 8. Only the owner may link a money row to a settlement.
 create or replace function chukta.guard_settlement_link() returns trigger
 language plpgsql set search_path = '' as $$
+declare
+  v_exists boolean;
 begin
+  -- Replayed push (upsert ignoreDuplicates): the row already exists, so ON CONFLICT will ignore it. Do not judge it against later state.
+  execute format('select exists(select 1 from chukta.%I where id = $1)', tg_table_name) into v_exists using new.id;
+  if v_exists then
+    return new;
+  end if;
   if new.settlement_id is not null and chukta.jwt_role() = 'staff' then
     raise exception 'only the owner can settle' using errcode = '42501';
   end if;
