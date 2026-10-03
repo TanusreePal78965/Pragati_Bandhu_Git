@@ -42,7 +42,11 @@
     "title": "Attendance", "hint": "Everyone is present unless you mark otherwise.", "present": "Present", "halfDay": "Half day", "absent": "Absent",
     "hours": "Hours", "hoursValue": "{{hours}} h", "hoursPrompt": "Hours worked", "hoursInvalid": "Enter hours between 0 and 24.",
     "weeklyOff": "Weekly off", "selected": "{{count}} selected", "markSelected": "Mark selected as", "clearSelection": "Clear",
-    "noWorkers": "No workers yet. Add workers in the Workers tab.", "selectHint": "Long-press to select several workers."
+    "noWorkers": "No workers yet. Add workers in the Workers tab.", "selectHint": "Long-press to select several workers.",
+    "worked": "Worked", "workedHalf": "Worked half", "notWorked": "Not worked", "dayOffHalf": "{{name}} · half day",
+    "overtime": "+ Overtime", "overtimeHours": "Overtime hours", "overtimeValue": "OT {{hours}} h",
+    "inclOvertime": "incl. {{hours}} h OT", "overtimeInvalid": "Enter 0 to 16 hours.",
+    "customAmount": "Custom amount (₹, optional)", "customAmountInvalid": "Enter a valid amount."
   },
   "workers": { "add": "Add worker", "due": "Wage due", "advance": "Advance", "overpaid": "Overpaid", "showLeft": "Show workers who left", "left": "Left", "empty": "No workers yet. Add one.", "emptyTitle": "No workers" },
   "worker": {
@@ -52,7 +56,7 @@
     "noHistory": "No money entries yet.", "noHistoryTitle": "No money history", "noPhone": "No phone", "joined": "Joined {{date}}", "leftOn": "Left {{date}}", "prevMonth": "Previous month", "nextMonth": "Next month",
     "notFound": "Worker not found."
   },
-  "entryType": { "advance": "Advance", "repayment": "Repayment", "writeoff": "Write-off", "payment": "Wage payment" },
+  "entryType": { "advance": "Advance", "repayment": "Repayment", "writeoff": "Write-off", "payment": "Wage payment", "bonus": "Bonus", "deduction": "Deduction" },
   "mode": { "cash": "Cash", "upi": "UPI", "bank": "Bank" },
   "workerForm": {
     "titleNew": "Add worker", "titleEdit": "Edit worker", "name": "Name", "phone": "Phone (optional)", "joiningDate": "Joining date",
@@ -64,7 +68,7 @@
     "leftBeforeJoin": "Last working day can't be before joining."
   },
   "money": {
-    "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.",
+    "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.", "noteRequiredDeduction": "A reason is required for a deduction.",
     "amountInvalid": "Enter an amount above ₹0.", "exceedsAdvance": "This is more than the {{outstanding}} advance outstanding.", "notePlaceholder": "Optional notes"
   },
   "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding.", "emptyTitle": "No advances" },
@@ -74,7 +78,7 @@
     "pending": "{{count}} waiting to sync", "lastSync": "Last synced {{time}}", "neverSynced": "Not synced yet", "syncing": "Syncing…",
     "syncNow": "Sync now", "issues": "{{count}} entries didn't sync", "logout": "Log out",
     "logoutConfirm": "{{count}} entries on this phone haven't synced yet. They will sync when you log in again on this phone. Log out?",
-    "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}", "synced": "Synced", "issuesChip": "{{count}} issues", "pendingChip": "{{count}} pending", "tapToResolve": "Tap to resolve or retry", "actionNeeded": "Action needed", "changeLanguage": "Change app language"
+    "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}", "synced": "Synced", "issuesChip": "{{count}} issues", "pendingChip": "{{count}} pending", "tapToResolve": "Tap to resolve or retry", "actionNeeded": "Action needed", "changeLanguage": "Change app language", "holidays": "Holidays"
   },
   "staff": {
     "titleNew": "Add staff", "titleEdit": "Edit staff", "name": "Name", "pin": "PIN (4 digits)", "pinConfirm": "Repeat PIN",
@@ -97,7 +101,28 @@
       "daily": "{{days}} days × {{rate}}",
       "weekly": "{{days}} days × {{rate}} ÷ 7",
       "monthly": "{{month}}: {{base}} − {{deductionDays}} days × {{perDay}}",
-      "monthlyPartial": "{{month}} ({{eligibleDays}} days): {{base}} − {{deductionDays}} days × {{perDay}}"
+      "monthlyPartial": "{{month}} ({{eligibleDays}} days): {{base}} − {{deductionDays}} days × {{perDay}}",
+      "daysOffPaid": "{{days}} days off (paid)", "daysOffUnpaid": "{{days}} days off (unpaid)",
+      "offdayWork": "{{days}} days worked on a day off: {{amount}}", "overtime": "{{hours}} overtime hours: {{amount}}",
+      "bonus": "Bonus: {{amount}}", "deduction": "Deduction: −{{amount}}"
     }
+  },
+  "daysOff": {
+    "title": "Holidays", "add": "Add holiday", "edit": "Edit holiday", "name": "Name", "nameRequired": "Enter a name.",
+    "date": "Date", "portion": "Full or half day", "full": "Full day", "half": "Half day", "payRule": "Pay",
+    "byBasis": "As per pay type", "allPaid": "Paid for all", "allUnpaid": "Unpaid for all", "active": "Active",
+    "removed": "Removed", "empty": "No holidays added yet.", "holiday": "Holiday", "closure": "Shop closed",
+    "upcoming": "Upcoming", "past": "Past", "suggestions": "Suggestions",
+    "suggest": { "durgaPuja": "Durga Puja", "poilaBoishakh": "Poila Boishakh", "eid": "Eid", "diwali": "Diwali", "holi": "Holi",
+      "republicDay": "Republic Day", "independenceDay": "Independence Day", "christmas": "Christmas" }
+  },
+  "closure": {
+    "button": "Shop closed today", "title": "Mark shop closed", "reason": "Reason", "bandh": "Bandh", "rain": "Rain",
+    "powerCut": "Power cut", "confirm": "Mark closed", "reasonRequired": "Enter a reason."
+  },
+  "extraPay": {
+    "title": "Extra pay", "offdayMultiplier": "Work on a day off pays", "otMode": "Overtime pay",
+    "multiplierMode": "× hourly pay", "fixedMode": "Fixed ₹ per hour", "otMultiplier": "Overtime rate",
+    "otRate": "₹ per overtime hour", "otRateRequired": "Enter the ₹ per hour.", "useProperty": "Property setting"
   }
 }

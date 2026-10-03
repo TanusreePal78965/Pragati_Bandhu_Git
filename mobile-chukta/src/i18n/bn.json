@@ -42,7 +42,11 @@
     "title": "হাজিরা", "hint": "আলাদা করে না দিলে সবাই উপস্থিত ধরা হবে।", "present": "উপস্থিত", "halfDay": "অর্ধেক দিন", "absent": "অনুপস্থিত",
     "hours": "ঘণ্টা", "hoursValue": "{{hours}} ঘণ্টা", "hoursPrompt": "কত ঘণ্টা কাজ", "hoursInvalid": "০ থেকে ২৪-এর মধ্যে ঘণ্টা লিখুন।",
     "weeklyOff": "সাপ্তাহিক ছুটি", "selected": "{{count}} জন বাছা হয়েছে", "markSelected": "বাছাইদের দিন", "clearSelection": "মুছুন",
-    "noWorkers": "এখনও কোনো কর্মী নেই। কর্মী ট্যাবে কর্মী যোগ করুন।", "selectHint": "একসাথে কয়েকজনকে বাছতে লম্বা চাপ দিন।"
+    "noWorkers": "এখনও কোনো কর্মী নেই। কর্মী ট্যাবে কর্মী যোগ করুন।", "selectHint": "একসাথে কয়েকজনকে বাছতে লম্বা চাপ দিন।",
+    "worked": "কাজ করেছে", "workedHalf": "অর্ধেক কাজ", "notWorked": "কাজ করেনি", "dayOffHalf": "{{name}} · অর্ধেক দিন",
+    "overtime": "+ ওভারটাইম", "overtimeHours": "ওভারটাইম ঘণ্টা", "overtimeValue": "ওটি {{hours}} ঘণ্টা",
+    "inclOvertime": "{{hours}} ঘণ্টা ওটি সহ", "overtimeInvalid": "০ থেকে ১৬ ঘণ্টা লিখুন।",
+    "customAmount": "নিজের টাকার পরিমাণ (₹, ঐচ্ছিক)", "customAmountInvalid": "সঠিক টাকার পরিমাণ লিখুন।"
   },
   "workers": { "add": "কর্মী যোগ করুন", "due": "বাকি মজুরি", "advance": "অগ্রিম", "overpaid": "বেশি দেওয়া", "showLeft": "চলে যাওয়া কর্মীদের দেখান", "left": "চলে গেছে", "empty": "এখনও কোনো কর্মী নেই। একজন যোগ করুন।", "emptyTitle": "কোনো কর্মী নেই" },
   "worker": {
@@ -52,7 +56,7 @@
     "noHistory": "এখনও কোনো টাকার এন্ট্রি নেই।", "noHistoryTitle": "টাকার হিসাব নেই", "noPhone": "ফোন নেই", "joined": "যোগ দিয়েছে {{date}}", "leftOn": "চলে গেছে {{date}}", "prevMonth": "আগের মাস", "nextMonth": "পরের মাস",
     "notFound": "কর্মী পাওয়া যায়নি।"
   },
-  "entryType": { "advance": "অগ্রিম", "repayment": "অগ্রিম ফেরত", "writeoff": "মাফ", "payment": "মজুরি দেওয়া" },
+  "entryType": { "advance": "অগ্রিম", "repayment": "অগ্রিম ফেরত", "writeoff": "মাফ", "payment": "মজুরি দেওয়া", "bonus": "বোনাস", "deduction": "কাটা" },
   "mode": { "cash": "নগদ", "upi": "UPI", "bank": "ব্যাংক" },
   "workerForm": {
     "titleNew": "কর্মী যোগ করুন", "titleEdit": "কর্মীর তথ্য বদলান", "name": "নাম", "phone": "ফোন (ঐচ্ছিক)", "joiningDate": "যোগদানের তারিখ",
@@ -64,7 +68,7 @@
     "leftBeforeJoin": "শেষ কাজের দিন যোগদানের আগে হতে পারে না।"
   },
   "money": {
-    "amount": "টাকা (₹)", "date": "তারিখ", "mode": "কীভাবে দেওয়া", "note": "নোট", "noteRequired": "মাফ করার জন্য নোট লিখতে হবে।",
+    "amount": "টাকা (₹)", "date": "তারিখ", "mode": "কীভাবে দেওয়া", "note": "নোট", "noteRequired": "মাফ করার জন্য নোট লিখতে হবে।", "noteRequiredDeduction": "কাটার কারণ লিখতে হবে।",
     "amountInvalid": "₹০-এর বেশি টাকা লিখুন।", "exceedsAdvance": "বাকি অগ্রিম {{outstanding}}-এর চেয়ে এই টাকার পরিমাণ বেশি।", "notePlaceholder": "ঐচ্ছিক নোট"
   },
   "advances": { "title": "বাকি অগ্রিম", "total": "মোট বাকি", "empty": "কোনো অগ্রিম বাকি নেই।", "emptyTitle": "কোনো অগ্রিম নেই" },
@@ -74,7 +78,7 @@
     "pending": "{{count}}টি সিঙ্কের অপেক্ষায়", "lastSync": "শেষ সিঙ্ক {{time}}", "neverSynced": "এখনও সিঙ্ক হয়নি", "syncing": "সিঙ্ক হচ্ছে…",
     "syncNow": "এখন সিঙ্ক করুন", "issues": "{{count}}টি এন্ট্রি সিঙ্ক হয়নি", "logout": "লগআউট",
     "logoutConfirm": "এই ফোনের {{count}}টি এন্ট্রি এখনও সিঙ্ক হয়নি। এই ফোনে আবার লগইন করলে সিঙ্ক হবে। লগআউট করবেন?",
-    "loggedInAs": "{{name}} হিসাবে লগইন", "ownerAccount": "মালিক {{phone}}", "synced": "সিঙ্ক হয়েছে", "issuesChip": "{{count}}টি সমস্যা", "pendingChip": "{{count}}টি বাকি", "tapToResolve": "ঠিক করতে বা আবার চেষ্টা করতে ট্যাপ করুন", "actionNeeded": "কাজ বাকি", "changeLanguage": "অ্যাপের ভাষা বদলান"
+    "loggedInAs": "{{name}} হিসাবে লগইন", "ownerAccount": "মালিক {{phone}}", "synced": "সিঙ্ক হয়েছে", "issuesChip": "{{count}}টি সমস্যা", "pendingChip": "{{count}}টি বাকি", "tapToResolve": "ঠিক করতে বা আবার চেষ্টা করতে ট্যাপ করুন", "actionNeeded": "কাজ বাকি", "changeLanguage": "অ্যাপের ভাষা বদলান", "holidays": "ছুটির দিন"
   },
   "staff": {
     "titleNew": "স্টাফ যোগ করুন", "titleEdit": "স্টাফের তথ্য বদলান", "name": "নাম", "pin": "পিন (৪ সংখ্যা)", "pinConfirm": "পিন আবার লিখুন",
@@ -97,7 +101,28 @@
       "daily": "{{days}} দিন × {{rate}}",
       "weekly": "{{days}} দিন × {{rate}} ÷ ৭",
       "monthly": "{{month}}: {{base}} − {{deductionDays}} দিন × {{perDay}}",
-      "monthlyPartial": "{{month}} ({{eligibleDays}} দিন): {{base}} − {{deductionDays}} দিন × {{perDay}}"
+      "monthlyPartial": "{{month}} ({{eligibleDays}} দিন): {{base}} − {{deductionDays}} দিন × {{perDay}}",
+      "daysOffPaid": "{{days}} দিন ছুটি (বেতনসহ)", "daysOffUnpaid": "{{days}} দিন ছুটি (বেতন ছাড়া)",
+      "offdayWork": "ছুটির দিনে {{days}} দিন কাজ: {{amount}}", "overtime": "{{hours}} ঘণ্টা ওভারটাইম: {{amount}}",
+      "bonus": "বোনাস: {{amount}}", "deduction": "কাটা: −{{amount}}"
     }
+  },
+  "daysOff": {
+    "title": "ছুটির দিন", "add": "ছুটি যোগ করুন", "edit": "ছুটি বদলান", "name": "নাম", "nameRequired": "নাম লিখুন।",
+    "date": "তারিখ", "portion": "পুরো না অর্ধেক দিন", "full": "পুরো দিন", "half": "অর্ধেক দিন", "payRule": "বেতন",
+    "byBasis": "বেতনের ধরন অনুযায়ী", "allPaid": "সবার জন্য বেতনসহ", "allUnpaid": "সবার জন্য বেতন ছাড়া", "active": "চালু",
+    "removed": "বাদ দেওয়া", "empty": "এখনও কোনো ছুটি যোগ করা হয়নি।", "holiday": "ছুটি", "closure": "দোকান বন্ধ",
+    "upcoming": "আসন্ন", "past": "আগের", "suggestions": "পরামর্শ",
+    "suggest": { "durgaPuja": "দুর্গাপূজা", "poilaBoishakh": "পয়লা বৈশাখ", "eid": "ঈদ", "diwali": "দীপাবলি", "holi": "দোল",
+      "republicDay": "প্রজাতন্ত্র দিবস", "independenceDay": "স্বাধীনতা দিবস", "christmas": "বড়দিন" }
+  },
+  "closure": {
+    "button": "আজ দোকান বন্ধ", "title": "দোকান বন্ধ চিহ্নিত করুন", "reason": "কারণ", "bandh": "বনধ", "rain": "বৃষ্টি",
+    "powerCut": "লোডশেডিং", "confirm": "বন্ধ চিহ্নিত করুন", "reasonRequired": "কারণ লিখুন।"
+  },
+  "extraPay": {
+    "title": "অতিরিক্ত বেতন", "offdayMultiplier": "ছুটির দিনে কাজের বেতন", "otMode": "ওভারটাইমের বেতন",
+    "multiplierMode": "× ঘণ্টার বেতন", "fixedMode": "ঘণ্টায় নির্দিষ্ট ₹", "otMultiplier": "ওভারটাইমের হার",
+    "otRate": "ওভারটাইমের প্রতি ঘণ্টা ₹", "otRateRequired": "ঘণ্টায় কত ₹ লিখুন।", "useProperty": "প্রপার্টির সেটিং"
   }
 }
