@@ -91,5 +91,7 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
   const advanceOutstandingPaise = activeMoneyRows(input.advances).reduce(
     (sum, a) => sum + (a.type === 'advance' ? a.amount_paise : -a.amount_paise), 0);
 
-  return { earnedPaise, paidPaise, wageDuePaise: earnedPaise - paidPaise, advanceOutstandingPaise, explanation };
+  return { earnedPaise, paidPaise, wageDuePaise: earnedPaise - paidPaise, advanceOutstandingPaise, explanation,
+    basePaise: earnedPaise, offdayExtraPaise: 0, overtimePaise: 0, bonusPaise: 0, deductionPaise: 0,
+  };
 }

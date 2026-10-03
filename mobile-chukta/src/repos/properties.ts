@@ -11,6 +11,7 @@ export async function createProperty(ctx: RepoContext, input: { shopId: string; 
   const row: Property = {
     id: ctx.newId(), shop_id: input.shopId, name: input.name.trim(), address: input.address ?? null, is_active: 1,
     default_pay_basis: 'daily', default_attendance_mode: 'day', shift_hours: 8, weekly_off: 0, monthly_divisor: 'calendar',
+    offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null,
     created_at: ctx.now().toISOString(), server_updated_at: null,
   };
   await insertAndEnqueue(ctx, 'properties', row);
