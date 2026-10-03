@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { initI18n } from '../i18n';
 import { addAdvance } from '../repos/money';
+import * as settlements from '../repos/settlements';
 import { upsertLocal } from '../repos/write';
 import { SettleScreen } from '../screens/SettleScreen';
 import { property, worker } from './helpers/fixtures';
@@ -46,12 +47,19 @@ test('settling writes the rows after confirming', async () => {
 });
 
 test('recovering more than the advance is refused', async () => {
+  const alert = jest.spyOn(Alert, 'alert');
   const s = await seeded();
   await addAdvance(s.repo, { propertyId: 'p1', workerId: 'w1', type: 'advance', amountPaise: 30000, date: '2026-09-01', mode: 'cash' });
   renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
   fireEvent.changeText(await screen.findByTestId('settle-recover'), '500');
   fireEvent.press(screen.getByTestId('settle-save'));
   expect(await screen.findByText('Cannot take back more than the advance.')).toBeTruthy();
+  expect(alert).not.toHaveBeenCalled();
+  expect(await s.db.getAllAsync('select id from settlements')).toEqual([]);
+  // Editing the field clears its error.
+  fireEvent.changeText(screen.getByTestId('settle-recover'), '100');
+  expect(screen.queryByText('Cannot take back more than the advance.')).toBeNull();
+  alert.mockRestore();
 });
 
 test('staff cannot settle', async () => {
@@ -59,4 +67,49 @@ test('staff cannot settle', async () => {
   renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
   expect(await screen.findByText('Only the owner can do this.')).toBeTruthy();
   expect(screen.queryByTestId('settle-save')).toBeNull();
+});
+
+async function confirmSave() {
+  const alert = jest.spyOn(Alert, 'alert');
+  fireEvent.press(await screen.findByTestId('settle-save'));
+  const buttons = alert.mock.calls[0][2]!;
+  alert.mockRestore();
+  await act(async () => { buttons[buttons.length - 1].onPress!(); });
+}
+
+test('a changed period shows the notice and lets the owner try again', async () => {
+  const s = await seeded();
+  const spy = jest.spyOn(settlements, 'settleWorker').mockRejectedValueOnce(new Error('period changed'));
+  try {
+    renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
+    await confirmSave();
+    expect(await screen.findByText('This period changed. Please check the figures again.')).toBeTruthy();
+    expect(screen.getByTestId('settle-save').props.accessibilityState.disabled).toBe(false);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test('a failed save shows the error and re-enables the button', async () => {
+  const s = await seeded();
+  const spy = jest.spyOn(settlements, 'settleWorker').mockRejectedValueOnce(new Error('disk full'));
+  try {
+    renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
+    await confirmSave();
+    expect(await screen.findByText('Could not save on this phone. Please try again.')).toBeTruthy();
+    expect(screen.getByTestId('settle-save').props.accessibilityState.disabled).toBe(false);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test('paying nothing hides the mode and writes no payment', async () => {
+  const s = await seeded();
+  renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
+  expect(await screen.findByTestId('settle-mode-cash')).toBeTruthy();
+  fireEvent.changeText(screen.getByTestId('settle-paid'), '');
+  expect(screen.queryByTestId('settle-mode-cash')).toBeNull();
+  await confirmSave();
+  await waitFor(async () => expect(await s.db.getAllAsync('select paid_now_paise from settlements')).toEqual([{ paid_now_paise: 0 }]));
+  expect(await s.db.getAllAsync('select id from wage_payments')).toEqual([]);
 });
