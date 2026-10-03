@@ -80,6 +80,7 @@ declare
   v_prop   uuid;
   v_worker uuid;
   v_void   uuid;
+  v_same_date boolean;
 begin
   select w.property_id into v_prop from chukta.workers w where w.id = new.worker_id;
   if v_prop is distinct from new.property_id then
@@ -87,9 +88,18 @@ begin
   end if;
   if tg_table_name in ('advance_entries', 'wage_payments', 'earning_adjustments', 'settlements') then
     if new.voids_id is not null then
-      execute format('select property_id, worker_id, voids_id from chukta.%I where id = $1', tg_table_name)
-        into v_prop, v_worker, v_void using new.voids_id;
-      if v_prop is distinct from new.property_id or v_worker is distinct from new.worker_id or v_void is not null then
+      if tg_table_name = 'settlements' then
+        -- A settlement void copies its period; check_settlement_order enforces that.
+        execute format('select property_id, worker_id, voids_id from chukta.%I where id = $1', tg_table_name)
+          into v_prop, v_worker, v_void using new.voids_id;
+        v_same_date := true;
+      else
+        -- A void must carry its target's date, otherwise it could slip past the period lock.
+        execute format('select property_id, worker_id, voids_id, date = $2 from chukta.%I where id = $1', tg_table_name)
+          into v_prop, v_worker, v_void, v_same_date using new.voids_id, (to_jsonb(new) ->> 'date')::date;
+      end if;
+      if v_prop is distinct from new.property_id or v_worker is distinct from new.worker_id or v_void is not null
+         or v_same_date is distinct from true then
         raise exception 'invalid void target %', new.voids_id using errcode = '23514';
       end if;
     end if;
@@ -120,6 +130,8 @@ declare
   v_last date;
   v_join date;
 begin
+  -- Serialise settles/unlocks per worker so two concurrent inserts cannot both pass the contiguity check.
+  perform pg_advisory_xact_lock(hashtextextended('chukta.settlement:' || new.worker_id::text, 0));
   if new.voids_id is not null then
     if not exists (select 1 from chukta.settlements t where t.id = new.voids_id
                    and t.period_start = new.period_start and t.period_end = new.period_end) then
@@ -159,12 +171,17 @@ declare
   v_link uuid;
 begin
   if tg_table_name = 'days_off' then
+    -- Shared lock per worker: waits for an in-flight settle, and blocks a settle until this insert commits.
+    perform pg_advisory_xact_lock_shared(hashtextextended('chukta.settlement:' || w.id::text, 0))
+      from chukta.workers w where w.property_id = new.property_id;
     if exists (select 1 from chukta.workers w
                where w.property_id = new.property_id and chukta.settled_period_id(w.id, new.date) is not null) then
       raise exception 'period is settled' using errcode = '23514';
     end if;
     return new;
   end if;
+  -- Shared lock: waits for an in-flight settle of this worker, and blocks a settle until this insert commits.
+  perform pg_advisory_xact_lock_shared(hashtextextended('chukta.settlement:' || new.worker_id::text, 0));
   v_id := chukta.settled_period_id(new.worker_id, new.date);
   if v_id is null then
     return new;
@@ -206,6 +223,14 @@ language plpgsql set search_path = '' as $$
 begin
   if new.settlement_id is not null and chukta.jwt_role() = 'staff' then
     raise exception 'only the owner can settle' using errcode = '42501';
+  end if;
+  -- The link must point at an active settlement of the same worker and property.
+  if new.settlement_id is not null and not exists (
+       select 1 from chukta.settlements s
+       where s.id = new.settlement_id and s.worker_id = new.worker_id and s.property_id = new.property_id
+         and s.voids_id is null
+         and not exists (select 1 from chukta.settlements v where v.voids_id = s.id)) then
+    raise exception 'invalid settlement link' using errcode = '23514';
   end if;
   return new;
 end $$;

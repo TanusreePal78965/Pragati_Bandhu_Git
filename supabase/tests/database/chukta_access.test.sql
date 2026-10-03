@@ -54,7 +54,7 @@ select throws_ok($$ insert into chukta.workers (id, property_id, name, pay_basis
   values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'X', 'daily', 40000, '2026-09-05', 'd0000000-0000-0000-0000-00000000000b', 'owner') $$, '42501', null, 'created_by cannot be spoofed');
 select throws_ok($$ delete from chukta.workers where id = 'd4000000-0000-0000-0000-00000000000a' $$, '42501', null, 'owner cannot delete');
 select lives_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, voids_id, created_by_role)
-  values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-03', 'd5000000-0000-0000-0000-00000000000a', 'owner') $$, 'owner can void');
+  values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-02', 'd5000000-0000-0000-0000-00000000000a', 'owner') $$, 'owner can void');
 select throws_ok($$ update chukta.workers set property_id = 'd2000000-0000-0000-0000-00000000000b' where id = 'd4000000-0000-0000-0000-00000000000a' $$,
   '42501', null, 'owner cannot move a worker to another property');
 select throws_ok($$ update chukta.workers set created_by = 'd0000000-0000-0000-0000-00000000000b' where id = 'd4000000-0000-0000-0000-00000000000a' $$,
@@ -70,7 +70,7 @@ select ok((select count(*) from chukta.workers where property_id = 'd2000000-000
 select lives_ok($$ insert into chukta.attendance_entries (id, property_id, worker_id, date, status, created_by_role)
   values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', '2026-09-04', 'absent', 'staff') $$, 'staff marks attendance');
 select throws_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, voids_id, created_by_role)
-  values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-03', 'd5000000-0000-0000-0000-00000000000a', 'staff') $$, '42501', null, 'staff cannot void');
+  values (gen_random_uuid(), 'd2000000-0000-0000-0000-00000000000a', 'd4000000-0000-0000-0000-00000000000a', 'advance', 100000, '2026-09-02', 'd5000000-0000-0000-0000-00000000000a', 'staff') $$, '42501', null, 'staff cannot void');
 select throws_ok($$ update chukta.advance_entries set amount_paise = 1 $$, '42501', null, 'money rows are not updatable');
 select throws_ok($$ select pin_hash from chukta.staff_users $$, '42501', null, 'pin_hash is never readable');
 select throws_ok($$ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by_role)

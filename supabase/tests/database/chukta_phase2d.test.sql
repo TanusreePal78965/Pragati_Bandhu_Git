@@ -16,7 +16,12 @@ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joinin
   ('f4000000-0000-0000-0000-00000000000a', 'f2000000-0000-0000-0000-00000000000a', 'WA', 'daily', 50000, '2026-09-01', 'f0000000-0000-0000-0000-00000000000a', 'owner');
 insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by, created_by_role) values
   ('f4000000-0000-0000-0000-00000000000b', 'f2000000-0000-0000-0000-00000000000b', 'WB', 'daily', 50000, '2026-09-01', 'f0000000-0000-0000-0000-00000000000b', 'owner');
-select plan(24);
+insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by, created_by_role) values
+  ('f4000000-0000-0000-0000-0000000000a2', 'f2000000-0000-0000-0000-00000000000a', 'WA2', 'daily', 50000, '2026-09-01', 'f0000000-0000-0000-0000-00000000000a', 'owner');
+-- Must exist before the first settlement, which would lock 2026-09-02.
+insert into chukta.days_off (id, property_id, date, name, kind, portion, pay_rule, created_by, created_by_role) values
+  ('f6000000-0000-0000-0000-00000000000a', 'f2000000-0000-0000-0000-00000000000a', '2026-09-02', 'Fixture holiday', 'holiday', 'full', 'by_basis', 'f0000000-0000-0000-0000-00000000000a', 'owner');
+select plan(34);
 
 
 -- as postgres: order + overlap
@@ -71,6 +76,21 @@ select throws_ok($$ insert into chukta.wage_payments (id, property_id, worker_id
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
     250000, '2026-09-05', 'f7000000-0000-0000-0000-000000000001', 'f8000000-0000-0000-0000-000000000001', 'owner') $$,
   '23514', null, 'a void inside a settled period is locked even when linked');
+select throws_ok($$ insert into chukta.wage_payments (id, property_id, worker_id, amount_paise, date, voids_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    250000, '2026-09-07', 'f8000000-0000-0000-0000-000000000001', 'owner') $$,
+  '23514', null, 'a void must carry its target date');
+select lives_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, settlement_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    'repayment', 100, '2026-09-05', 'f7000000-0000-0000-0000-000000000001', 'owner') $$, 'repayment linked to its settlement is allowed');
+select throws_ok($$ insert into chukta.wage_payments (id, property_id, worker_id, amount_paise, date, settlement_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-0000000000a2',
+    100, '2026-09-08', 'f7000000-0000-0000-0000-000000000001', 'owner') $$,
+  '23514', null, 'a payment cannot link to another worker settlement');
+select throws_ok($$ update chukta.days_off set is_active = false where id = 'f6000000-0000-0000-0000-00000000000a' $$,
+  '23514', null, 'deactivating a day off on a settled date is locked');
+select lives_ok($$ update chukta.days_off set name = 'Renamed' where id = 'f6000000-0000-0000-0000-00000000000a' $$,
+  'renaming a day off on a settled date is allowed');
 select throws_ok($$ insert into chukta.advance_entries (id, property_id, worker_id, type, amount_paise, date, settlement_id, created_by_role)
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
     'advance', 100, '2026-09-05', 'f7000000-0000-0000-0000-000000000001', 'owner') $$,
@@ -94,19 +114,46 @@ select throws_ok($$ insert into chukta.settlements (id, property_id, worker_id, 
 select throws_ok($$ insert into chukta.wage_payments (id, property_id, worker_id, amount_paise, date, settlement_id, created_by_role)
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
     100, '2026-09-08', 'f7000000-0000-0000-0000-000000000001', 'staff') $$, '42501', null, 'staff cannot link a payment to a settlement');
+select throws_ok($$ insert into chukta.days_off (id, property_id, date, name, kind, portion, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', '2026-09-04', 'Bandh', 'closure', 'full', 'staff') $$,
+  '23514', null, 'closure on a settled date is locked');
 select throws_ok($$ update chukta.workers set pay_cycle = 'monthly' where id = 'f4000000-0000-0000-0000-00000000000a' $$,
   '42501', null, 'staff cannot change the pay cycle');
 select is((select count(*)::int from chukta.settlements where worker_id = 'f4000000-0000-0000-0000-00000000000a'), 1, 'staff can read settlements');
 
--- owner A again: unlock
+-- owner A again: settle next week, unlock in order
 select set_config('request.jwt.claims', json_build_object('sub', 'f0000000-0000-0000-0000-00000000000a', 'role', 'authenticated',
   'app', 'chukta', 'shop_id', 'f1000000-0000-0000-0000-00000000000a')::text, true);
 select lives_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
     opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
+    paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, created_by_role)
+  values ('f7000000-0000-0000-0000-000000000002', 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    '2026-09-06', '2026-09-12', '2026-09-13', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'owner') $$, 'owner settles the next week');
+select throws_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
+    opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
     paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, voids_id, created_by_role)
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
-    '2026-09-01', '2026-09-05', '2026-09-08', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    'f7000000-0000-0000-0000-000000000001', 'owner') $$, 'owner unlocks by voiding');
+    '2026-09-01', '2026-09-05', '2026-09-14', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'f7000000-0000-0000-0000-000000000001', 'owner') $$, '23514', null, 'unlock newer settlements first');
+select lives_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
+    opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
+    paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, voids_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    '2026-09-06', '2026-09-12', '2026-09-14', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'f7000000-0000-0000-0000-000000000002', 'owner') $$, 'owner unlocks the latest settlement');
+select throws_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
+    opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
+    paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, voids_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    '2026-09-06', '2026-09-12', '2026-09-14', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'f7000000-0000-0000-0000-000000000002', 'owner') $$, '23514', null, 'settlement already unlocked');
+select lives_ok($$ insert into chukta.settlements (id, property_id, worker_id, period_start, period_end, settled_on, pay_basis, rate_paise,
+    opening_balance_paise, base_paise, offday_extra_paise, overtime_paise, bonus_paise, deduction_paise, earned_paise,
+    paid_in_period_paise, paid_now_paise, advance_recovered_paise, advance_after_paise, closing_balance_paise, voids_id, created_by_role)
+  values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a',
+    '2026-09-01', '2026-09-05', '2026-09-15', 'daily', 50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'f7000000-0000-0000-0000-000000000001', 'owner') $$, 'owner unlocks the first settlement once newer ones are void');
 select lives_ok($$ insert into chukta.attendance_entries (id, property_id, worker_id, date, status, created_by_role)
   values (gen_random_uuid(), 'f2000000-0000-0000-0000-00000000000a', 'f4000000-0000-0000-0000-00000000000a', '2026-09-03', 'absent', 'owner') $$,
   'unlocked period accepts entries again');
