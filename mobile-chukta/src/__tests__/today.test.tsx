@@ -46,11 +46,21 @@ test('hours mode: valid hours are saved, invalid hours show an error', async () 
   await waitFor(async () => expect((await rowsFor(s, 'w2')).map((r) => [r.status, r.hours])).toEqual([['hours', 5.5]]));
 });
 
-test('weekly-off workers show Weekly off, with work-on-a-day-off controls and no overtime link', async () => {
+test('weekly-off workers show Weekly off, with work-on-a-day-off controls and an overtime link', async () => {
   const s = await seeded();
   renderScreen('Tabs', TodayScreen, s);
   expect(await screen.findByText('Weekly off')).toBeTruthy();
-  expect(screen.getByTestId('status-w3-absent')).toBeTruthy(); expect(screen.queryByTestId('ot-open-w3')).toBeNull();
+  expect(screen.getByTestId('status-w3-absent')).toBeTruthy(); expect(screen.getByTestId('ot-open-w3')).toBeTruthy();
+});
+
+test('overtime can be saved on a weekly-off row', async () => {
+  const s = await seeded();
+  renderScreen('Tabs', TodayScreen, s);
+  fireEvent.press(await screen.findByTestId('ot-open-w3'));
+  fireEvent.changeText(screen.getByTestId('ot-hours-w3'), '2');
+  fireEvent.press(screen.getByTestId('ot-save-w3'));
+  await waitFor(async () => expect(await s.db.getAllAsync('select worker_id, hours from overtime_entries'))
+    .toEqual([{ worker_id: 'w3', hours: 2 }]));
 });
 
 test('bulk: long-press to select, then mark all selected half day', async () => {

@@ -451,7 +451,7 @@ function AttendanceRow({
         </View>
       ) : null}
       <ErrorText>{hoursError ? t('today.hoursInvalid') : null}</ErrorText>
-      {row.isOff ? null : otOpen ? (
+      {otOpen ? (
         <View style={styles.overtime}>
           <Field
             label={t('today.overtimeHours')}
