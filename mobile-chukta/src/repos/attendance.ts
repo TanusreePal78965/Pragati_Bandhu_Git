@@ -1,6 +1,7 @@
 import type { SqlDb } from '../db/sqlDb';
 import type { AttendanceEntry, AttendanceStatus } from '../domain/types';
 import type { RepoContext } from './context';
+import { assertWorkerDateOpen } from './lockGuard';
 import { insertAndEnqueue } from './write';
 
 export async function markAttendance(
@@ -11,6 +12,7 @@ export async function markAttendance(
     throw new Error('hours between 0 and 24 required for status hours');
   }
   if ((input.customAmountPaise ?? null) !== null && ctx.role !== 'owner') throw new Error('only the owner can set a custom amount');
+  await assertWorkerDateOpen(ctx.db, input.workerId, input.date);
   const row: AttendanceEntry = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, date: input.date, status: input.status,
     hours: input.status === 'hours' ? input.hours! : null, note: input.note ?? null,

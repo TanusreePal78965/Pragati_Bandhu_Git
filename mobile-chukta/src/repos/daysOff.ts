@@ -1,6 +1,7 @@
 import type { SqlDb } from '../db/sqlDb';
 import type { DayOff, DayOffKind, DayOffPayRule, DayOffPortion } from '../domain/types';
 import type { RepoContext } from './context';
+import { assertPropertyDateOpen } from './lockGuard';
 import { insertAndEnqueue, updateAndEnqueue } from './write';
 
 export type DayOffPatch = Partial<Pick<DayOff, 'name' | 'kind' | 'portion' | 'pay_rule' | 'is_active'>>;
@@ -13,6 +14,7 @@ export async function addDayOff(
   if (ctx.role !== 'owner' && input.kind !== 'closure') throw new Error('only the owner can add holidays');
   if (ctx.role !== 'owner' && input.payRule !== 'by_basis') throw new Error('only the owner can choose how a day off is paid');
   if (!input.name.trim()) throw new Error('name is required');
+  await assertPropertyDateOpen(ctx.db, input.propertyId, input.date);
   const row: DayOff = {
     id: ctx.newId(), property_id: input.propertyId, date: input.date, name: input.name.trim(), kind: input.kind,
     portion: input.portion, pay_rule: input.payRule, is_active: 1,
@@ -28,6 +30,10 @@ export async function updateDayOff(ctx: RepoContext, id: string, patch: DayOffPa
     const name = patch.name.trim();
     if (!name) throw new Error('name is required');
     patch = { ...patch, name };
+  }
+  if ('is_active' in patch || 'portion' in patch || 'pay_rule' in patch) {
+    const row = await getDayOff(ctx.db, id);
+    if (row) await assertPropertyDateOpen(ctx.db, row.property_id, row.date);
   }
   await updateAndEnqueue(ctx, 'days_off', id, patch);
 }

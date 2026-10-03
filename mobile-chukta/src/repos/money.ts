@@ -1,6 +1,7 @@
 import type { SqlDb } from '../db/sqlDb';
 import type { AdjustmentType, AdvanceEntry, AdvanceType, EarningAdjustment, PaymentMode, WagePayment } from '../domain/types';
 import type { RepoContext } from './context';
+import { assertWorkerDateOpen } from './lockGuard';
 import { insertAndEnqueue } from './write';
 
 type Base = { propertyId: string; workerId: string; amountPaise: number; date: string; mode?: PaymentMode; note?: string };
@@ -16,6 +17,7 @@ function audit(ctx: RepoContext) {
 export async function addAdvance(ctx: RepoContext, input: Base & { type: AdvanceType }): Promise<AdvanceEntry> {
   assertAmount(input.amountPaise);
   if (input.type === 'writeoff' && !input.note?.trim()) throw new Error('a note is required for a write-off');
+  await assertWorkerDateOpen(ctx.db, input.workerId, input.date);
   const row: AdvanceEntry = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, type: input.type, amount_paise: input.amountPaise,
     date: input.date, mode: input.mode ?? null, note: input.note ?? null, voids_id: null, ...audit(ctx),
@@ -26,6 +28,7 @@ export async function addAdvance(ctx: RepoContext, input: Base & { type: Advance
 
 export async function addPayment(ctx: RepoContext, input: Base): Promise<WagePayment> {
   assertAmount(input.amountPaise);
+  await assertWorkerDateOpen(ctx.db, input.workerId, input.date);
   const row: WagePayment = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, amount_paise: input.amountPaise,
     date: input.date, mode: input.mode ?? null, note: input.note ?? null, voids_id: null, ...audit(ctx),
@@ -41,9 +44,11 @@ async function voidRow<T extends AdvanceEntry | WagePayment | EarningAdjustment>
   const target = await ctx.db.getFirstAsync<T>(`select * from ${table} where id = ?`, [targetId]);
   if (!target) throw new Error('entry not found');
   if (target.voids_id) throw new Error('cannot correct a correction');
+  await assertWorkerDateOpen(ctx.db, target.worker_id, target.date);
   const existing = await ctx.db.getFirstAsync<{ id: string }>(`select id from ${table} where voids_id = ?`, [targetId]);
   if (existing) throw new Error('entry already corrected');
-  const row = { ...target, id: ctx.newId(), voids_id: target.id, note: null, ...audit(ctx) } as T;
+  const row = { ...target, id: ctx.newId(), voids_id: target.id, note: null,
+    ...('settlement_id' in target ? { settlement_id: null } : {}), ...audit(ctx) } as T;
   await insertAndEnqueue(ctx, table, row as unknown as Record<string, unknown>);
   return row;
 }
@@ -66,6 +71,7 @@ export async function addAdjustment(
   if (ctx.role !== 'owner') throw new Error('only the owner can add a bonus or deduction');
   assertAmount(input.amountPaise);
   if (input.type === 'deduction' && !input.note?.trim()) throw new Error('a reason is required for a deduction');
+  await assertWorkerDateOpen(ctx.db, input.workerId, input.date);
   const row: EarningAdjustment = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, type: input.type, amount_paise: input.amountPaise,
     date: input.date, note: input.note?.trim() || null, voids_id: null, ...audit(ctx),

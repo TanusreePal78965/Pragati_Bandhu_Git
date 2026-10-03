@@ -1,6 +1,7 @@
 import type { SqlDb } from '../db/sqlDb';
 import type { OvertimeEntry } from '../domain/types';
 import type { RepoContext } from './context';
+import { assertWorkerDateOpen } from './lockGuard';
 import { insertAndEnqueue } from './write';
 
 /** Append-only; the newest entry per worker and date wins (0 hours clears overtime for that date). */
@@ -12,6 +13,7 @@ export async function addOvertime(
   const custom = input.customAmountPaise ?? null;
   if (custom !== null && ctx.role !== 'owner') throw new Error('only the owner can set a custom amount');
   if (custom !== null && !(Number.isInteger(custom) && custom >= 0)) throw new Error('custom amount must be whole paise');
+  await assertWorkerDateOpen(ctx.db, input.workerId, input.date);
   const row: OvertimeEntry = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, date: input.date, hours: input.hours,
     custom_amount_paise: custom, note: input.note ?? null,
