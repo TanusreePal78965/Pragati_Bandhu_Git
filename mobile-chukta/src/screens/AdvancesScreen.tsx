@@ -65,13 +65,12 @@ function AdvancesBody({ property }: { property: Property }) {
       {data.length === 0 ? (
         <EmptyState
           icon="wallet-outline"
-          title="No advances"
+          title={t('advances.emptyTitle')}
           message={t('advances.empty')}
         />
       ) : null}
 
       {/* Hidden text kept for test compatibility */}
-      {data.length === 0 ? <Muted style={styles.hidden}>{t('advances.empty')}</Muted> : null}
 
       <View style={styles.list}>
         {data.map(({ worker, ledger }) => (
@@ -145,9 +144,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.primaryDark,
-  },
-  hidden: {
-    height: 0,
-    opacity: 0,
   },
 });

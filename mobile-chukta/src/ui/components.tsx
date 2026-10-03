@@ -85,6 +85,7 @@ export function ScreenHeader({
   // Not useNavigation(): that throws outside a NavigationContainer, and the first-run language
   // picker renders this header before the navigator mounts.
   const navigation = useContext(NavigationContext);
+  const t = useT();
   const insets = useSafeAreaInsets();
 
   const handleBack = () => {
@@ -100,7 +101,7 @@ export function ScreenHeader({
             <Pressable
               onPress={handleBack}
               accessibilityRole="button"
-              accessibilityLabel="Back"
+              accessibilityLabel={t('common.back')}
               style={styles.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >

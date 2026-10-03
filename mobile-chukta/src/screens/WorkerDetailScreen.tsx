@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
@@ -69,18 +69,6 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
   }, [property, workerId, ym.year, ym.month, today]);
 
   const worker = data?.worker ?? null;
-  useLayoutEffect(() => {
-    if (!worker) return;
-    navigation.setOptions({
-      title: worker.name,
-      headerRight: () => (
-        <Pressable testID="edit-worker" accessibilityRole="button" onPress={() => navigation.navigate('WorkerForm', { workerId })}>
-          <Text style={styles.headerLink}>{t('common.edit')}</Text>
-        </Pressable>
-      ),
-    });
-  }, [worker, navigation, workerId, t]);
-
   const correct = (item: HistoryItem) => Alert.alert(t('worker.correct'), t('worker.correctConfirm'), [
     { text: t('common.cancel'), style: 'cancel' },
     {
@@ -192,13 +180,6 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           </View>
         ) : null}
 
-        {/* Kept for test assertion text compatibility */}
-        <Muted style={styles.hidden}>
-          {`${t('worker.earned')} ${formatRupees(ledger.earnedPaise)} · ${t('worker.paid')} ${formatRupees(ledger.paidPaise)}`}
-        </Muted>
-        <Muted style={styles.hidden}>
-          {`${t('worker.advance')} ${formatRupees(ledger.advanceOutstandingPaise)}`}
-        </Muted>
       </HeroCard>
 
       {/* Money Action Buttons */}
@@ -229,13 +210,12 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
         {history.length === 0 ? (
           <EmptyState
             icon="cash-outline"
-            title="No money history"
+            title={t('worker.noHistoryTitle')}
             message={t('worker.noHistory')}
           />
         ) : null}
 
         {/* Hidden text kept for test compatibility */}
-        {history.length === 0 ? <Muted style={styles.hidden}>{t('worker.noHistory')}</Muted> : null}
 
         {history.map((item) => (
           <Row
@@ -361,8 +341,4 @@ const styles = StyleSheet.create({
   struck: { textDecorationLine: 'line-through', color: colors.muted },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   action: { flexGrow: 1, flexBasis: '45%' },
-  hidden: {
-    height: 0,
-    opacity: 0,
-  },
 });

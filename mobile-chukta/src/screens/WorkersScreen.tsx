@@ -10,7 +10,6 @@ import {
   Card,
   EmptyState,
   Loading,
-  Muted,
   Row,
   Screen,
   ScreenHeader,
@@ -47,13 +46,12 @@ function WorkersBody({ property }: { property: Property }) {
       {data.length === 0 ? (
         <EmptyState
           icon="people-outline"
-          title="No workers"
+          title={t('workers.emptyTitle')}
           message={t('workers.empty')}
         />
       ) : null}
 
       {/* Hidden text kept for test assertion compatibility */}
-      {data.length === 0 ? <Muted style={styles.hidden}>{t('workers.empty')}</Muted> : null}
 
       <View style={styles.list}>
         {data.map(({ worker, ledger }) => {
@@ -101,8 +99,4 @@ const styles = StyleSheet.create({
   due: { fontSize: 15, fontWeight: '700', color: colors.text },
   overpaid: { color: colors.accentText },
   adv: { fontSize: 13, color: colors.primaryDark, fontWeight: '500' },
-  hidden: {
-    height: 0,
-    opacity: 0,
-  },
 });

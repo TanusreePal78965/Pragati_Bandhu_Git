@@ -44,7 +44,7 @@ export function SettingsScreen() {
           <Muted>{t('settings.loggedInAs', { name: who })}</Muted>
         </View>
         <StatusChip
-          label={identity.kind === 'owner' ? 'Owner' : 'Staff'}
+          label={t(identity.kind === 'owner' ? 'auth.login.owner' : 'auth.login.staff')}
           tone="primary"
         />
       </Card>
@@ -59,11 +59,11 @@ export function SettingsScreen() {
             {syncStatus.running ? (
               <StatusChip label={t('settings.syncing')} tone="warning" />
             ) : syncStatus.dead > 0 ? (
-              <StatusChip label={`${syncStatus.dead} ISSUES`} tone="danger" />
+              <StatusChip label={t('settings.issuesChip', { count: syncStatus.dead })} tone="danger" />
             ) : syncStatus.pending > 0 ? (
-              <StatusChip label={`${syncStatus.pending} PENDING`} tone="warning" />
+              <StatusChip label={t('settings.pendingChip', { count: syncStatus.pending })} tone="warning" />
             ) : (
-              <StatusChip label="SYNCED" tone="success" />
+              <StatusChip label={t('settings.synced')} tone="success" />
             )}
           </View>
           <Muted testID="sync-line" style={styles.syncLineText}>{syncLine}</Muted>
@@ -76,10 +76,10 @@ export function SettingsScreen() {
         {syncStatus.dead > 0 ? (
           <Row
             title={t('settings.issues', { count: syncStatus.dead })}
-            subtitle="Tap to resolve or retry"
+            subtitle={t('settings.tapToResolve')}
             onPress={() => navigation.navigate('SyncIssues')}
             testID="sync-issues"
-            right={<StatusChip label="Action needed" tone="danger" />}
+            right={<StatusChip label={t('settings.actionNeeded')} tone="danger" />}
           />
         ) : null}
 
@@ -96,7 +96,7 @@ export function SettingsScreen() {
       <Section title={t('settings.language')}>
         <Row
           title={t(`language.${i18n.language}`)}
-          subtitle="Change app language"
+          subtitle={t('settings.changeLanguage')}
           onPress={() => navigation.navigate('Language')}
           testID="language"
         />

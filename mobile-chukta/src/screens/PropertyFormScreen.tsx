@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { useLocalData, useSession } from '../app/session';
@@ -40,9 +40,6 @@ export function PropertyFormScreen() {
   useEffect(() => {
     if (values === null && existing !== undefined) setValues(propertyToFormValues(existing));
   }, [existing, values]);
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(editingId ? 'properties.edit' : 'properties.add') });
-  }, [navigation, editingId, t]);
 
   if (!values) return <Loading />;
   const set = (patch: Partial<PropertyFormValues>) => setValues({ ...values, ...patch });

@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
@@ -64,9 +64,6 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
     setValues(v);
     setShowOverrides(hasOverrides(v));
   }, [existing, values, property, today]);
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(workerId ? 'workerForm.titleEdit' : 'workerForm.titleNew') });
-  }, [navigation, workerId, t]);
 
   if (!values) return <Loading />;
   const set = (patch: Partial<WorkerFormValues>) => setValues({ ...values, ...patch });

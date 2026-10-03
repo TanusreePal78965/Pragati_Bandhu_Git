@@ -131,7 +131,7 @@ function TodayBody({ property }: { property: Property }) {
       {rows.length === 0 ? (
         <EmptyState
           icon="people-outline"
-          title="No workers"
+          title={t('workers.emptyTitle')}
           message={t('today.noWorkers')}
         />
       ) : (
@@ -139,7 +139,6 @@ function TodayBody({ property }: { property: Property }) {
       )}
 
       {/* Hidden text kept for test compatibility */}
-      {rows.length === 0 ? <Muted style={styles.hidden}>{t('today.noWorkers')}</Muted> : null}
 
       {selected.size > 0 ? (
         <Card style={styles.selectionCard}>
@@ -282,8 +281,4 @@ const styles = StyleSheet.create({
   },
   hours: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   hoursInput: { flex: 1 },
-  hidden: {
-    height: 0,
-    opacity: 0,
-  },
 });

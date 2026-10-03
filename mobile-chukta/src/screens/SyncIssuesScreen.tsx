@@ -69,7 +69,7 @@ export function SyncIssuesScreen() {
         <EmptyState
           icon="cloud-done-outline"
           title={t('syncIssues.empty')}
-          message="All changes from this device have safely reached the server."
+          message={t('syncIssues.allSynced')}
         />
       ) : null}
 
@@ -80,7 +80,7 @@ export function SyncIssuesScreen() {
         return (
           <Card key={g.error} style={styles.issueCard}>
             <View style={styles.errorHeader}>
-              <StatusChip label="Sync failed" tone="danger" />
+              <StatusChip label={t('syncIssues.failed')} tone="danger" />
               <Muted>{`${t('syncIssues.count', { count: g.count })} · ${g.tables.map((tb) => t(`tables.${tb}`)).join(', ')}`}</Muted>
             </View>
             <Text style={styles.errorText}>{g.error}</Text>

@@ -53,7 +53,7 @@ export function LoginScreen({
           </View>
           <View style={styles.heroText}>
             <Title style={styles.appName}>{t('common.appName')}</Title>
-            <Text style={styles.tagline}>Worker Pay, Advance & Attendance</Text>
+            <Text style={styles.tagline}>{t('auth.login.tagline')}</Text>
           </View>
         </HeroCard>
 
@@ -85,7 +85,7 @@ export function LoginScreen({
             value={phone}
             onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
             keyboardType="phone-pad"
-            placeholder="10-digit mobile number"
+            placeholder={t('auth.login.phonePlaceholder')}
             testID="phone"
           />
 
@@ -96,7 +96,7 @@ export function LoginScreen({
               onChangeText={setSecret}
               secureTextEntry
               autoCapitalize="none"
-              placeholder="Password"
+              placeholder={t('auth.login.passwordPlaceholder')}
               testID="secret"
             />
           ) : (
@@ -106,7 +106,7 @@ export function LoginScreen({
               onChangeText={(v) => setSecret(v.replace(/\D/g, '').slice(0, 4))}
               keyboardType="number-pad"
               secureTextEntry
-              placeholder="4 digit PIN"
+              placeholder={t('auth.login.pinPlaceholder')}
               testID="secret"
             />
           )}

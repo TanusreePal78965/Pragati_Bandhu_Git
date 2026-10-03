@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { StaffApiError, type StaffApiErrorKey } from '../api/staffApi';
 import { useStackNav, type RootStackParamList } from '../app/routes';
@@ -13,7 +13,6 @@ import {
   ErrorText,
   Field,
   Loading,
-  Muted,
   Screen,
   ScreenHeader,
   StatusChip,
@@ -42,9 +41,6 @@ export function StaffFormScreen() {
     setName(existing?.name ?? '');
     setActive(existing ? existing.is_active === 1 : true);
   }, [existing, name]);
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(staffId ? 'staff.titleEdit' : 'staff.titleNew') });
-  }, [navigation, staffId, t]);
 
   if (name === null) return <Loading />;
   const err = (k: string) => (errors[k] ? t(errors[k]) : null);
@@ -87,7 +83,6 @@ export function StaffFormScreen() {
     <Screen header={<ScreenHeader title={title} showBack />}>
       <View style={styles.noticeWrap}>
         <StatusChip label={t('common.needsInternet')} tone="info" />
-        <Muted style={styles.hidden}>{t('common.needsInternet')}</Muted>
       </View>
 
       <Card style={styles.card}>
@@ -112,9 +107,5 @@ const styles = StyleSheet.create({
   },
   card: {
     gap: space.md,
-  },
-  hidden: {
-    height: 0,
-    opacity: 0,
   },
 });

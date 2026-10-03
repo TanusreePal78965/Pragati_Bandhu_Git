@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
@@ -43,10 +43,6 @@ export function MoneyEntryScreen() {
   // Only repayments and write-offs can overshoot what's actually owed; advances and payments never do.
   const tracksAdvance = params.kind === 'repayment' || params.kind === 'writeoff';
   const { data: advances } = useLocalData((s) => (tracksAdvance ? listAdvances(s.db, params.workerId) : Promise.resolve(null)), [params.workerId, tracksAdvance]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(`entryType.${params.kind}`) });
-  }, [navigation, params.kind, t]);
 
   if (worker === undefined) return <Loading />;
   const set = (patch: Partial<MoneyFormValues>) => setValues({ ...values, ...patch });
@@ -93,7 +89,7 @@ export function MoneyEntryScreen() {
           <Avatar name={worker.name} id={worker.id} size={42} />
           <View style={styles.workerInfo}>
             <Text style={styles.workerName}>{worker.name}</Text>
-            <Muted>{worker.phone || 'No phone'}</Muted>
+            <Muted>{worker.phone || t('worker.noPhone')}</Muted>
           </View>
           <StatusChip label={title} tone="primary" />
         </Card>
@@ -142,7 +138,7 @@ export function MoneyEntryScreen() {
           label={t('money.note')}
           value={values.note}
           onChangeText={(note) => set({ note })}
-          placeholder="Optional notes"
+          placeholder={t('money.notePlaceholder')}
           error={err('note')}
           testID="note"
         />

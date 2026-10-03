@@ -1,5 +1,5 @@
 {
-  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry", "loading": "Loading…", "confirm": "Confirm", "edit": "Edit", "add": "Add", "needsInternet": "Needs internet.", "saveFailed": "Could not save on this phone. Please try again." },
+  "common": { "appName": "Chukta", "ok": "OK", "cancel": "Cancel", "save": "Save", "retry": "Retry", "loading": "Loading…", "confirm": "Confirm", "edit": "Edit", "add": "Add", "needsInternet": "Needs internet.", "back": "Back", "saveFailed": "Could not save on this phone. Please try again." },
   "language": { "title": "Choose language", "en": "English", "bn": "বাংলা", "hi": "हिन्दी" },
   "months": {
     "long": { "m1": "January", "m2": "February", "m3": "March", "m4": "April", "m5": "May", "m6": "June", "m7": "July", "m8": "August", "m9": "September", "m10": "October", "m11": "November", "m12": "December" },
@@ -9,7 +9,7 @@
   "auth": {
     "login": {
       "title": "Log in", "owner": "Owner", "staff": "Staff", "phone": "Mobile number", "password": "Password",
-      "ownerPhone": "Owner's mobile number", "pin": "PIN", "submit": "Log in", "forgot": "Forgot password?",
+      "ownerPhone": "Owner's mobile number", "pin": "PIN", "submit": "Log in", "forgot": "Forgot password?", "tagline": "Worker Pay, Advance & Attendance", "phonePlaceholder": "10-digit mobile number", "passwordPlaceholder": "Password", "pinPlaceholder": "4 digit PIN",
       "register": "New to Chukta? Register on the website", "sessionEnded": "You were logged out. Please log in again."
     },
     "error": {
@@ -30,7 +30,7 @@
     "archived": "Archived", "archive": "Archive property", "archiveConfirm": "Staff of this property will be logged out and lose access. Continue?",
     "restore": "Restore", "restoreNote": "After restoring, set a new PIN for each staff member before they can log in again.",
     "empty": "Add your first property to start.", "defaults": "Settings for workers", "switch": "Switch property",
-    "nameRequired": "Enter a property name.", "waitingForSync": "Loading your properties…", "choose": "Choose a property"
+    "nameRequired": "Enter a property name.", "waitingForSync": "Loading your properties…", "choose": "Choose a property", "active": "Active"
   },
   "fields": { "payBasis": "Pay basis", "attendanceMode": "Attendance", "shiftHours": "Shift hours", "weeklyOff": "Weekly off", "monthlyDivisor": "Monthly salary per day", "shiftInvalid": "Shift hours must be more than 0 and at most 24." },
   "payBasis": { "hourly": "Hourly", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly" },
@@ -44,12 +44,12 @@
     "weeklyOff": "Weekly off", "selected": "{{count}} selected", "markSelected": "Mark selected as", "clearSelection": "Clear",
     "noWorkers": "No workers yet. Add workers in the Workers tab.", "selectHint": "Long-press to select several workers."
   },
-  "workers": { "add": "Add worker", "due": "Wage due", "advance": "Advance", "overpaid": "Overpaid", "showLeft": "Show workers who left", "left": "Left", "empty": "No workers yet. Add one." },
+  "workers": { "add": "Add worker", "due": "Wage due", "advance": "Advance", "overpaid": "Overpaid", "showLeft": "Show workers who left", "left": "Left", "empty": "No workers yet. Add one.", "emptyTitle": "No workers" },
   "worker": {
     "due": "Wage due", "earned": "Earned", "paid": "Paid", "advance": "Advance outstanding", "howCalculated": "How this is calculated",
     "calendar": "Attendance", "history": "Money entries", "correct": "Correct",
     "correctConfirm": "This entry will be cancelled and removed from the totals. Continue?", "correction": "Correction", "cancelled": "Cancelled",
-    "noHistory": "No money entries yet.", "joined": "Joined {{date}}", "leftOn": "Left {{date}}", "prevMonth": "Previous month", "nextMonth": "Next month",
+    "noHistory": "No money entries yet.", "noHistoryTitle": "No money history", "noPhone": "No phone", "joined": "Joined {{date}}", "leftOn": "Left {{date}}", "prevMonth": "Previous month", "nextMonth": "Next month",
     "notFound": "Worker not found."
   },
   "entryType": { "advance": "Advance", "repayment": "Repayment", "writeoff": "Write-off", "payment": "Wage payment" },
@@ -65,16 +65,16 @@
   },
   "money": {
     "amount": "Amount (₹)", "date": "Date", "mode": "Paid by", "note": "Note", "noteRequired": "A note is required for a write-off.",
-    "amountInvalid": "Enter an amount above ₹0.", "exceedsAdvance": "This is more than the {{outstanding}} advance outstanding."
+    "amountInvalid": "Enter an amount above ₹0.", "exceedsAdvance": "This is more than the {{outstanding}} advance outstanding.", "notePlaceholder": "Optional notes"
   },
-  "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding." },
+  "advances": { "title": "Advances outstanding", "total": "Total outstanding", "empty": "No advances outstanding.", "emptyTitle": "No advances" },
   "settings": {
     "property": "Property", "staff": "Staff", "addStaff": "Add staff", "staffHelp": "Staff log in with your mobile number ({{phone}}) and their own PIN.",
     "unlock": "Unlock staff login", "unlocked": "Staff login unlocked.", "language": "Language", "sync": "Sync",
     "pending": "{{count}} waiting to sync", "lastSync": "Last synced {{time}}", "neverSynced": "Not synced yet", "syncing": "Syncing…",
     "syncNow": "Sync now", "issues": "{{count}} entries didn't sync", "logout": "Log out",
     "logoutConfirm": "{{count}} entries on this phone haven't synced yet. They will sync when you log in again on this phone. Log out?",
-    "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}"
+    "loggedInAs": "Logged in as {{name}}", "ownerAccount": "Owner {{phone}}", "synced": "Synced", "issuesChip": "{{count}} issues", "pendingChip": "{{count}} pending", "tapToResolve": "Tap to resolve or retry", "actionNeeded": "Action needed", "changeLanguage": "Change app language"
   },
   "staff": {
     "titleNew": "Add staff", "titleEdit": "Edit staff", "name": "Name", "pin": "PIN (4 digits)", "pinConfirm": "Repeat PIN",
@@ -88,7 +88,7 @@
   "syncIssues": {
     "title": "Entries that didn't sync", "explain": "The server rejected these changes. Retry after fixing the cause, or discard them from this phone.",
     "retry": "Retry", "discard": "Discard", "discardConfirm": "Discarded entries are removed from this phone. Continue?", "count": "{{count}} entries",
-    "empty": "Everything is synced."
+    "empty": "Everything is synced.", "allSynced": "All changes from this device have safely reached the server.", "failed": "Sync failed"
   },
   "tables": { "properties": "Property", "staff_users": "Staff", "workers": "Worker", "attendance_entries": "Attendance", "advance_entries": "Advance", "wage_payments": "Payment" },
   "ledger": {
