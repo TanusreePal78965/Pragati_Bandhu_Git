@@ -18,6 +18,7 @@ import {
   Segmented,
   WeekdayPicker,
 } from '../ui/components';
+import { ExtraPayFields } from '../ui/ExtraPayFields';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { space } from '../ui/theme';
 import { propertyToFormValues, validatePropertyForm, type FieldErrors, type PropertyFormValues } from '../view/forms';
@@ -134,6 +135,9 @@ export function PropertyFormScreen() {
         <Segmented options={DIVISORS.map((d) => ({ value: d, label: t(`divisor.${d}`) }))} value={values.monthlyDivisor}
           onChange={(monthlyDivisor) => set({ monthlyDivisor })} testIDPrefix="divisor" />
       </Section>
+
+      <ExtraPayFields value={values} allowInherit={false} errors={errors} testIDPrefix="prop-extra"
+        onChange={(patch) => set(patch as Partial<PropertyFormValues>)} />
 
       <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
 

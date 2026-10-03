@@ -22,6 +22,7 @@ import {
   WeekdayPicker,
 } from '../ui/components';
 import { DateField } from '../ui/DateField';
+import { ExtraPayFields } from '../ui/ExtraPayFields';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { RequireProperty } from '../ui/RequireProperty';
 import { space } from '../ui/theme';
@@ -40,7 +41,8 @@ const newWorkerValues = (p: Property, today: string): WorkerFormValues => ({
   weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null, hasLeft: false, leftDate: null,
   offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '',
 });
-const hasOverrides = (v: WorkerFormValues) => v.attendanceMode !== null || v.shiftHours !== '' || v.weeklyOffOverride || v.monthlyDivisor !== null;
+const hasOverrides = (v: WorkerFormValues) => v.attendanceMode !== null || v.shiftHours !== '' || v.weeklyOffOverride || v.monthlyDivisor !== null
+  || v.offdayMultiplier !== null || v.otMode !== null || v.otMultiplier !== null || v.otRate !== '';
 
 export function WorkerFormScreen() {
   const { params } = useRoute<RouteProp<RootStackParamList, 'WorkerForm'>>();
@@ -52,6 +54,7 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
   const session = useSession();
   const navigation = useStackNav();
   const today = sessionToday(session);
+  const isOwner = session.identity.kind === 'owner';
   const { data: existing } = useLocalData((s) => (workerId ? getWorker(s.db, workerId) : Promise.resolve(null)), [workerId]);
   const [values, setValues] = useState<WorkerFormValues | null>(null);
   const [showOverrides, setShowOverrides] = useState(false);
@@ -72,7 +75,8 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
 
   const toggleOverrides = (on: boolean) => {
     setShowOverrides(on);
-    if (!on) set({ attendanceMode: null, shiftHours: '', weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null });
+    if (!on) set({ attendanceMode: null, shiftHours: '', weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null,
+      offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '' });
   };
 
   async function save() {
@@ -84,8 +88,8 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
     setBusy(true);
     setSaveError(null);
     try {
-      if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value, session.identity.kind === 'owner'));
-      else await createWorker(session.repo, toNewWorker(property.id, r.value, session.identity.kind === 'owner'));
+      if (workerId) await updateWorker(session.repo, workerId, toWorkerPatch(r.value, isOwner));
+      else await createWorker(session.repo, toNewWorker(property.id, r.value, isOwner));
     } catch {
       setSaveError('common.saveFailed');
       setBusy(false);
@@ -148,6 +152,7 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
                 onChange={(d) => set({ monthlyDivisor: d === DEFAULT ? null : (d as MonthlyDivisor) })} testIDPrefix="worker-divisor" />
             </View>
           ) : null}
+          {isOwner ? <ExtraPayFields value={values} allowInherit errors={errors} testIDPrefix="worker-extra" onChange={set} /> : null}
         </Section>
       ) : null}
 

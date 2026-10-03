@@ -96,3 +96,26 @@ test('edit worker: mark as left sends an update patch', async () => {
     expect(JSON.parse(q[0].payload)).toMatchObject({ id: 'w1', status: 'left', left_date: '2026-09-07' });
   });
 });
+
+test('worker override: 1.5× overtime, other extra-pay settings follow the property', async () => {
+  const s = await seeded();
+  renderScreen('WorkerForm', WorkerFormScreen, s, { workerId: 'w1' });
+  fireEvent(await screen.findByTestId('overrides'), 'valueChange', true);
+  fireEvent.press(screen.getByTestId('worker-extra-otMode-multiplier'));
+  fireEvent.press(screen.getByTestId('worker-extra-otMultiplier-1.5'));
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select offday_multiplier, ot_mode, ot_multiplier, ot_rate_paise from workers where id = ?', ['w1']))
+    .toEqual({ offday_multiplier: null, ot_mode: 'multiplier', ot_multiplier: 1.5, ot_rate_paise: null }));
+});
+
+test('staff can edit a worker; the Extra pay section is hidden and pay settings are untouched', async () => {
+  const s = await seeded(STAFF);
+  renderScreen('WorkerForm', WorkerFormScreen, s, { workerId: 'w1' });
+  fireEvent(await screen.findByTestId('overrides'), 'valueChange', true);
+  expect(screen.queryByText('Extra pay')).toBeNull();
+  expect(screen.queryByTestId('worker-extra-otMode-fixed')).toBeNull();
+  fireEvent.changeText(screen.getByTestId('name'), 'Ramesh');
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select name from workers where id = ?', ['w1'])).toEqual({ name: 'Ramesh' }));
+  expect(s.afterWrite).toHaveBeenCalled();
+});

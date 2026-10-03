@@ -90,3 +90,17 @@ test('a failed settings save after a successful create does not create a second 
   const ops = await s.db.getAllAsync<{ op: string }>('select op from sync_queue order by seq');
   expect(ops.map((o) => o.op)).toEqual(['insert', 'update']);
 });
+
+test('owner sets fixed overtime ₹60/h and 2× day-off pay', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('PropertyForm', PropertyFormScreen, s, { propertyId: 'p1' });
+  fireEvent.press(await screen.findByTestId('prop-extra-offday-2'));
+  fireEvent.press(screen.getByTestId('prop-extra-otMode-fixed'));
+  fireEvent.press(screen.getByTestId('save'));
+  expect(await screen.findByText('Enter the ₹ per hour.')).toBeTruthy();
+  fireEvent.changeText(screen.getByTestId('prop-extra-otRate'), '60');
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select offday_multiplier, ot_mode, ot_rate_paise from properties'))
+    .toEqual({ offday_multiplier: 2, ot_mode: 'fixed', ot_rate_paise: 6000 }));
+});
