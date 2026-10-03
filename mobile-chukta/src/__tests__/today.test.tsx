@@ -284,6 +284,28 @@ test('a settled row cannot be selected, and bulk marking skips it', async () => 
   expect(await rowsFor(s, 'w1')).toEqual([]);
 });
 
+test('a row settled after it was selected is skipped by bulk marking', async () => {
+  const s = await seeded();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    renderScreen('Tabs', TodayScreen, s);
+    fireEvent.press(await screen.findByTestId('today-date'));
+    fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 3));
+    fireEvent(await screen.findByTestId('row-w1'), 'longPress');
+    fireEvent(screen.getByTestId('row-w3'), 'longPress');
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    // Settled on another path while both rows are selected; the screen has not reloaded.
+    await settleWorker({ ...s.repo, role: 'owner' }, { worker: worker({ id: 'w1', name: 'Ram' }), property: property(), periodStart: '2026-09-01',
+      today: '2026-09-07', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+    fireEvent.press(screen.getByTestId('bulk-absent'));
+    await waitFor(async () => expect(await rowsFor(s, 'w3')).toHaveLength(1));
+    expect(await rowsFor(s, 'w1')).toEqual([]);
+    expect(alert).not.toHaveBeenCalled();
+  } finally {
+    alert.mockRestore();
+  }
+});
+
 test('a closure refused because the date is settled shows the locked message', async () => {
   const s = await seeded();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});

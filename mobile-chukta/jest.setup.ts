@@ -8,5 +8,3 @@ jest.mock('@react-native-community/datetimepicker', () => {
 });
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/payslip.png') }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(async () => true), shareAsync: jest.fn(async () => undefined) }));
-jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/payslip.png') }));
-jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(async () => true), shareAsync: jest.fn(async () => undefined) }));

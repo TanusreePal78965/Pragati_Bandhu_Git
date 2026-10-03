@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
 import { sessionToday, useLocalData, useManualRefresh, useSession } from '../app/session';
 import { effectiveAttendance } from '../domain/attendance';
+import { isSettled } from '../domain/lock';
 import type { AttendanceStatus, DayOffPortion, Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendanceForDate, markAttendance } from '../repos/attendance';
@@ -116,6 +117,8 @@ function TodayBody({ property }: { property: Property }) {
       // Read fresh from SQLite (not the `rows` closure) so a same-status write during a
       // still-in-flight write, or a stale render, can't slip past the dedupe check.
       const fresh = await listAttendanceForDate(session.db, property.id, date);
+      // Bulk skips rows settled since the screen loaded (a single tap still says the period is settled).
+      const settlements = bulk ? await listPropertySettlements(session.db, property.id) : [];
       const byWorker = new Map<string, typeof fresh>();
       for (const e of fresh) {
         const list = byWorker.get(e.worker_id) ?? [];
@@ -124,7 +127,7 @@ function TodayBody({ property }: { property: Property }) {
       }
       for (const id of workerIds) {
         const row = rows?.find((r) => r.worker.id === id);
-        if (!row || (bulk && (row.isOff || row.settled))) continue;
+        if (!row || (bulk && (row.isOff || row.settled || isSettled(settlements, id, date)))) continue;
         const list = byWorker.get(id);
         const cur = list ? effectiveAttendance(list).get(date) ?? null : null;
         const same = cur
