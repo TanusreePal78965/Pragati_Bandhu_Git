@@ -217,10 +217,16 @@ end $$;
 create or replace function chukta.guard_settled_day_off_update() returns trigger
 language plpgsql set search_path = '' as $$
 begin
-  if (new.is_active is distinct from old.is_active or new.portion is distinct from old.portion
-      or new.pay_rule is distinct from old.pay_rule)
-     and exists (select 1 from chukta.workers w
-                 where w.property_id = new.property_id and chukta.settled_period_id(w.id, new.date) is not null) then
+  if new.is_active is not distinct from old.is_active and new.portion is not distinct from old.portion
+     and new.pay_rule is not distinct from old.pay_rule then
+    return new;
+  end if;
+  -- Same shared locks as a days_off insert in check_not_settled: wait for an in-flight settle of any worker here,
+  -- and block a settle until this update commits. Taken in id order so they cannot deadlock.
+  perform pg_advisory_xact_lock_shared(hashtextextended('chukta.settlement:' || x.id::text, 0))
+    from (select w.id from chukta.workers w where w.property_id = new.property_id order by w.id) x;
+  if exists (select 1 from chukta.workers w
+             where w.property_id = new.property_id and chukta.settled_period_id(w.id, new.date) is not null) then
     raise exception 'period is settled' using errcode = '23514';
   end if;
   return new;
