@@ -52,11 +52,46 @@ test('each table has exactly the declared columns', async () => {
 
 test('v2 → v3 upgrade adds the Phase 2A tables and columns without touching existing rows', async () => {
   const db = openTestDb();
-  await migrate(db); // fresh install runs v1..v3
+  await db.execAsync(`
+    create table properties (
+      id text primary key, shop_id text not null, name text not null, address text, is_active integer not null default 1,
+      default_pay_basis text not null default 'daily', default_attendance_mode text not null default 'day',
+      shift_hours real not null default 8, weekly_off integer, monthly_divisor text not null default 'calendar',
+      created_at text not null, server_updated_at text
+    );
+    create table workers (
+      id text primary key, property_id text not null, name text not null, phone text, pay_basis text not null,
+      rate_paise integer not null, joining_date text not null, status text not null default 'active', left_date text,
+      attendance_mode text, shift_hours real, weekly_off_override integer not null default 0, weekly_off integer,
+      monthly_divisor text, created_by text not null, created_by_role text not null, created_at text not null, server_updated_at text
+    );
+    create table attendance_entries (
+      id text primary key, property_id text not null, worker_id text not null, date text not null, status text not null,
+      hours real, note text, created_by text not null, created_by_role text not null, created_at text not null, server_updated_at text
+    );
+    create index idx_attendance_worker_date on attendance_entries(worker_id, date);
+    create index idx_attendance_property_date on attendance_entries(property_id, date);
+    pragma user_version = 2;
+  `);
   await db.runAsync(`insert into properties (id, shop_id, name, created_at) values ('p1', 's', 'Main', 't')`);
-  const prop = await db.getFirstAsync<{ offday_multiplier: number; ot_mode: string; ot_multiplier: number; ot_rate_paise: number | null }>(
-    'select offday_multiplier, ot_mode, ot_multiplier, ot_rate_paise from properties');
-  expect(prop).toEqual({ offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null });
+  await db.runAsync(`insert into workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by, created_by_role, created_at)
+    values ('w1', 'p1', 'Ravi', 'daily', 50000, '2026-01-01', 'u', 'owner', 't')`);
+  await db.runAsync(`insert into attendance_entries (id, property_id, worker_id, date, status, created_by, created_by_role, created_at)
+    values ('a1', 'p1', 'w1', '2026-10-01', 'present', 'u', 'owner', 't')`);
+
+  await migrate(db);
+
+  expect((await db.getFirstAsync<{ user_version: number }>('pragma user_version'))?.user_version).toBe(3);
+  expect(await db.getFirstAsync('select id, name, shift_hours, default_pay_basis from properties')).toEqual(
+    { id: 'p1', name: 'Main', shift_hours: 8, default_pay_basis: 'daily' });
+  expect(await db.getFirstAsync('select offday_multiplier, ot_mode, ot_multiplier, ot_rate_paise from properties')).toEqual(
+    { offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null });
+  expect(await db.getFirstAsync('select id, name, rate_paise, joining_date from workers')).toEqual(
+    { id: 'w1', name: 'Ravi', rate_paise: 50000, joining_date: '2026-01-01' });
+  expect(await db.getFirstAsync('select offday_multiplier, ot_mode, ot_multiplier, ot_rate_paise from workers')).toEqual(
+    { offday_multiplier: null, ot_mode: null, ot_multiplier: null, ot_rate_paise: null });
+  expect(await db.getFirstAsync('select id, worker_id, date, status, custom_amount_paise from attendance_entries')).toEqual(
+    { id: 'a1', worker_id: 'w1', date: '2026-10-01', status: 'present', custom_amount_paise: null });
   for (const t of ['days_off', 'overtime_entries', 'earning_adjustments']) {
     expect(await db.getFirstAsync("select name from sqlite_master where type = 'table' and name = ?", [t])).toEqual({ name: t });
   }
