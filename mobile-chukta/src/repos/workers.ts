@@ -1,5 +1,5 @@
 import type { SqlDb } from '../db/sqlDb';
-import type { AttendanceMode, MonthlyDivisor, OtMode, PayBasis, Worker } from '../domain/types';
+import type { AttendanceMode, MonthlyDivisor, OtMode, PayBasis, PayCycle, Worker } from '../domain/types';
 import type { RepoContext } from './context';
 import { insertAndEnqueue, updateAndEnqueue } from './write';
 
@@ -7,16 +7,18 @@ export type NewWorker = {
   propertyId: string; name: string; phone?: string; payBasis: PayBasis; ratePaise: number; joiningDate: string;
   attendanceMode?: AttendanceMode; shiftHours?: number; weeklyOff?: number | null; monthlyDivisor?: MonthlyDivisor;
   offdayMultiplier?: number; otMode?: OtMode; otMultiplier?: number; otRatePaise?: number;
+  payCycle?: PayCycle; cycleEndWeekday?: number;
 };
 export type WorkerPatch = Partial<Pick<Worker,
   'name' | 'phone' | 'pay_basis' | 'rate_paise' | 'joining_date' | 'status' | 'left_date' | 'attendance_mode'
   | 'shift_hours' | 'weekly_off_override' | 'weekly_off' | 'monthly_divisor'
-  | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>;
+  | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'
+  | 'pay_cycle' | 'cycle_end_weekday'>>;
 
-const PAY_KEYS = ['offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'] as const;
+const PAY_KEYS = ['offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'pay_cycle', 'cycle_end_weekday'] as const;
 
 export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<Worker> {
-  if (ctx.role !== 'owner' && [input.offdayMultiplier, input.otMode, input.otMultiplier, input.otRatePaise].some((v) => v != null)) {
+  if (ctx.role !== 'owner' && [input.offdayMultiplier, input.otMode, input.otMultiplier, input.otRatePaise, input.payCycle, input.cycleEndWeekday].some((v) => v != null)) {
     throw new Error('only the owner can set pay settings');
   }
   if (!input.name.trim()) throw new Error('name is required');
@@ -31,6 +33,7 @@ export async function createWorker(ctx: RepoContext, input: NewWorker): Promise<
     monthly_divisor: input.monthlyDivisor ?? null,
     offday_multiplier: input.offdayMultiplier ?? null, ot_mode: input.otMode ?? null,
     ot_multiplier: input.otMultiplier ?? null, ot_rate_paise: input.otRatePaise ?? null,
+    pay_cycle: input.payCycle ?? null, cycle_end_weekday: input.cycleEndWeekday ?? null,
     created_by: ctx.userId, created_by_role: ctx.role, created_at: ctx.now().toISOString(), server_updated_at: null,
   };
   await insertAndEnqueue(ctx, 'workers', row);

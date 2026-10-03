@@ -5,7 +5,8 @@ import type { AttendanceEntry, EarningAdjustment, OvertimeEntry, ResolvedSetting
 // 2026-09-01 is a Tuesday; Sunday 2026-09-06 is the weekly off.
 const S = (over: Partial<ResolvedSettings> = {}): ResolvedSettings => ({
   payBasis: 'daily', attendanceMode: 'day', shiftHours: 8, weeklyOff: 0, monthlyDivisor: 'calendar',
-  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null, ...over,
+  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null,
+  payCycle: 'weekly', cycleEndWeekday: 6, ...over,
 });
 let n = 0;
 const att = (date: string, status: AttendanceEntry['status'], over: Partial<AttendanceEntry> = {}): AttendanceEntry => ({

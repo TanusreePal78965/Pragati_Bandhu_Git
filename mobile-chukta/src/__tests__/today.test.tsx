@@ -1,5 +1,9 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { initI18n } from '../i18n';
+import * as daysOffRepo from '../repos/daysOff';
+import { SettledError } from '../repos/lockGuard';
+import { settleWorker } from '../repos/settlements';
 import { upsertLocal } from '../repos/write';
 import { TodayScreen } from '../screens/TodayScreen';
 import { att, property, worker } from './helpers/fixtures';
@@ -233,4 +237,87 @@ test('a half-day closure on the weekly off still reads Weekly off for that worke
   renderScreen('Tabs', TodayScreen, s);
   expect(await screen.findByText('Weekly off')).toBeTruthy(); // w3 (Monday off)
   expect(screen.getAllByText('Bandh · half day').length).toBeGreaterThan(0); // banner and working rows
+});
+
+async function settledOn3Sep() {
+  const s = await seeded();
+  // seeded() is a staff session; only an owner settles. This settles Ram's 1–5 Sep.
+  await settleWorker({ ...s.repo, role: 'owner' }, { worker: worker({ id: 'w1', name: 'Ram' }), property: property(), periodStart: '2026-09-01',
+    today: '2026-09-07', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  renderScreen('Tabs', TodayScreen, s);
+  fireEvent.press(await screen.findByTestId('today-date'));
+  fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 3));
+  return s;
+}
+
+test('a settled worker row shows Settled and has no controls; Shop closed is hidden', async () => {
+  await settledOn3Sep();
+  expect(await screen.findByText('Settled')).toBeTruthy();
+  expect(screen.queryByTestId('status-w1-absent')).toBeNull();
+  expect(screen.queryByTestId('ot-open-w1')).toBeNull();
+  expect(screen.queryByTestId('closure-open')).toBeNull();
+  expect(screen.getByTestId('status-w3-absent')).toBeTruthy(); // other workers keep their controls
+  expect(screen.getByTestId('hours-w2')).toBeTruthy();
+});
+
+test('where Shop closed is hidden because of a settled row, a note says the period is settled', async () => {
+  await settledOn3Sep();
+  expect(await screen.findByText('Settled')).toBeTruthy();
+  expect(screen.getByTestId('closure-locked')).toHaveTextContent('This period is settled. Unlock it first to change entries.');
+});
+
+test('no settled note on a date with nothing settled', async () => {
+  const s = await seeded();
+  renderScreen('Tabs', TodayScreen, s);
+  expect(await screen.findByTestId('closure-open')).toBeTruthy();
+  expect(screen.queryByTestId('closure-locked')).toBeNull();
+});
+
+test('a settled row cannot be selected, and bulk marking skips it', async () => {
+  const s = await settledOn3Sep();
+  await screen.findByText('Settled');
+  fireEvent(screen.getByTestId('row-w1'), 'longPress');
+  expect(screen.queryByTestId('bulk-absent')).toBeNull();
+  fireEvent(screen.getByTestId('row-w3'), 'longPress');
+  fireEvent.press(await screen.findByTestId('bulk-absent'));
+  await waitFor(async () => expect(await rowsFor(s, 'w3')).toHaveLength(1));
+  expect(await rowsFor(s, 'w1')).toEqual([]);
+});
+
+test('a row settled after it was selected is skipped by bulk marking', async () => {
+  const s = await seeded();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    renderScreen('Tabs', TodayScreen, s);
+    fireEvent.press(await screen.findByTestId('today-date'));
+    fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 3));
+    fireEvent(await screen.findByTestId('row-w1'), 'longPress');
+    fireEvent(screen.getByTestId('row-w3'), 'longPress');
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    // Settled on another path while both rows are selected; the screen has not reloaded.
+    await settleWorker({ ...s.repo, role: 'owner' }, { worker: worker({ id: 'w1', name: 'Ram' }), property: property(), periodStart: '2026-09-01',
+      today: '2026-09-07', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+    fireEvent.press(screen.getByTestId('bulk-absent'));
+    await waitFor(async () => expect(await rowsFor(s, 'w3')).toHaveLength(1));
+    expect(await rowsFor(s, 'w1')).toEqual([]);
+    expect(alert).not.toHaveBeenCalled();
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+test('a closure refused because the date is settled shows the locked message', async () => {
+  const s = await seeded();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const spy = jest.spyOn(daysOffRepo, 'addDayOff').mockRejectedValueOnce(new SettledError());
+  try {
+    renderScreen('Tabs', TodayScreen, s);
+    fireEvent.press(await screen.findByTestId('closure-open'));
+    fireEvent.changeText(screen.getByTestId('closure-reason'), 'Strike');
+    fireEvent.press(screen.getByTestId('closure-save'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('This period is settled. Unlock it first to change entries.'));
+  } finally {
+    spy.mockRestore();
+    alert.mockRestore();
+  }
 });

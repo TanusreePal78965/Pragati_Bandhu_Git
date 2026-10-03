@@ -99,3 +99,16 @@ test('pull stores rows of the Phase 2A tables', async () => {
   await pullAll(db, fakeRemote({ days_off: [dayOff] }));
   expect(await db.getFirstAsync('select name, is_active from days_off')).toEqual({ name: 'Durga Puja', is_active: 1 });
 });
+
+test('pull stores a settlement with its jsonb summary as text', async () => {
+  const db = openTestDb();
+  await migrate(db);
+  const row = { id: 's1', property_id: 'p', worker_id: 'w', period_start: '2026-09-01', period_end: '2026-09-05', settled_on: '2026-09-06',
+    pay_basis: 'daily', rate_paise: 50000, opening_balance_paise: 0, base_paise: 250000, offday_extra_paise: 0, overtime_paise: 0,
+    bonus_paise: 0, deduction_paise: 0, earned_paise: 250000, paid_in_period_paise: 0, paid_now_paise: 250000, advance_recovered_paise: 0,
+    advance_after_paise: 0, closing_balance_paise: 0, summary: { present: 5, explanation: [] }, note: null, voids_id: null,
+    created_by: 'u', created_by_role: 'owner', created_at: 't', server_updated_at: '2026-09-06T00:00:00Z' };
+  await pullAll(db, fakeRemote({ settlements: [row] }));
+  const got = await db.getFirstAsync<{ summary: string }>('select summary from settlements');
+  expect(JSON.parse(got!.summary)).toEqual({ present: 5, explanation: [] });
+});

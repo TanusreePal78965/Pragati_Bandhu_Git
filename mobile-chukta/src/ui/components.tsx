@@ -341,20 +341,26 @@ export function Segmented<T extends string | number>({
 }
 
 const NO_DAY = -1;
-/** Weekly-off picker; "None" (no weekly off) is null. */
+/**
+ * Weekly-off picker; "None" (no weekly off) is null.
+ * `noneLabel` renames the null option (e.g. "Property setting"); `false` leaves it out, so a day is required.
+ */
 export function WeekdayPicker({
   value,
   onChange,
   testIDPrefix = 'weekday',
+  noneLabel,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   testIDPrefix?: string;
+  noneLabel?: string | false;
 }) {
   const t = useT();
-  const options = [NO_DAY, 0, 1, 2, 3, 4, 5, 6].map((d) => ({
+  const days = noneLabel === false ? [0, 1, 2, 3, 4, 5, 6] : [NO_DAY, 0, 1, 2, 3, 4, 5, 6];
+  const options = days.map((d) => ({
     value: d,
-    label: weekdayName(d === NO_DAY ? null : d, t),
+    label: d === NO_DAY ? noneLabel || weekdayName(null, t) : weekdayName(d, t),
   }));
   return (
     <Segmented

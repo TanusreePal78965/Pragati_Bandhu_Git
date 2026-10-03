@@ -84,7 +84,7 @@ Permissions: these columns are **owner-only**.
 | `paid_now_paise` | bigint not null ≥ 0 | |
 | `advance_recovered_paise` | bigint not null ≥ 0 | |
 | `advance_after_paise` | bigint not null | Advance outstanding after recovery |
-| `closing_balance_paise` | bigint not null | `opening + earned − paid_in_period − paid_now`. Positive means owed to the worker; negative means overpaid |
+| `closing_balance_paise` | bigint not null | `opening + earned − paid_in_period − advance_recovered − paid_now`. Positive means owed to the worker; negative means overpaid |
 | `summary` | jsonb not null | Attendance counts: `{present, half, absent, hoursTotal, daysOffPaid, daysOffUnpaid, offdayWorked, otHours}`. Also the explanation lines `[{key, params}]`. Stored as numbers and i18n keys only, never translated text |
 | `note` | text null | |
 | `voids_id` | uuid null → settlements | A void row unlocks the target. A void row copies the target's worker, property and period, with every amount 0 and `summary` `{}` |
@@ -148,6 +148,7 @@ For a worker with resolved cycle `C`:
 - **Period end:**
   - monthly: the last day of the start's calendar month;
   - weekly: the first date ≥ start whose weekday is `cycle_end_weekday`.
+- **First settlement catches up.** When the worker has no active settlement, the first period starts on `joining_date` and ends at the end of the **most recent period that has fully ended before today** (walking normal periods forward from joining). Existing workers with months of history are therefore settled once for all of it, and the suggested pay is the all-time wage due at that end, after every payment already made. If even the joining period has not ended, the first period is the normal joining period (not due yet). For a worker who has left, the end is still cut to `left_date`. Example (weeks end Saturday): joined Fri 2026-05-01, today Sat 2026-10-03 → first period 2026-05-01..2026-09-26; the next is 2026-09-27..2026-10-03, due from 2026-10-04. After the first settlement, periods are normal. The server order trigger needs no change: the first settlement starts on the joining date and any end ≥ start is allowed.
 - A period is **due** when `period_end < today` (in the session's local date).
 - **Several due periods:** the due list and the Settle button always offer the **oldest** one. Periods are settled one at a time, in order.
 - **A worker who has left:** the period containing `left_date` is due from `left_date` onward, and its `period_end` is cut to `left_date`. Nothing after `left_date` is ever due.
@@ -167,7 +168,7 @@ All figures come from the existing `calculateWorkerLedger`, which gains an optio
 
 Rules for the calculation:
 - **Bonus and deduction:** when `from` and an end date are given, only entries dated inside that range count. The opening-balance run likewise counts only entries dated ≤ `s − 1`. The all-time ledger (no `from`) is unchanged.
-- **Monthly workers:** a full calendar-month period must equal the Phase 1 / 2A monthly result for that month exactly. A first month that starts on the joining date uses the existing partial-month rule.
+- **Monthly workers:** a full calendar-month period must equal the Phase 1 / 2A monthly result for that month, within ±1 paisa. Period figures are cumulative differences (ledger from joining to `e` minus ledger from joining to `s − 1`), so per-run rounding never drifts across chained periods, but a single month can differ by 1 paisa from a ledger run over that month alone. A first month that starts on the joining date uses the existing partial-month rule.
 
 ### 5.3 Settle
 
@@ -269,7 +270,7 @@ All new strings are in `en.json`, `bn.json` and `hi.json`. Bengali uses Bengali 
 |---|---|
 | Paid now = 0 or recovered = 0 | No payment row or repayment row for that part. The settlement still locks |
 | Opening balance already overpaid | Paid now defaults to 0. Carry-forward shows overpaid |
-| Worker joins mid-period | The first period starts on the joining date |
+| Worker joins mid-period | The first period starts on the joining date (and catches up to the last ended period, §5.1) |
 | Worker has left | Final period up to `left_date`, due from `left_date`. Nothing after it |
 | Rate changed before settling | The whole period uses the current rate (as today). The snapshot freezes it |
 | Two owner phones settle the same period offline | The second settlement is refused by the server's overlap trigger. Its linked payment and repayment are refused by the foreign key or lock. All of them show on "entries that didn't sync". No duplicate money |

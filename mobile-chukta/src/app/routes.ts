@@ -12,6 +12,8 @@ export type RootStackParamList = {
   WorkerDetail: { workerId: string };
   WorkerForm: { workerId?: string } | undefined;
   MoneyEntry: { workerId: string; kind: MoneyKind };
+  Settle: { workerId: string };
+  Payslip: { settlementId: string };
   StaffForm: { staffId?: string } | undefined;
   SyncIssues: undefined;
 };

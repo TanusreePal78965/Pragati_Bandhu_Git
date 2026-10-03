@@ -2,13 +2,17 @@ import { TABLE_COLUMNS, type SyncedTable } from '../db/schema';
 import type { SqlDb, SqlParam } from '../db/sqlDb';
 import type { RepoContext } from './context';
 
-const toParam = (v: unknown): SqlParam => (v === undefined ? null : typeof v === 'boolean' ? (v ? 1 : 0) : (v as SqlParam));
+const toParam = (v: unknown): SqlParam =>
+  v === undefined ? null
+    : typeof v === 'boolean' ? (v ? 1 : 0)
+      : v !== null && typeof v === 'object' ? JSON.stringify(v)
+        : (v as SqlParam);
 
 export const UPDATABLE_COLUMNS = {
   properties: ['name', 'address', 'is_active', 'default_pay_basis', 'default_attendance_mode', 'shift_hours', 'weekly_off', 'monthly_divisor',
-    'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'],
+    'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'pay_cycle', 'cycle_end_weekday'],
   workers: ['name', 'phone', 'pay_basis', 'rate_paise', 'joining_date', 'status', 'left_date', 'attendance_mode', 'shift_hours',
-    'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'],
+    'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'pay_cycle', 'cycle_end_weekday'],
   days_off: ['name', 'kind', 'portion', 'pay_rule', 'is_active'],
 } as const;
 export type SyncOp = 'insert' | 'update';
@@ -27,12 +31,24 @@ async function enqueue(ctx: RepoContext, table: SyncedTable, id: string, op: Syn
   );
 }
 
+async function insertOne(ctx: RepoContext, table: SyncedTable, row: Record<string, unknown>): Promise<void> {
+  await upsertLocal(ctx.db, table, row);
+  const payload: Record<string, unknown> = {};
+  for (const c of TABLE_COLUMNS[table]) if (c !== 'server_updated_at' && c in row) payload[c] = row[c];
+  await enqueue(ctx, table, row.id as string, 'insert', payload);
+}
+
 export async function insertAndEnqueue(ctx: RepoContext, table: SyncedTable, row: Record<string, unknown>): Promise<void> {
+  await ctx.db.withTransactionAsync(() => insertOne(ctx, table, row));
+}
+
+/** Several inserts as one unit: all rows land and are queued in this order, or none do. */
+export async function insertManyAndEnqueue(
+  ctx: RepoContext, items: { table: SyncedTable; row: Record<string, unknown> }[], precheck?: () => Promise<void>,
+): Promise<void> {
   await ctx.db.withTransactionAsync(async () => {
-    await upsertLocal(ctx.db, table, row);
-    const payload: Record<string, unknown> = {};
-    for (const c of TABLE_COLUMNS[table]) if (c !== 'server_updated_at' && c in row) payload[c] = row[c];
-    await enqueue(ctx, table, row.id as string, 'insert', payload);
+    if (precheck) await precheck();
+    for (const it of items) await insertOne(ctx, it.table, it.row);
   });
 }
 

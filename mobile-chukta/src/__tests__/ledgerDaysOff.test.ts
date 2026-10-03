@@ -4,7 +4,8 @@ import type { AttendanceEntry, DayOff, ResolvedSettings } from '../domain/types'
 // 2026-09-01 is a Tuesday; Sundays are 6, 13, 20, 27. The default weekly off is Sunday (0).
 const S = (over: Partial<ResolvedSettings> = {}): ResolvedSettings => ({
   payBasis: 'daily', attendanceMode: 'day', shiftHours: 8, weeklyOff: 0, monthlyDivisor: 'calendar',
-  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null, ...over,
+  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null,
+  payCycle: 'weekly', cycleEndWeekday: 6, ...over,
 });
 let n = 0;
 const att = (date: string, status: AttendanceEntry['status'], hours: number | null = null): AttendanceEntry => ({

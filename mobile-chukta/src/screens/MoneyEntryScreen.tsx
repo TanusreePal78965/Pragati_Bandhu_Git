@@ -6,6 +6,7 @@ import { sessionToday, useLocalData, useSession } from '../app/session';
 import { activeMoneyRows } from '../domain/attendance';
 import { useT } from '../i18n/useT';
 import { addAdjustment, addAdvance, addPayment, listAdvances } from '../repos/money';
+import { SettledError } from '../repos/lockGuard';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -86,8 +87,8 @@ export function MoneyEntryScreen() {
         });
       } else if (params.kind === 'payment') await addPayment(session.repo, base);
       else await addAdvance(session.repo, { ...base, type: params.kind });
-    } catch {
-      setSaveError('common.saveFailed');
+    } catch (e) {
+      setSaveError(e instanceof SettledError ? 'settle.locked' : 'common.saveFailed');
       setBusy(false);
       return;
     }

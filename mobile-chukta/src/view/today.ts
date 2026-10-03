@@ -1,8 +1,9 @@
 import { effectiveAttendance } from '../domain/attendance';
 import { classifyDay, type DayClass } from '../domain/dayClass';
 import { effectiveDaysOff, latestByDate } from '../domain/latest';
+import { isSettled } from '../domain/lock';
 import { resolveSettings } from '../domain/settings';
-import type { AttendanceEntry, DayOff, OvertimeEntry, Property, ResolvedSettings, Worker } from '../domain/types';
+import type { AttendanceEntry, DayOff, OvertimeEntry, Property, ResolvedSettings, Settlement, Worker } from '../domain/types';
 import { compareDates } from '../utils/dates';
 
 export type TodayRow = {
@@ -10,6 +11,8 @@ export type TodayRow = {
   /** Full day off (weekly off, holiday or closure): attendance here means work on a day off. */
   isOff: boolean;
   dayClass: DayClass; entry: AttendanceEntry | null; overtime: OvertimeEntry | null; autoOtHours: number;
+  /** The date falls inside a settled pay period: the day is locked. */
+  settled: boolean;
 };
 
 export function effectiveDayOffFor(daysOff: DayOff[], date: string): DayOff | null {
@@ -19,7 +22,7 @@ export function effectiveDayOffFor(daysOff: DayOff[], date: string): DayOff | nu
 /** One row per worker employed on `date`, with that day's effective attendance and overtime (latest wins). */
 export function buildTodayRows(
   workers: Worker[], property: Property, entries: AttendanceEntry[], date: string,
-  daysOff: DayOff[] = [], overtime: OvertimeEntry[] = [],
+  daysOff: DayOff[] = [], overtime: OvertimeEntry[] = [], settlements: Settlement[] = [],
 ): TodayRow[] {
   const dayOff = effectiveDayOffFor(daysOff, date) ?? undefined;
   const byWorker = new Map<string, AttendanceEntry[]>();
@@ -47,7 +50,7 @@ export function buildTodayRows(
     const shift = settings.shiftHours > 0 ? settings.shiftHours : 8;
     const ot = otByWorker.get(worker.id);
     rows.push({
-      worker, settings, dayClass, entry,
+      worker, settings, dayClass, entry, settled: isSettled(settlements, worker.id, date),
       isOff: dayClass.kind === 'off' && dayClass.portion === 'full',
       overtime: ot ? latestByDate(ot).get(date) ?? null : null,
       autoOtHours: entry?.status === 'hours' && (entry.hours ?? 0) > shift ? (entry.hours ?? 0) - shift : 0,

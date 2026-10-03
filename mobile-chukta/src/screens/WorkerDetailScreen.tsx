@@ -3,13 +3,16 @@ import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
+import { isSettled } from '../domain/lock';
 import { resolveSettings } from '../domain/settings';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendance } from '../repos/attendance';
 import { listDaysOff } from '../repos/daysOff';
+import { SettledError } from '../repos/lockGuard';
 import { listAdjustments, listAdvances, listPayments, voidAdjustment, voidAdvance, voidPayment } from '../repos/money';
 import { listOvertime } from '../repos/overtime';
+import { getDueSettlement, listSettlements } from '../repos/settlements';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -32,6 +35,7 @@ import { colors, radius, shadows, space } from '../ui/theme';
 import { daysInMonth } from '../utils/dates';
 import { explanationText, formatDate } from '../utils/format';
 import { formatRupees } from '../utils/money';
+import { formatPeriod } from '../view/dueList';
 import { getWorkerLedger } from '../view/ledgerQueries';
 import { buildMoneyHistory, type HistoryItem } from '../view/moneyHistory';
 import { buildMonthGrid, shiftMonth } from '../view/monthGrid';
@@ -57,7 +61,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
     if (!worker) return null;
     const from = `${ym.year}-${pad(ym.month)}-01`;
     const to = `${ym.year}-${pad(ym.month)}-${pad(daysInMonth(ym.year, ym.month))}`;
-    const [ledger, attendance, advances, payments, adjustments, daysOff, overtime] = await Promise.all([
+    const [ledger, attendance, advances, payments, adjustments, daysOff, overtime, settlements, due] = await Promise.all([
       getWorkerLedger(s.db, worker, property, today),
       listAttendance(s.db, worker.id, from, to),
       listAdvances(s.db, worker.id),
@@ -65,12 +69,16 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
       listAdjustments(s.db, worker.id),
       listDaysOff(s.db, property.id),
       listOvertime(s.db, worker.id),
+      listSettlements(s.db, worker.id),
+      s.identity.kind === 'owner' ? getDueSettlement(s.db, worker, property, today) : Promise.resolve(null),
     ]);
     const grid = buildMonthGrid({
       year: ym.year, month: ym.month, settings: resolveSettings(worker, property), joiningDate: worker.joining_date,
-      leftDate: worker.left_date, today, attendance, daysOff, overtime,
+      leftDate: worker.left_date, today, attendance, daysOff, overtime, workerId: worker.id, settlements,
     });
-    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments) };
+    const voided = new Set(settlements.map((x) => x.voids_id).filter(Boolean));
+    const payslips = settlements.filter((x) => !x.voids_id).map((x) => ({ settlement: x, voided: voided.has(x.id) }));
+    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments), payslips, due, settlements };
   }, [property, workerId, ym.year, ym.month, today]);
 
   const worker = data?.worker ?? null;
@@ -87,8 +95,8 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           else if (item.table === 'earning_adjustments') await voidAdjustment(session.repo, item.id);
           else await voidPayment(session.repo, item.id);
           session.afterWrite();
-        } catch {
-          Alert.alert(t('common.saveFailed'));
+        } catch (e) {
+          Alert.alert(t(e instanceof SettledError ? 'settle.locked' : 'common.saveFailed'));
         } finally {
           correcting.current = false;
         }
@@ -104,7 +112,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
       </Screen>
     );
   }
-  const { ledger, grid, history } = data;
+  const { ledger, grid, history, payslips, settlements } = data;
   const due = ledger.wageDuePaise;
   const isOwner = session.identity.kind === 'owner';
 
@@ -188,6 +196,14 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
 
       </HeroCard>
 
+      {isOwner && data.due ? (
+        <Button
+          title={t('settle.button', { period: formatPeriod(data.due.period, t) })}
+          onPress={() => navigation.navigate('Settle', { workerId })}
+          testID="settle-open"
+        />
+      ) : null}
+
       {/* Money Action Buttons */}
       <View style={styles.actions}>
         {([...(['advance', 'repayment', 'writeoff', 'payment'] as const), ...(isOwner ? (['bonus', 'deduction'] as const) : [])]).map((kind) => (
@@ -209,6 +225,20 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           onPrev={() => setYm(shiftMonth(ym.year, ym.month, -1))}
           onNext={() => setYm(shiftMonth(ym.year, ym.month, 1))}
         />
+      </Section>
+
+      <Section title={t('payslip.list')}>
+        {payslips.length === 0 ? <Muted>{t('payslip.none')}</Muted> : null}
+        {payslips.map(({ settlement: p, voided }) => (
+          <Row
+            key={p.id}
+            testID={`payslip-${p.id}`}
+            title={formatPeriod({ start: p.period_start, end: p.period_end }, t)}
+            subtitle={formatRupees(p.paid_now_paise + p.advance_recovered_paise)}
+            right={voided ? <StatusChip label={t('payslip.unlocked')} tone="warning" /> : undefined}
+            onPress={() => navigation.navigate('Payslip', { settlementId: p.id })}
+          />
+        ))}
       </Section>
 
       {/* Money History Section */}
@@ -238,7 +268,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
                 <Text style={[styles.amount, (item.isVoided || item.isVoid) && styles.struck]}>
                   {`${item.kind === 'deduction' ? '−' : ''}${formatRupees(item.amountPaise)}`}
                 </Text>
-                {isOwner && item.canCorrect ? (
+                {isOwner && item.canCorrect && !isSettled(settlements, workerId, item.date) ? (
                   <Button
                     kind="secondary"
                     title={t('worker.correct')}

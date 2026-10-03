@@ -19,6 +19,7 @@ import {
   WeekdayPicker,
 } from '../ui/components';
 import { ExtraPayFields } from '../ui/ExtraPayFields';
+import { PayCycleFields } from '../ui/PayCycleFields';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { space } from '../ui/theme';
 import { propertyToFormValues, validatePropertyForm, type FieldErrors, type PropertyFormValues } from '../view/forms';
@@ -137,6 +138,9 @@ export function PropertyFormScreen() {
       </Section>
 
       <ExtraPayFields value={values} allowInherit={false} errors={errors} testIDPrefix="prop-extra"
+        onChange={(patch) => set(patch as Partial<PropertyFormValues>)} />
+
+      <PayCycleFields value={values} allowInherit={false} testIDPrefix="prop-cycle"
         onChange={(patch) => set(patch as Partial<PropertyFormValues>)} />
 
       <ErrorText>{saveError ? t(saveError) : null}</ErrorText>

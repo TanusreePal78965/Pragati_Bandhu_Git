@@ -32,3 +32,9 @@ test('Phase 2A explanation lines format amounts as rupees', () => {
   expect(explanationText({ key: 'ledger.explain.deduction', params: { amount: 20000 } }, t)).toBe('Deduction: −₹200');
   expect(explanationText({ key: 'ledger.explain.daysOffPaid', params: { days: 1.5 } }, t)).toBe('1.5 days off (paid)');
 });
+
+test('Phase 2D strings exist', () => {
+  expect(t('settle.title')).toBe('Settle pay');
+  expect(t('payslip.carryOwed', { amount: '₹200' })).toBe('Carried forward: ₹200 still to pay');
+  expect(t('settle.locked')).toBe('This period is settled. Unlock it first to change entries.');
+});

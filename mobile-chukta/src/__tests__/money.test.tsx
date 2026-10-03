@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
 import * as moneyRepo from '../repos/money';
+import { settleWorker } from '../repos/settlements';
 import { upsertLocal } from '../repos/write';
 import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
@@ -212,4 +213,30 @@ test('calendar: a half day off shows the sun icon and a named label', async () =
   const cell = await screen.findByTestId('day-2026-09-02');
   expect(within(cell).getByLabelText('sunny-outline')).toBeTruthy();
   expect(cell.props.accessibilityLabel).toContain('Half closure');
+});
+
+test('worker detail offers Settle when a period is due, and shows no payslips yet', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker());
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  expect(await screen.findByText('Settle 1–5 Sep')).toBeTruthy();
+  expect(screen.getByText('No payslips yet.')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('settle-open'));
+  expect((await screen.findByTestId('current-route')).props.children).toBe('Settle');
+});
+
+test('saving money inside a settled period shows the locked message', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker());
+  await settleWorker(s.repo, { worker: worker(), property: property(), periodStart: '2026-09-01', today: '2026-09-07',
+    paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'advance' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '100');
+  fireEvent.press(screen.getByTestId('money-date'));
+  fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 3));
+  fireEvent.press(screen.getByTestId('save'));
+  expect(await screen.findByText('This period is settled. Unlock it first to change entries.')).toBeTruthy();
+  expect(await s.db.getAllAsync('select id from advance_entries')).toEqual([]);
 });

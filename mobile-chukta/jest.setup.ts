@@ -6,3 +6,5 @@ jest.mock('@react-native-community/datetimepicker', () => {
   const { View } = require('react-native');
   return { __esModule: true, default: (props: object) => React.createElement(View, { testID: 'date-picker', ...props }) };
 });
+jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///tmp/payslip.png') }));
+jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(async () => true), shareAsync: jest.fn(async () => undefined) }));
