@@ -102,6 +102,22 @@ begin
   end loop;
 end $$;
 
+-- Pay settings on workers are owner-only (the Phase 1 member_update policy also covers staff).
+create or replace function chukta.guard_worker_pay_settings() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if chukta.jwt_role() = 'staff' and (
+       new.offday_multiplier is distinct from old.offday_multiplier
+    or new.ot_mode is distinct from old.ot_mode
+    or new.ot_multiplier is distinct from old.ot_multiplier
+    or new.ot_rate_paise is distinct from old.ot_rate_paise) then
+    raise exception 'only the owner can change pay settings' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger trg_guard_pay_settings before update on chukta.workers
+  for each row execute function chukta.guard_worker_pay_settings();
+
 -- 4. Grants.
 grant select, insert on chukta.days_off, chukta.overtime_entries, chukta.earning_adjustments to authenticated;
 grant update (name, kind, portion, pay_rule, is_active) on chukta.days_off to authenticated;
@@ -118,7 +134,7 @@ create policy member_select on chukta.days_off for select to authenticated using
 create policy owner_insert on chukta.days_off for insert to authenticated
   with check (chukta.is_owner_of(property_id) and chukta.is_own_write(created_by, created_by_role));
 create policy staff_insert on chukta.days_off for insert to authenticated
-  with check (chukta.is_staff_of(property_id) and kind = 'closure' and chukta.is_own_write(created_by, created_by_role));
+  with check (chukta.is_staff_of(property_id) and kind = 'closure' and pay_rule = 'by_basis' and chukta.is_own_write(created_by, created_by_role));
 create policy owner_update on chukta.days_off for update to authenticated
   using (chukta.is_owner_of(property_id)) with check (chukta.is_owner_of(property_id));
 
