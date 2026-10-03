@@ -324,8 +324,10 @@ function AttendanceRow({
   const [offdayAmount, setOffdayAmount] = useState(entryAmount !== null ? paiseToInput(entryAmount) : '');
   const [amountError, setAmountError] = useState(false);
   const [otOpen, setOtOpen] = useState(false);
-  const [otText, setOtText] = useState(row.overtime ? String(row.overtime.hours) : '');
-  const [otAmount, setOtAmount] = useState('');
+  const otText0 = row.overtime ? String(row.overtime.hours) : '';
+  const otAmount0 = row.overtime?.custom_amount_paise != null ? paiseToInput(row.overtime.custom_amount_paise) : '';
+  const [otText, setOtText] = useState(otText0);
+  const [otAmount, setOtAmount] = useState(otAmount0);
   const [otError, setOtError] = useState(false);
   const [otAmountError, setOtAmountError] = useState(false);
   const [otBusy, setOtBusy] = useState(false);
@@ -341,12 +343,20 @@ function AttendanceRow({
     setAmountError(false);
   }, [entryAmount]);
 
+  // Keep the overtime fields on the latest entry, so editing the hours doesn't drop an owner's custom amount.
+  useEffect(() => {
+    setOtText(otText0);
+    setOtAmount(otAmount0);
+  }, [otText0, otAmount0]);
+
   const labelKey = (st: AttendanceStatus) => (row.isOff ? OFF_STATUS_KEY[st] : STATUS_KEY[st]);
   const current: AttendanceStatus = row.entry ? row.entry.status : row.isOff ? 'absent' : 'present';
   const hoursMode = row.settings.attendanceMode === 'hours';
   const dayOff = row.dayClass.kind === 'off' ? row.dayClass.dayOff : null;
+  // Full off because of the weekly off: a half-day holiday or closure there doesn't rename the day.
+  const weeklyWithHalf = row.dayClass.kind === 'off' && row.dayClass.weekly && dayOff?.portion === 'half';
   const subtitle = row.isOff
-    ? dayOff ? dayOff.name : t('today.weeklyOff')
+    ? dayOff && !weeklyWithHalf ? dayOff.name : t('today.weeklyOff')
     : row.entry?.status === 'hours'
       ? t('today.hoursValue', { hours: row.entry.hours })
       : dayOff ? t('today.dayOffHalf', { name: dayOff.name }) : undefined;

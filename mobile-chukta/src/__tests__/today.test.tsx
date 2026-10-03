@@ -46,7 +46,7 @@ test('hours mode: valid hours are saved, invalid hours show an error', async () 
   await waitFor(async () => expect((await rowsFor(s, 'w2')).map((r) => [r.status, r.hours])).toEqual([['hours', 5.5]]));
 });
 
-test('weekly-off workers show Weekly off and have no controls', async () => {
+test('weekly-off workers show Weekly off, with work-on-a-day-off controls and no overtime link', async () => {
   const s = await seeded();
   renderScreen('Tabs', TodayScreen, s);
   expect(await screen.findByText('Weekly off')).toBeTruthy();
@@ -197,4 +197,28 @@ test('owner overtime: a custom amount is saved in paise, and 0 means not set', a
   expect(await screen.findByText('OT 3 h')).toBeTruthy();
   expect(await s.db.getAllAsync('select hours, custom_amount_paise from overtime_entries order by created_at, id'))
     .toEqual([{ hours: 2, custom_amount_paise: null }, { hours: 3, custom_amount_paise: 15000 }]);
+});
+
+test('owner editing overtime hours keeps the existing custom amount', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram' }));
+  await upsertLocal(s.db, 'overtime_entries', { id: 'o1', property_id: 'p1', worker_id: 'w1', date: '2026-09-07', hours: 2,
+    custom_amount_paise: 15000, note: null, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-06T12:00:00Z', server_updated_at: null });
+  renderScreen('Tabs', TodayScreen, s);
+  fireEvent.press(await screen.findByTestId('ot-open-w1'));
+  expect(screen.getByTestId('ot-amount-w1').props.value).toBe('150');
+  fireEvent.changeText(screen.getByTestId('ot-hours-w1'), '3');
+  fireEvent.press(screen.getByTestId('ot-save-w1'));
+  expect(await screen.findByText('OT 3 h')).toBeTruthy();
+  expect(await s.db.getAllAsync("select hours, custom_amount_paise from overtime_entries where id != 'o1'"))
+    .toEqual([{ hours: 3, custom_amount_paise: 15000 }]);
+});
+
+test('a half-day closure on the weekly off still reads Weekly off for that worker', async () => {
+  const s = await seeded();
+  await upsertLocal(s.db, 'days_off', dayOffRow({ portion: 'half' }));
+  renderScreen('Tabs', TodayScreen, s);
+  expect(await screen.findByText('Weekly off')).toBeTruthy(); // w3 (Monday off)
+  expect(screen.getAllByText('Bandh · half day').length).toBeGreaterThan(0); // banner and working rows
 });
