@@ -62,6 +62,13 @@ test('payslip view: only non-zero lines, carry forward wording', () => {
   expect(buildPayslipView(settlement({ summary: {} }), true).attendance).toEqual([]);
 });
 
+test('payslip view: a negative carried-in uses the overpaid wording with a positive amount', () => {
+  expect(buildPayslipView(settlement({ opening_balance_paise: -700 }), false).balance[0])
+    .toEqual({ key: 'settle.openingOverpaid', amountPaise: 700, amountInText: true });
+  expect(buildPayslipView(settlement({ opening_balance_paise: 2000 }), false).balance[0])
+    .toEqual({ key: 'payslip.opening', amountPaise: 2000 });
+});
+
 test('today rows are flagged settled', () => {
   const rows = buildTodayRows([worker()], property(), [], '2026-09-03', [], [], [settlement()]);
   expect(rows[0].settled).toBe(true);

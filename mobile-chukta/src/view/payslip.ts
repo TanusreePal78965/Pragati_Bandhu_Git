@@ -1,6 +1,9 @@
 import type { Settlement, SettlementSummary } from '../domain/types';
 
-export type PayslipLine = { key: string; params?: Record<string, string | number>; amountPaise?: number; negative?: boolean };
+/** `amountInText`: the formatted amount goes into the text as {{amount}} instead of the amount column. */
+export type PayslipLine = {
+  key: string; params?: Record<string, string | number>; amountPaise?: number; negative?: boolean; amountInText?: boolean;
+};
 export type PayslipView = { header: { settledOn: string; rateKey: string; ratePaise: number };
   attendance: PayslipLine[]; earnings: PayslipLine[]; deductions: PayslipLine[]; balance: PayslipLine[]; carry: PayslipLine;
   advanceLeft: PayslipLine; voided: boolean };
@@ -33,7 +36,9 @@ export function buildPayslipView(s: Settlement, voided: boolean): PayslipView {
       rateKey: `payBasis.${s.pay_basis}`, ratePaise: s.rate_paise },
     attendance, earnings, deductions,
     balance: [
-      { key: 'payslip.opening', amountPaise: s.opening_balance_paise },
+      s.opening_balance_paise < 0
+        ? { key: 'settle.openingOverpaid', amountPaise: -s.opening_balance_paise, amountInText: true }
+        : { key: 'payslip.opening', amountPaise: s.opening_balance_paise },
       { key: 'payslip.paidInPeriod', amountPaise: s.paid_in_period_paise },
       { key: 'payslip.paidNow', amountPaise: s.paid_now_paise },
     ],

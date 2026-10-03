@@ -96,8 +96,8 @@ export function PayslipScreen() {
 
   const line = (l: PayslipLine, i: number) => (
     <View key={`${l.key}-${i}`} style={styles.line}>
-      <Text style={styles.lineText}>{t(l.key, l.params)}</Text>
-      {l.amountPaise !== undefined ? (
+      <Text style={styles.lineText}>{t(l.key, l.amountInText ? { ...l.params, amount: formatRupees(l.amountPaise ?? 0) } : l.params)}</Text>
+      {l.amountPaise !== undefined && !l.amountInText ? (
         <Text style={styles.amount}>{`${l.negative ? '−' : ''}${formatRupees(l.amountPaise)}`}</Text>
       ) : null}
     </View>

@@ -35,6 +35,22 @@ test('payslip shows the frozen figures and shares as an image', async () => {
   expect(captureRef).toHaveBeenCalled();
 });
 
+test('an overpaid carried-in reads as overpaid, not a negative amount', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  const w = worker({ joining_date: '2026-08-23' });
+  await upsertLocal(s.db, 'workers', w);
+  // 23–29 Aug earns 6 × ₹500 = ₹3000; paying ₹4000 leaves ₹1000 overpaid, carried into 30 Aug–5 Sep.
+  await settleWorker(s.repo, { worker: w, property: property(), today: '2026-08-30', periodStart: '2026-08-23', paidNowPaise: 400000,
+    recoveredPaise: 0, mode: 'cash' });
+  const st = await settleWorker(s.repo, { worker: w, property: property(), today: '2026-09-07', periodStart: '2026-08-30', paidNowPaise: 0,
+    recoveredPaise: 0, mode: null });
+  expect(st.opening_balance_paise).toBe(-100000);
+  renderScreen('Payslip', PayslipScreen, s, { settlementId: st.id });
+  expect(await screen.findByText('Carried in: overpaid ₹1,000')).toBeTruthy();
+  expect(screen.queryByText(/−₹1,000/)).toBeNull();
+});
+
 test('owner unlocks after confirming; the slip then shows Unlocked', async () => {
   const { s, st } = await settled();
   const alert = jest.spyOn(Alert, 'alert');
