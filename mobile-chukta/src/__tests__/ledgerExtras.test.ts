@@ -89,3 +89,39 @@ test('a deduction larger than earned makes wage due negative', () => {
   const r = run(S(), 50000, { adjustments: [adj('d1', 'deduction', 500000)] });
   expect(r.wageDuePaise).toBe(300000 - 500000);
 });
+
+test('a 0-hour explicit overtime entry clears the date, even with a custom amount and hours above the shift', () => {
+  const s = S({ payBasis: 'hourly', attendanceMode: 'hours' });
+  const r = run(s, 6000, {
+    attendance: [att('2026-09-03', 'hours', { hours: 10 })],
+    overtime: [ot('2026-09-03', 0, { custom_amount_paise: 50000 })],
+  });
+  expect(r.overtimePaise).toBe(0);
+});
+
+test('overtime and day-off work dated before joining or after today are ignored', () => {
+  const r = run(S(), 50000, {
+    joiningDate: '2026-09-02', today: '2026-09-05',
+    overtime: [ot('2026-09-01', 2), ot('2026-09-06', 2)],
+    attendance: [att('2026-08-30', 'present'), att('2026-09-06', 'present')],
+  });
+  expect([r.overtimePaise, r.offdayExtraPaise]).toEqual([0, 0]);
+});
+
+test('a voided deduction does not count', () => {
+  const r = run(S(), 50000, { adjustments: [adj('d1', 'deduction', 20000), adj('v', 'deduction', 20000, { voids_id: 'd1' })] });
+  expect(r.deductionPaise).toBe(0);
+  expect(r.earnedPaise).toBe(300000);
+});
+
+test('fractional components are each rounded half-up, then summed', () => {
+  const s = S({ payBasis: 'hourly', attendanceMode: 'hours', otMultiplier: 1.5, offdayMultiplier: 1.5 });
+  const r = run(s, 6251, {
+    attendance: [att('2026-09-06', 'hours', { hours: 3 })],
+    overtime: [ot('2026-09-03', 1.25)],
+  });
+  expect(r.offdayExtraPaise).toBe(28130); // 3/8 x 50008 x 1.5 = 28129.5
+  expect(r.overtimePaise).toBe(11721); // 1.25 x 6251 x 1.5 = 11720.625
+  expect(r.earnedPaise).toBe(r.basePaise + 28130 + 11721);
+  expect(r.basePaise).toBe(6 * 8 * 6251);
+});

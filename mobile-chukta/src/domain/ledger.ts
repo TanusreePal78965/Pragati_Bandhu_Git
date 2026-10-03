@@ -121,7 +121,8 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
     const explicit = otByDate.get(d);
     const autoHours = entry?.status === 'hours' && (entry.hours ?? 0) > shift ? (entry.hours ?? 0) - shift : 0;
     const otHours = explicit ? explicit.hours : autoHours;
-    if (otHours > 0 || explicit?.custom_amount_paise != null) {
+    // An explicit 0-hour entry clears overtime for the date, even with a custom amount (spec 4.2).
+    if (otHours > 0) {
       if (explicit?.custom_amount_paise != null) otPay += explicit.custom_amount_paise;
       else if (s.otMode === 'fixed' && s.otRatePaise != null) otPay += otHours * s.otRatePaise;
       else otPay += otHours * (dayRate / shift) * (s.otMode === 'fixed' ? 1 : s.otMultiplier);
