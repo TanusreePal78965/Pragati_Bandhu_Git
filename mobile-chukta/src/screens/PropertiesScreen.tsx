@@ -4,7 +4,7 @@ import { useStackNav } from '../app/routes';
 import { useLocalData, useManualRefresh, useSession } from '../app/session';
 import { useT } from '../i18n/useT';
 import { listAllProperties, updatePropertySettings } from '../repos/properties';
-import { Button, EmptyState, Loading, Muted, Row, Screen, ScreenHeader, Section, StatusChip } from '../ui/components';
+import { Button, EmptyState, Loading, Row, Screen, ScreenHeader, Section, StatusChip } from '../ui/components';
 import { Icon } from '../ui/Icon';
 import { colors, space } from '../ui/theme';
 
@@ -65,13 +65,6 @@ export function PropertiesScreen() {
         />
       ) : null}
 
-      {/* Hidden text kept for test compatibility if any checks Muted */}
-      {data.length === 0 ? (
-        <Muted style={styles.hidden}>
-          {session.syncStatus.lastSyncedAt ? t('properties.empty') : t('properties.waitingForSync')}
-        </Muted>
-      ) : null}
-
       <View style={styles.list}>
         {active.map((p) => {
           const isSelected = p.id === session.propertyId;
@@ -82,7 +75,7 @@ export function PropertiesScreen() {
               subtitle={p.address ?? undefined}
               selected={isSelected}
               left={<Icon name="business-outline" size={24} color={isSelected ? colors.primaryDark : colors.muted} />}
-              right={isSelected ? <StatusChip label="Active" tone="primary" /> : undefined}
+              right={isSelected ? <StatusChip label={t('properties.active')} tone="primary" /> : undefined}
               onPress={() => void choose(p.id)}
               testID={`property-${p.id}`}
             />
@@ -123,9 +116,5 @@ export function PropertiesScreen() {
 const styles = StyleSheet.create({
   list: {
     gap: space.xs,
-  },
-  hidden: {
-    height: 0,
-    opacity: 0,
   },
 });

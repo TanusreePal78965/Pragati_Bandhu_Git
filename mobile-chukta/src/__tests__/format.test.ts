@@ -26,3 +26,9 @@ test('explanation lines format money params as rupees and the month by name', ()
     params: { month: '2026-09', base: 1000000, deductionDays: 1, perDay: 100000, divisor: 30, eligibleDays: 10 } }, t))
     .toBe('September 2026 (10 days): ₹10,000 − 1 days × ₹1,000');
 });
+
+test('Phase 2A explanation lines format amounts as rupees', () => {
+  expect(explanationText({ key: 'ledger.explain.overtime', params: { hours: 2, amount: 18750 } }, t)).toBe('2 overtime hours: ₹187.50');
+  expect(explanationText({ key: 'ledger.explain.deduction', params: { amount: 20000 } }, t)).toBe('Deduction: −₹200');
+  expect(explanationText({ key: 'ledger.explain.daysOffPaid', params: { days: 1.5 } }, t)).toBe('1.5 days off (paid)');
+});

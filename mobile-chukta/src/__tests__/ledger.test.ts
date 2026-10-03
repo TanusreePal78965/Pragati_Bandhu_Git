@@ -2,7 +2,8 @@ import { calculateWorkerLedger } from '../domain/ledger';
 import type { AttendanceEntry, ResolvedSettings } from '../domain/types';
 
 const S = (over: Partial<ResolvedSettings> = {}): ResolvedSettings => ({
-  payBasis: 'daily', attendanceMode: 'day', shiftHours: 8, weeklyOff: 0, monthlyDivisor: 'calendar', ...over,
+  payBasis: 'daily', attendanceMode: 'day', shiftHours: 8, weeklyOff: 0, monthlyDivisor: 'calendar',
+  offdayMultiplier: 1, otMode: 'multiplier', otMultiplier: 1, otRatePaise: null, ...over,
 });
 let n = 0;
 const att = (date: string, status: AttendanceEntry['status'], hours: number | null = null): AttendanceEntry => ({
@@ -20,20 +21,23 @@ test('spec example: daily ₹500, Sunday off, Sep 1–7, one absence, one 4/8h d
   expect(r.explanation).toEqual([{ key: 'ledger.explain.daily', params: { days: 4.5, rate: 50000 } }]);
 });
 
-test('daily: weekly-off entries are ignored and off days unpaid', () => {
+test('daily: work on the weekly off is paid as work on a day off (1×); off days otherwise unpaid', () => {
   const r = calculateWorkerLedger({
     ...base, settings: S(), ratePaise: 50000, joiningDate: '2026-09-06', today: '2026-09-07',
     attendance: [att('2026-09-06', 'present')],
   });
-  expect(r.earnedPaise).toBe(50000); // only Monday 7th
+  // Monday 7th (50000) + Sunday worked at 1× as extra (50000); spec §5.5.
+  expect(r.earnedPaise).toBe(100000);
 });
 
-test('hourly: normal day = shift hours, entries capped at shift', () => {
+test('hourly: base capped at shift; hours above shift are automatic overtime (spec §5.7)', () => {
   const r = calculateWorkerLedger({
     ...base, settings: S({ payBasis: 'hourly', attendanceMode: 'hours' }), ratePaise: 6000,
     joiningDate: '2026-09-01', today: '2026-09-02', attendance: [att('2026-09-02', 'hours', 12)],
   });
-  expect(r.earnedPaise).toBe(16 * 6000);
+  expect(r.basePaise).toBe(16 * 6000);
+  expect(r.overtimePaise).toBe(4 * 6000);
+  expect(r.earnedPaise).toBe(120000);
 });
 
 test('weekly: off day paid, absence deducts rate/7', () => {

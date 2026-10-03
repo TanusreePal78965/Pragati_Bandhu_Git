@@ -18,7 +18,13 @@ export type IconName =
   | 'cash-outline'
   | 'trash-outline'
   | 'create-outline'
-  | 'refresh-outline';
+  | 'refresh-outline'
+  | 'sunny-outline'
+  | 'moon-outline'
+  | 'add-outline'
+  | 'gift-outline'
+  | 'remove-circle-outline'
+  | 'storefront-outline';
 
 interface IconProps {
   name: string;

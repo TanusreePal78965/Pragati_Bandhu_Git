@@ -85,6 +85,7 @@ export function ScreenHeader({
   // Not useNavigation(): that throws outside a NavigationContainer, and the first-run language
   // picker renders this header before the navigator mounts.
   const navigation = useContext(NavigationContext);
+  const t = useT();
   const insets = useSafeAreaInsets();
 
   const handleBack = () => {
@@ -100,7 +101,7 @@ export function ScreenHeader({
             <Pressable
               onPress={handleBack}
               accessibilityRole="button"
-              accessibilityLabel="Back"
+              accessibilityLabel={t('common.back')}
               style={styles.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -121,11 +122,13 @@ export function ScreenHeader({
 export function Card({
   children,
   style,
+  testID,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.card, style]} testID={testID}>{children}</View>;
 }
 
 export function HeroCard({
@@ -481,20 +484,22 @@ export function StatusChip({
   tone = 'primary',
   icon,
   testID,
+  onPress,
 }: {
   label: string;
   tone?: StatusTone;
   icon?: IconName;
   testID?: string;
+  onPress?: () => void;
 }) {
   const tStyle = STATUS_TONE_STYLES[tone];
-  return (
+  const chip = (
     <View
       style={[
         styles.chip,
         { backgroundColor: tStyle.bg, borderColor: tStyle.border },
       ]}
-      testID={testID}
+      testID={onPress ? undefined : testID}
     >
       {icon ? (
         <Icon name={icon} size={12} color={tStyle.text} style={styles.chipIcon} />
@@ -503,6 +508,12 @@ export function StatusChip({
       )}
       <Text style={[styles.chipText, { color: tStyle.text }]}>{label}</Text>
     </View>
+  );
+  if (!onPress) return chip;
+  return (
+    <Pressable testID={testID} accessibilityRole="button" onPress={onPress}>
+      {chip}
+    </Pressable>
   );
 }
 

@@ -2,7 +2,8 @@ import type { AdvanceEntry, AttendanceEntry, Property, WagePayment, Worker } fro
 
 export const property = (over: Partial<Property> = {}): Property => ({
   id: 'p1', shop_id: 'shop1', name: 'Main', address: null, is_active: 1, default_pay_basis: 'daily', default_attendance_mode: 'day',
-  shift_hours: 8, weekly_off: 0, monthly_divisor: 'calendar', created_at: '2026-09-01T00:00:00Z', server_updated_at: null, ...over,
+  shift_hours: 8, weekly_off: 0, monthly_divisor: 'calendar', offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null,
+  created_at: '2026-09-01T00:00:00Z', server_updated_at: null, ...over,
 });
 
 export const worker = (over: Partial<Worker> = {}): Worker => ({

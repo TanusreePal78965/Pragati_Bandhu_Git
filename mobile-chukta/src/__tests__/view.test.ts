@@ -89,3 +89,17 @@ test('summaries compute every worker from three batched queries', async () => {
     ['Sita', 300000, 0],
   ]);
 });
+
+test('worker ledger from SQLite includes days off, overtime and adjustments', async () => {
+  const db = await seeded(); // Ram: daily ₹500 from 2026-09-01, absent 09-03, ₹500 paid, ₹1,000 advance
+  await upsertLocal(db, 'days_off', { id: 'h1', property_id: 'p1', date: '2026-09-02', name: 'H', kind: 'holiday', portion: 'full',
+    pay_rule: 'all_paid', is_active: 1, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-01T00:00:00Z', server_updated_at: null });
+  await upsertLocal(db, 'overtime_entries', { id: 'o1', property_id: 'p1', worker_id: 'w1', date: '2026-09-04', hours: 2,
+    custom_amount_paise: null, note: null, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-04T18:00:00Z', server_updated_at: null });
+  await upsertLocal(db, 'earning_adjustments', { id: 'b1', property_id: 'p1', worker_id: 'w1', type: 'bonus', amount_paise: 10000,
+    date: '2026-09-05', note: null, voids_id: null, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-05T10:00:00Z', server_updated_at: null });
+  const l = await getWorkerLedger(db, worker(), property(), '2026-09-07');
+  expect([l.basePaise, l.overtimePaise, l.bonusPaise]).toEqual([250000, 12500, 10000]); // holiday paid replaces nothing lost: 5 days
+  const [summary] = await listWorkerSummaries(db, property(), '2026-09-07');
+  expect(summary.ledger.earnedPaise).toBe(l.earnedPaise);
+});

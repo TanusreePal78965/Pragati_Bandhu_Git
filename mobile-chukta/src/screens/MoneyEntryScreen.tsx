@@ -1,11 +1,11 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
 import { activeMoneyRows } from '../domain/attendance';
 import { useT } from '../i18n/useT';
-import { addAdvance, addPayment, listAdvances } from '../repos/money';
+import { addAdjustment, addAdvance, addPayment, listAdvances } from '../repos/money';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -33,9 +33,12 @@ export function MoneyEntryScreen() {
   const navigation = useStackNav();
   const { params } = useRoute<RouteProp<RootStackParamList, 'MoneyEntry'>>();
   const today = sessionToday(session);
-  // A write-off moves no money, so it has no payment mode.
+  // A write-off, bonus or deduction moves no cash at entry time, so it has no payment mode.
   const isWriteoff = params.kind === 'writeoff';
-  const [values, setValues] = useState<MoneyFormValues>({ kind: params.kind, amount: '', date: today, mode: isWriteoff ? null : 'cash', note: '' });
+  const isAdjustment = params.kind === 'bonus' || params.kind === 'deduction';
+  const noMode = isWriteoff || isAdjustment;
+  const isOwner = session.identity.kind === 'owner';
+  const [values, setValues] = useState<MoneyFormValues>({ kind: params.kind, amount: '', date: today, mode: noMode ? null : 'cash', note: '' });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -44,11 +47,15 @@ export function MoneyEntryScreen() {
   const tracksAdvance = params.kind === 'repayment' || params.kind === 'writeoff';
   const { data: advances } = useLocalData((s) => (tracksAdvance ? listAdvances(s.db, params.workerId) : Promise.resolve(null)), [params.workerId, tracksAdvance]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(`entryType.${params.kind}`) });
-  }, [navigation, params.kind, t]);
-
   if (worker === undefined) return <Loading />;
+  // Only the owner may add a bonus or deduction; anyone else sees an error and nothing writable.
+  if (isAdjustment && !isOwner) {
+    return (
+      <Screen header={<ScreenHeader title={t(`entryType.${params.kind}`)} showBack />}>
+        <ErrorText>{t('money.ownerOnly')}</ErrorText>
+      </Screen>
+    );
+  }
   const set = (patch: Partial<MoneyFormValues>) => setValues({ ...values, ...patch });
   const err = (k: string) => (errors[k] ? t(errors[k]) : null);
 
@@ -70,10 +77,14 @@ export function MoneyEntryScreen() {
     setSaveError(null);
     const base = {
       propertyId: worker.property_id, workerId: worker.id, amountPaise: r.value.amountPaise, date: r.value.date,
-      mode: isWriteoff ? undefined : r.value.mode ?? undefined, note: r.value.note ?? undefined,
+      mode: noMode ? undefined : r.value.mode ?? undefined, note: r.value.note ?? undefined,
     };
     try {
-      if (params.kind === 'payment') await addPayment(session.repo, base);
+      if (params.kind === 'bonus' || params.kind === 'deduction') {
+        await addAdjustment(session.repo, {
+          propertyId: base.propertyId, workerId: base.workerId, type: params.kind, amountPaise: base.amountPaise, date: base.date, note: base.note,
+        });
+      } else if (params.kind === 'payment') await addPayment(session.repo, base);
       else await addAdvance(session.repo, { ...base, type: params.kind });
     } catch {
       setSaveError('common.saveFailed');
@@ -93,7 +104,7 @@ export function MoneyEntryScreen() {
           <Avatar name={worker.name} id={worker.id} size={42} />
           <View style={styles.workerInfo}>
             <Text style={styles.workerName}>{worker.name}</Text>
-            <Muted>{worker.phone || 'No phone'}</Muted>
+            <Muted>{worker.phone || t('worker.noPhone')}</Muted>
           </View>
           <StatusChip label={title} tone="primary" />
         </Card>
@@ -126,7 +137,7 @@ export function MoneyEntryScreen() {
           testID="money-date"
         />
 
-        {isWriteoff ? null : (
+        {noMode ? null : (
           <View style={styles.fieldWrap}>
             <Label>{t('money.mode')}</Label>
             <Segmented
@@ -139,10 +150,10 @@ export function MoneyEntryScreen() {
         )}
 
         <Field
-          label={t('money.note')}
+          label={params.kind === 'deduction' ? t('money.noteReason') : t('money.note')}
           value={values.note}
           onChangeText={(note) => set({ note })}
-          placeholder="Optional notes"
+          placeholder={params.kind === 'deduction' ? t('money.reasonPlaceholder') : t('money.notePlaceholder')}
           error={err('note')}
           testID="note"
         />

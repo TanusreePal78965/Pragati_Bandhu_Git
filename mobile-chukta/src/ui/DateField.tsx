@@ -19,12 +19,14 @@ export function DateField({
   value,
   onChange,
   max,
+  disabled,
   testID,
 }: {
   label: string;
   value: string;
   onChange: (date: string) => void;
   max?: string;
+  disabled?: boolean;
   testID?: string;
 }) {
   const t = useT();
@@ -37,8 +39,10 @@ export function DateField({
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={label}
+        disabled={disabled}
+        accessibilityState={{ disabled: !!disabled }}
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.input, pressed && styles.inputPressed]}
+        style={({ pressed }) => [styles.input, pressed && !disabled && styles.inputPressed, disabled && styles.inputDisabled]}
       >
         <Text style={styles.text}>{formatDate(value, t)}</Text>
         <Icon name="calendar-outline" size={20} color={colors.primary} />
@@ -75,5 +79,6 @@ const styles = StyleSheet.create({
   inputPressed: {
     backgroundColor: colors.surfaceHover,
   },
+  inputDisabled: { opacity: 0.6 },
   text: { fontSize: 16, color: colors.text, fontWeight: '500' },
 });

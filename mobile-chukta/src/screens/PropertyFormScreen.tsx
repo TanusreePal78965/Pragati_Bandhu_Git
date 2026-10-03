@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { useLocalData, useSession } from '../app/session';
@@ -18,6 +18,7 @@ import {
   Segmented,
   WeekdayPicker,
 } from '../ui/components';
+import { ExtraPayFields } from '../ui/ExtraPayFields';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { space } from '../ui/theme';
 import { propertyToFormValues, validatePropertyForm, type FieldErrors, type PropertyFormValues } from '../view/forms';
@@ -40,9 +41,6 @@ export function PropertyFormScreen() {
   useEffect(() => {
     if (values === null && existing !== undefined) setValues(propertyToFormValues(existing));
   }, [existing, values]);
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: t(editingId ? 'properties.edit' : 'properties.add') });
-  }, [navigation, editingId, t]);
 
   if (!values) return <Loading />;
   const set = (patch: Partial<PropertyFormValues>) => setValues({ ...values, ...patch });
@@ -137,6 +135,9 @@ export function PropertyFormScreen() {
         <Segmented options={DIVISORS.map((d) => ({ value: d, label: t(`divisor.${d}`) }))} value={values.monthlyDivisor}
           onChange={(monthlyDivisor) => set({ monthlyDivisor })} testIDPrefix="divisor" />
       </Section>
+
+      <ExtraPayFields value={values} allowInherit={false} errors={errors} testIDPrefix="prop-extra"
+        onChange={(patch) => set(patch as Partial<PropertyFormValues>)} />
 
       <ErrorText>{saveError ? t(saveError) : null}</ErrorText>
 

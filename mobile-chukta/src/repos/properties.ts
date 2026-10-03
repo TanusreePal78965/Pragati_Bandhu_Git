@@ -4,13 +4,15 @@ import type { RepoContext } from './context';
 import { insertAndEnqueue, updateAndEnqueue } from './write';
 
 export type PropertySettingsPatch = Partial<Pick<Property,
-  'name' | 'address' | 'is_active' | 'default_pay_basis' | 'default_attendance_mode' | 'shift_hours' | 'weekly_off' | 'monthly_divisor'>>;
+  'name' | 'address' | 'is_active' | 'default_pay_basis' | 'default_attendance_mode' | 'shift_hours' | 'weekly_off' | 'monthly_divisor'
+  | 'offday_multiplier' | 'ot_mode' | 'ot_multiplier' | 'ot_rate_paise'>>;
 
 export async function createProperty(ctx: RepoContext, input: { shopId: string; name: string; address?: string }): Promise<Property> {
   if (ctx.role !== 'owner') throw new Error('only the owner can manage properties');
   const row: Property = {
     id: ctx.newId(), shop_id: input.shopId, name: input.name.trim(), address: input.address ?? null, is_active: 1,
     default_pay_basis: 'daily', default_attendance_mode: 'day', shift_hours: 8, weekly_off: 0, monthly_divisor: 'calendar',
+    offday_multiplier: 1, ot_mode: 'multiplier', ot_multiplier: 1, ot_rate_paise: null,
     created_at: ctx.now().toISOString(), server_updated_at: null,
   };
   await insertAndEnqueue(ctx, 'properties', row);

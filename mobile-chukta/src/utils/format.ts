@@ -4,7 +4,7 @@ import { formatRupees } from './money';
 export type Translate = (key: string, params?: Record<string, unknown>) => string;
 
 const pad = (n: number) => n.toString().padStart(2, '0');
-const MONEY_PARAMS = new Set(['rate', 'base', 'perDay']);
+const MONEY_PARAMS = new Set(['rate', 'base', 'perDay', 'amount']);
 
 /** "2026-09-07" → "7 Sep 2026" in the current language (month names come from i18n, never Intl). */
 export function formatDate(date: string, t: Translate): string {

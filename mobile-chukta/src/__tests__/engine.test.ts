@@ -1,5 +1,5 @@
 import { openTestDb } from '../db/testing/betterSqliteDb';
-import { migrate } from '../db/schema';
+import { migrate, SYNCED_TABLES } from '../db/schema';
 import { backoffDelay, createSyncEngine } from '../sync/engine';
 import type { RemoteReader } from '../sync/pull';
 import type { RemoteError, RemoteWriter } from '../sync/push';
@@ -50,7 +50,7 @@ test('a clean pass pushes, pulls every table, and records lastSyncedAt', async (
   const t = fakeTimers();
   const engine = createSyncEngine({ db, remote, hasSession: async () => true, now: () => NOW, setTimer: t.setTimer, clearTimer: t.clearTimer });
   await engine.run();
-  expect(calls).toEqual({ write: 1, fetch: 6 });
+  expect(calls).toEqual({ write: 1, fetch: SYNCED_TABLES.length });
   expect(engine.getStatus()).toMatchObject({ running: false, pending: 0, dead: 0, lastError: null, lastSyncedAt: NOW.toISOString() });
   expect(t.live()).toEqual([]);
 });
@@ -67,7 +67,7 @@ test('single flight: runs requested mid-pass collapse into one extra pass', asyn
   release();
   await Promise.all([a, b, c]);
   expect(calls.write).toBe(1); // second pass finds the queue empty
-  expect(calls.fetch).toBe(12); // two passes × 6 tables
+  expect(calls.fetch).toBe(2 * SYNCED_TABLES.length); // two passes
 });
 
 test('retryable push failure backs off 5s, 10s, 20s and resets after success', async () => {

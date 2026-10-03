@@ -5,14 +5,16 @@ import { insertAndEnqueue } from './write';
 
 export async function markAttendance(
   ctx: RepoContext,
-  input: { propertyId: string; workerId: string; date: string; status: AttendanceStatus; hours?: number; note?: string },
+  input: { propertyId: string; workerId: string; date: string; status: AttendanceStatus; hours?: number; note?: string; customAmountPaise?: number | null },
 ): Promise<AttendanceEntry> {
   if (input.status === 'hours' && (input.hours === undefined || input.hours < 0 || input.hours > 24)) {
     throw new Error('hours between 0 and 24 required for status hours');
   }
+  if ((input.customAmountPaise ?? null) !== null && ctx.role !== 'owner') throw new Error('only the owner can set a custom amount');
   const row: AttendanceEntry = {
     id: ctx.newId(), property_id: input.propertyId, worker_id: input.workerId, date: input.date, status: input.status,
     hours: input.status === 'hours' ? input.hours! : null, note: input.note ?? null,
+    custom_amount_paise: input.customAmountPaise ?? null,
     created_by: ctx.userId, created_by_role: ctx.role, created_at: ctx.now().toISOString(), server_updated_at: null,
   };
   await insertAndEnqueue(ctx, 'attendance_entries', row);

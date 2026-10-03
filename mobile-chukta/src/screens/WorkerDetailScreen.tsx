@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
@@ -7,7 +7,9 @@ import { resolveSettings } from '../domain/settings';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendance } from '../repos/attendance';
-import { listAdvances, listPayments, voidAdvance, voidPayment } from '../repos/money';
+import { listDaysOff } from '../repos/daysOff';
+import { listAdjustments, listAdvances, listPayments, voidAdjustment, voidAdvance, voidPayment } from '../repos/money';
+import { listOvertime } from '../repos/overtime';
 import { getWorker } from '../repos/workers';
 import {
   Avatar,
@@ -55,32 +57,23 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
     if (!worker) return null;
     const from = `${ym.year}-${pad(ym.month)}-01`;
     const to = `${ym.year}-${pad(ym.month)}-${pad(daysInMonth(ym.year, ym.month))}`;
-    const [ledger, attendance, advances, payments] = await Promise.all([
+    const [ledger, attendance, advances, payments, adjustments, daysOff, overtime] = await Promise.all([
       getWorkerLedger(s.db, worker, property, today),
       listAttendance(s.db, worker.id, from, to),
       listAdvances(s.db, worker.id),
       listPayments(s.db, worker.id),
+      listAdjustments(s.db, worker.id),
+      listDaysOff(s.db, property.id),
+      listOvertime(s.db, worker.id),
     ]);
     const grid = buildMonthGrid({
       year: ym.year, month: ym.month, settings: resolveSettings(worker, property), joiningDate: worker.joining_date,
-      leftDate: worker.left_date, today, attendance,
+      leftDate: worker.left_date, today, attendance, daysOff, overtime,
     });
-    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments) };
+    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments) };
   }, [property, workerId, ym.year, ym.month, today]);
 
   const worker = data?.worker ?? null;
-  useLayoutEffect(() => {
-    if (!worker) return;
-    navigation.setOptions({
-      title: worker.name,
-      headerRight: () => (
-        <Pressable testID="edit-worker" accessibilityRole="button" onPress={() => navigation.navigate('WorkerForm', { workerId })}>
-          <Text style={styles.headerLink}>{t('common.edit')}</Text>
-        </Pressable>
-      ),
-    });
-  }, [worker, navigation, workerId, t]);
-
   const correct = (item: HistoryItem) => Alert.alert(t('worker.correct'), t('worker.correctConfirm'), [
     { text: t('common.cancel'), style: 'cancel' },
     {
@@ -91,6 +84,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
         correcting.current = true;
         try {
           if (item.table === 'advance_entries') await voidAdvance(session.repo, item.id);
+          else if (item.table === 'earning_adjustments') await voidAdjustment(session.repo, item.id);
           else await voidPayment(session.repo, item.id);
           session.afterWrite();
         } catch {
@@ -192,18 +186,11 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           </View>
         ) : null}
 
-        {/* Kept for test assertion text compatibility */}
-        <Muted style={styles.hidden}>
-          {`${t('worker.earned')} ${formatRupees(ledger.earnedPaise)} · ${t('worker.paid')} ${formatRupees(ledger.paidPaise)}`}
-        </Muted>
-        <Muted style={styles.hidden}>
-          {`${t('worker.advance')} ${formatRupees(ledger.advanceOutstandingPaise)}`}
-        </Muted>
       </HeroCard>
 
       {/* Money Action Buttons */}
       <View style={styles.actions}>
-        {(['advance', 'repayment', 'writeoff', 'payment'] as const).map((kind) => (
+        {([...(['advance', 'repayment', 'writeoff', 'payment'] as const), ...(isOwner ? (['bonus', 'deduction'] as const) : [])]).map((kind) => (
           <View key={kind} style={styles.action}>
             <Button
               kind="secondary"
@@ -229,13 +216,12 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
         {history.length === 0 ? (
           <EmptyState
             icon="cash-outline"
-            title="No money history"
+            title={t('worker.noHistoryTitle')}
             message={t('worker.noHistory')}
           />
         ) : null}
 
         {/* Hidden text kept for test compatibility */}
-        {history.length === 0 ? <Muted style={styles.hidden}>{t('worker.noHistory')}</Muted> : null}
 
         {history.map((item) => (
           <Row
@@ -251,7 +237,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
             right={
               <View style={styles.historyRight}>
                 <Text style={[styles.amount, (item.isVoided || item.isVoid) && styles.struck]}>
-                  {formatRupees(item.amountPaise)}
+                  {`${item.kind === 'deduction' ? '−' : ''}${formatRupees(item.amountPaise)}`}
                 </Text>
                 {isOwner && item.canCorrect ? (
                   <Button
@@ -361,8 +347,4 @@ const styles = StyleSheet.create({
   struck: { textDecorationLine: 'line-through', color: colors.muted },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   action: { flexGrow: 1, flexBasis: '45%' },
-  hidden: {
-    height: 0,
-    opacity: 0,
-  },
 });

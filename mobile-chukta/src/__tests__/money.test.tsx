@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
 import * as moneyRepo from '../repos/money';
 import { upsertLocal } from '../repos/write';
@@ -6,7 +6,7 @@ import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
 import { WorkerDetailScreen } from '../screens/WorkerDetailScreen';
 import { adv, property, worker } from './helpers/fixtures';
-import { makeSession, renderScreen, STAFF } from './helpers/session';
+import { makeSession, OWNER, renderScreen, STAFF } from './helpers/session';
 
 beforeAll(() => initI18n('en'));
 
@@ -109,4 +109,107 @@ test('the warning never shows for an advance or a payment', async () => {
   renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'advance' });
   fireEvent.changeText(await screen.findByTestId('amount'), '99999999');
   expect(screen.queryByTestId('exceeds-advance')).toBeNull();
+});
+
+test('owner adds a deduction (reason required, no mode picker)', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram' }));
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'deduction' });
+  fireEvent.changeText(await screen.findByTestId('amount'), '200');
+  expect(screen.queryByTestId('mode-cash')).toBeNull();
+  expect(screen.getByText('Reason (required)')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('save'));
+  expect(await screen.findByText('A reason is required for a deduction.')).toBeTruthy();
+  fireEvent.changeText(screen.getByTestId('note'), 'Broken glass');
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getAllAsync('select type, amount_paise, note, created_by_role from earning_adjustments'))
+    .toEqual([{ type: 'deduction', amount_paise: 20000, note: 'Broken glass', created_by_role: 'owner' }]));
+});
+
+test('a non-owner reaching a bonus entry sees nothing writable', async () => {
+  const s = await makeSession(STAFF);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram' }));
+  renderScreen('MoneyEntry', MoneyEntryScreen, s, { workerId: 'w1', kind: 'bonus' });
+  expect(await screen.findByText('Only the owner can do this.')).toBeTruthy();
+  expect(screen.queryByTestId('save')).toBeNull();
+  expect(screen.queryByTestId('amount')).toBeNull();
+});
+
+async function ownerWithBonus() {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram' }));
+  await upsertLocal(s.db, 'earning_adjustments', { id: 'b1', property_id: 'p1', worker_id: 'w1', type: 'bonus', amount_paise: 50000,
+    date: '2026-09-05', note: null, voids_id: null, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-05T10:00:00Z', server_updated_at: null });
+  return s;
+}
+
+test('worker detail: owner sees Bonus/Deduction, the ledger includes the bonus, and a deduction row shows a minus', async () => {
+  const s = await ownerWithBonus();
+  await upsertLocal(s.db, 'earning_adjustments', { id: 'd1', property_id: 'p1', worker_id: 'w1', type: 'deduction', amount_paise: 20000,
+    date: '2026-09-06', note: 'Glass', voids_id: null, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-06T10:00:00Z', server_updated_at: null });
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  expect(await screen.findByTestId('add-bonus')).toBeTruthy();
+  expect(screen.getByTestId('add-deduction')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('explain-toggle'));
+  expect(screen.getByText('Bonus: ₹500')).toBeTruthy();
+  expect(screen.getByTestId('correct-b1')).toBeTruthy();
+  expect(screen.getByText('−₹200')).toBeTruthy();
+});
+
+test('worker detail: correcting a bonus voids it', async () => {
+  const s = await ownerWithBonus();
+  const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  try {
+    fireEvent.press(await screen.findByTestId('correct-b1'));
+    const buttons = alert.mock.calls[0][2] as { onPress?: () => void }[];
+    await buttons[1].onPress?.();
+    await waitFor(async () => expect(await s.db.getAllAsync('select voids_id from earning_adjustments where voids_id is not null')).toEqual([{ voids_id: 'b1' }]));
+  } finally {
+    alert.mockRestore();
+  }
+});
+
+test('worker detail: staff do not see Bonus/Deduction', async () => {
+  const st = await makeSession(STAFF);
+  await upsertLocal(st.db, 'properties', property());
+  await upsertLocal(st.db, 'workers', worker({ id: 'w1', name: 'Ram' }));
+  renderScreen('WorkerDetail', WorkerDetailScreen, st, { workerId: 'w1' });
+  await screen.findAllByText('Ram');
+  expect(screen.queryByTestId('add-bonus')).toBeNull();
+  expect(screen.queryByTestId('add-deduction')).toBeNull();
+});
+
+test('calendar marks a day off, work on a day off, and overtime', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram', joining_date: '2026-09-01' }));
+  const dayOff = (id: string, date: string) => ({ id, property_id: 'p1', date, name: 'Holi', kind: 'holiday', portion: 'full', pay_rule: 'by_basis',
+    is_active: 1, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-01T09:00:00Z', server_updated_at: null });
+  await upsertLocal(s.db, 'days_off', dayOff('d1', '2026-09-03'));
+  await upsertLocal(s.db, 'days_off', dayOff('d2', '2026-09-04'));
+  await upsertLocal(s.db, 'attendance_entries', { id: 'at1', property_id: 'p1', worker_id: 'w1', date: '2026-09-04', status: 'present', hours: null, note: null,
+    created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-04T09:00:00Z', server_updated_at: null });
+  await upsertLocal(s.db, 'overtime_entries', { id: 'o1', property_id: 'p1', worker_id: 'w1', date: '2026-09-02', hours: 2, custom_amount_paise: null, note: null,
+    created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-02T18:00:00Z', server_updated_at: null });
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  const day = async (d: string) => within(await screen.findByTestId(`day-2026-09-${d}`));
+  expect((await day('03')).getByLabelText('sunny-outline')).toBeTruthy();
+  expect((await day('04')).getByLabelText('add-outline')).toBeTruthy();
+  expect((await day('02')).getByText('OT')).toBeTruthy();
+});
+
+test('calendar: a half day off shows the sun icon and a named label', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker({ id: 'w1', name: 'Ram', joining_date: '2026-09-01' }));
+  await upsertLocal(s.db, 'days_off', { id: 'd3', property_id: 'p1', date: '2026-09-02', name: 'Half closure', kind: 'closure', portion: 'half', pay_rule: 'by_basis',
+    is_active: 1, created_by: 'u1', created_by_role: 'owner', created_at: '2026-09-01T09:00:00Z', server_updated_at: null });
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  const cell = await screen.findByTestId('day-2026-09-02');
+  expect(within(cell).getByLabelText('sunny-outline')).toBeTruthy();
+  expect(cell.props.accessibilityLabel).toContain('Half closure');
 });
