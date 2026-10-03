@@ -1,9 +1,9 @@
 import { addDays, compareDates, daysInMonth } from '../utils/dates';
 import { activeMoneyRows, effectiveAttendance } from './attendance';
-import { baseCredit, classifyDay } from './dayClass';
-import { effectiveDaysOff } from './latest';
+import { baseCredit, classifyDay, dayCredit, dayRatePaise } from './dayClass';
+import { effectiveDaysOff, latestByDate } from './latest';
 import type {
-  AdvanceEntry, AttendanceEntry, DayOff, ExplanationLine, LedgerResult, ResolvedSettings, WagePayment,
+  AdvanceEntry, AttendanceEntry, DayOff, EarningAdjustment, ExplanationLine, LedgerResult, OvertimeEntry, ResolvedSettings, WagePayment,
 } from './types';
 
 export { dayCredit } from './dayClass';
@@ -18,6 +18,8 @@ type Input = {
   advances: AdvanceEntry[];
   payments: WagePayment[];
   daysOff?: DayOff[];
+  overtime?: OvertimeEntry[];
+  adjustments?: EarningAdjustment[];
 };
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
@@ -97,14 +99,54 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
   if (paidOff > 0) explanation.push({ key: 'ledger.explain.daysOffPaid', params: { days: round2(paidOff) } });
   if (unpaidOff > 0) explanation.push({ key: 'ledger.explain.daysOffUnpaid', params: { days: round2(unpaidOff) } });
 
+  const otByDate = latestByDate(input.overtime ?? []);
+  let offdayExtra = 0;
+  let offdayDays = 0;
+  let otPay = 0;
+  let otHoursTotal = 0;
+  for (const d of dates) {
+    const cls = classifyDay(d, s, offByDate.get(d));
+    const entry = byDate.get(d);
+    const dayRate = dayRatePaise(s, rate, d);
+
+    // Work on a full day off: extra on top of any off-pay (spec 5.5). No entry or absent means no work.
+    if (cls.kind === 'off' && cls.portion === 'full' && entry && entry.status !== 'absent') {
+      const workCredit = dayCredit(entry, shift);
+      if (entry.custom_amount_paise != null) offdayExtra += entry.custom_amount_paise;
+      else offdayExtra += workCredit * dayRate * s.offdayMultiplier;
+      offdayDays += workCredit;
+    }
+
+    // Overtime (spec 5.7): an explicit entry wins; otherwise hours above the shift.
+    const explicit = otByDate.get(d);
+    const autoHours = entry?.status === 'hours' && (entry.hours ?? 0) > shift ? (entry.hours ?? 0) - shift : 0;
+    const otHours = explicit ? explicit.hours : autoHours;
+    if (otHours > 0 || explicit?.custom_amount_paise != null) {
+      if (explicit?.custom_amount_paise != null) otPay += explicit.custom_amount_paise;
+      else if (s.otMode === 'fixed' && s.otRatePaise != null) otPay += otHours * s.otRatePaise;
+      else otPay += otHours * (dayRate / shift) * (s.otMode === 'fixed' ? 1 : s.otMultiplier);
+      otHoursTotal += otHours;
+    }
+  }
+  const adjustments = activeMoneyRows(input.adjustments ?? []);
+  const bonusPaise = adjustments.filter((a) => a.type === 'bonus').reduce((sum, a) => sum + a.amount_paise, 0);
+  const deductionPaise = adjustments.filter((a) => a.type === 'deduction').reduce((sum, a) => sum + a.amount_paise, 0);
+
   const basePaise = toPaise(base);
-  const earnedPaise = basePaise;
+  const offdayExtraPaise = toPaise(offdayExtra);
+  const overtimePaise = toPaise(otPay);
+  if (offdayExtraPaise > 0) explanation.push({ key: 'ledger.explain.offdayWork', params: { days: round2(offdayDays), amount: offdayExtraPaise } });
+  if (overtimePaise > 0) explanation.push({ key: 'ledger.explain.overtime', params: { hours: round2(otHoursTotal), amount: overtimePaise } });
+  if (bonusPaise > 0) explanation.push({ key: 'ledger.explain.bonus', params: { amount: bonusPaise } });
+  if (deductionPaise > 0) explanation.push({ key: 'ledger.explain.deduction', params: { amount: deductionPaise } });
+
+  const earnedPaise = basePaise + offdayExtraPaise + overtimePaise + bonusPaise - deductionPaise;
   const paidPaise = activeMoneyRows(input.payments).reduce((sum, p) => sum + p.amount_paise, 0);
   const advanceOutstandingPaise = activeMoneyRows(input.advances).reduce(
     (sum, a) => sum + (a.type === 'advance' ? a.amount_paise : -a.amount_paise), 0);
 
   return {
     earnedPaise, paidPaise, wageDuePaise: earnedPaise - paidPaise, advanceOutstandingPaise, explanation,
-    basePaise, offdayExtraPaise: 0, overtimePaise: 0, bonusPaise: 0, deductionPaise: 0,
+    basePaise, offdayExtraPaise, overtimePaise, bonusPaise, deductionPaise,
   };
 }
