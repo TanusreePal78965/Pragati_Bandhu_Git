@@ -7,6 +7,8 @@ export type RootStackParamList = {
   Language: undefined;
   Properties: undefined;
   PropertyForm: { propertyId?: string } | undefined;
+  Holidays: undefined;
+  HolidayForm: { dayOffId?: string } | undefined;
   WorkerDetail: { workerId: string };
   WorkerForm: { workerId?: string } | undefined;
   MoneyEntry: { workerId: string; kind: MoneyKind };

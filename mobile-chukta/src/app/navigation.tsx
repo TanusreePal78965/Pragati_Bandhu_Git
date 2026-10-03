@@ -7,6 +7,8 @@ import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { LanguageRoute } from '../screens/LanguageScreen';
 import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
+import { HolidayFormScreen } from '../screens/HolidayFormScreen';
+import { HolidaysScreen } from '../screens/HolidaysScreen';
 import { PropertyFormScreen } from '../screens/PropertyFormScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { StaffFormScreen } from '../screens/StaffFormScreen';
@@ -88,6 +90,8 @@ export function SessionNavigator() {
         <Stack.Screen name="Language" component={LanguageRoute} />
         <Stack.Screen name="Properties" component={PropertiesScreen} />
         <Stack.Screen name="PropertyForm" component={PropertyFormScreen} />
+        <Stack.Screen name="Holidays" component={HolidaysScreen} />
+        <Stack.Screen name="HolidayForm" component={HolidayFormScreen} />
         <Stack.Screen name="WorkerDetail" component={WorkerDetailScreen} />
         <Stack.Screen name="WorkerForm" component={WorkerFormScreen} />
         <Stack.Screen name="MoneyEntry" component={MoneyEntryScreen} />

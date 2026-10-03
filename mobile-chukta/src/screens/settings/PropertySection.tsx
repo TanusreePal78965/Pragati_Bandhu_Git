@@ -28,6 +28,14 @@ export function PropertySection() {
               testID="edit-property"
             />
           ) : null}
+          {property ? (
+            <Row
+              title={t('settings.holidays')}
+              left={<Icon name="sunny-outline" size={22} color={colors.primary} />}
+              onPress={() => navigation.navigate('Holidays')}
+              testID="holidays"
+            />
+          ) : null}
           <Row
             title={t('properties.switch')}
             onPress={() => navigation.navigate('Properties')}

@@ -14,7 +14,7 @@ export const OWNER: Identity = { kind: 'owner', userId: 'u1', shopId: 'shop1', p
 export const STAFF: Identity = { kind: 'staff', userId: 'u2', staffId: 'st1', staffName: 'Mgr', propertyId: 'p1', propertyName: 'Main' };
 
 export const ALL_ROUTES: (keyof RootStackParamList)[] = [
-  'Tabs', 'Language', 'Properties', 'PropertyForm', 'WorkerDetail', 'WorkerForm', 'MoneyEntry', 'StaffForm', 'SyncIssues',
+  'Tabs', 'Language', 'Properties', 'PropertyForm', 'Holidays', 'HolidayForm', 'WorkerDetail', 'WorkerForm', 'MoneyEntry', 'StaffForm', 'SyncIssues',
 ];
 
 /** A real SQLite-backed session (in memory) with jest.fn() side effects. "Today" is 2026-09-07 (a Monday). */

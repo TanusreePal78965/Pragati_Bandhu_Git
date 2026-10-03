@@ -482,20 +482,22 @@ export function StatusChip({
   tone = 'primary',
   icon,
   testID,
+  onPress,
 }: {
   label: string;
   tone?: StatusTone;
   icon?: IconName;
   testID?: string;
+  onPress?: () => void;
 }) {
   const tStyle = STATUS_TONE_STYLES[tone];
-  return (
+  const chip = (
     <View
       style={[
         styles.chip,
         { backgroundColor: tStyle.bg, borderColor: tStyle.border },
       ]}
-      testID={testID}
+      testID={onPress ? undefined : testID}
     >
       {icon ? (
         <Icon name={icon} size={12} color={tStyle.text} style={styles.chipIcon} />
@@ -504,6 +506,12 @@ export function StatusChip({
       )}
       <Text style={[styles.chipText, { color: tStyle.text }]}>{label}</Text>
     </View>
+  );
+  if (!onPress) return chip;
+  return (
+    <Pressable testID={testID} accessibilityRole="button" onPress={onPress}>
+      {chip}
+    </Pressable>
   );
 }
 
