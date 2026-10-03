@@ -3,11 +3,13 @@ import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useSession } from '../app/session';
+import { isSettled } from '../domain/lock';
 import { resolveSettings } from '../domain/settings';
 import type { Property } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { listAttendance } from '../repos/attendance';
 import { listDaysOff } from '../repos/daysOff';
+import { SettledError } from '../repos/lockGuard';
 import { listAdjustments, listAdvances, listPayments, voidAdjustment, voidAdvance, voidPayment } from '../repos/money';
 import { listOvertime } from '../repos/overtime';
 import { getDueSettlement, listSettlements } from '../repos/settlements';
@@ -76,7 +78,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
     });
     const voided = new Set(settlements.map((x) => x.voids_id).filter(Boolean));
     const payslips = settlements.filter((x) => !x.voids_id).map((x) => ({ settlement: x, voided: voided.has(x.id) }));
-    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments), payslips, due };
+    return { worker, ledger, grid, history: buildMoneyHistory(advances, payments, adjustments), payslips, due, settlements };
   }, [property, workerId, ym.year, ym.month, today]);
 
   const worker = data?.worker ?? null;
@@ -93,8 +95,8 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           else if (item.table === 'earning_adjustments') await voidAdjustment(session.repo, item.id);
           else await voidPayment(session.repo, item.id);
           session.afterWrite();
-        } catch {
-          Alert.alert(t('common.saveFailed'));
+        } catch (e) {
+          Alert.alert(t(e instanceof SettledError ? 'settle.locked' : 'common.saveFailed'));
         } finally {
           correcting.current = false;
         }
@@ -110,7 +112,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
       </Screen>
     );
   }
-  const { ledger, grid, history, payslips } = data;
+  const { ledger, grid, history, payslips, settlements } = data;
   const due = ledger.wageDuePaise;
   const isOwner = session.identity.kind === 'owner';
 
@@ -266,7 +268,7 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
                 <Text style={[styles.amount, (item.isVoided || item.isVoid) && styles.struck]}>
                   {`${item.kind === 'deduction' ? '−' : ''}${formatRupees(item.amountPaise)}`}
                 </Text>
-                {isOwner && item.canCorrect ? (
+                {isOwner && item.canCorrect && !isSettled(settlements, workerId, item.date) ? (
                   <Button
                     kind="secondary"
                     title={t('worker.correct')}

@@ -64,6 +64,32 @@ test('owner corrects a payment: a void row is written and totals exclude it', as
   expect(s.afterWrite).toHaveBeenCalled();
 });
 
+test('money rows inside a settled period have no Correct; later rows keep it', async () => {
+  const s = await seeded();
+  await upsertLocal(s.db, 'wage_payments', pay('p2', { date: '2026-09-07', created_at: '2026-09-07T10:00:00Z' }));
+  await settleWorker(s.repo, { worker: worker(), property: property(), periodStart: '2026-09-01', today: '2026-09-07',
+    paidNowPaise: 100000, recoveredPaise: 0, mode: 'cash' });
+  const [linked] = await s.db.getAllAsync<{ id: string }>('select id from wage_payments where settlement_id is not null');
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  expect(await screen.findByTestId('correct-p2')).toBeTruthy(); // 7 Sep is after the settled 1–5 Sep
+  expect(screen.queryByTestId(`correct-${linked.id}`)).toBeNull();
+  expect(screen.queryByTestId('correct-p1')).toBeNull(); // 5 Sep
+  expect(screen.queryByTestId('correct-a1')).toBeNull(); // 2 Sep
+});
+
+test('Correct on a row settled meanwhile says the period is settled', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => { void buttons?.[1]?.onPress?.(); });
+  const s = await seeded();
+  renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
+  const button = await screen.findByTestId('correct-p1');
+  // Settled on another path after the screen loaded; the screen still shows the button.
+  await settleWorker(s.repo, { worker: worker(), property: property(), periodStart: '2026-09-01', today: '2026-09-07',
+    paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  fireEvent.press(button);
+  await waitFor(() => expect(alert).toHaveBeenCalledWith('This period is settled. Unlock it first to change entries.'));
+  expect(await s.db.getAllAsync('select id from wage_payments where voids_id is not null')).toEqual([]);
+});
+
 test('staff never see Correct', async () => {
   const s = await seeded(STAFF);
   renderScreen('WorkerDetail', WorkerDetailScreen, s, { workerId: 'w1' });
