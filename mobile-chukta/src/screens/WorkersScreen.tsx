@@ -51,7 +51,6 @@ function WorkersBody({ property }: { property: Property }) {
         />
       ) : null}
 
-      {/* Hidden text kept for test assertion compatibility */}
 
       <View style={styles.list}>
         {data.map(({ worker, ledger }) => {

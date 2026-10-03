@@ -70,7 +70,6 @@ function AdvancesBody({ property }: { property: Property }) {
         />
       ) : null}
 
-      {/* Hidden text kept for test compatibility */}
 
       <View style={styles.list}>
         {data.map(({ worker, ledger }) => (

@@ -221,7 +221,6 @@ function WorkerDetailBody({ property, workerId }: { property: Property; workerId
           />
         ) : null}
 
-        {/* Hidden text kept for test compatibility */}
 
         {history.map((item) => (
           <Row

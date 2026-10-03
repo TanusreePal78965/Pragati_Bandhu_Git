@@ -61,6 +61,7 @@ test('overtime can be saved on a weekly-off row', async () => {
   fireEvent.press(screen.getByTestId('ot-save-w3'));
   await waitFor(async () => expect(await s.db.getAllAsync('select worker_id, hours from overtime_entries'))
     .toEqual([{ worker_id: 'w3', hours: 2 }]));
+  expect(await screen.findByText('OT 2 h')).toBeTruthy(); // let the reload after save settle
 });
 
 test('bulk: long-press to select, then mark all selected half day', async () => {
@@ -112,7 +113,8 @@ test('after midnight Today moves to the new day, so a tap writes to the new date
   const next = { ...s, version: s.version + 1, repo: { ...s.repo, now: () => new Date(2026, 8, 8, 0, 5) } };
   rerenderWith(next);
   fireEvent.press(await screen.findByTestId('status-w1-absent'));
-  await waitFor(async () => expect((await rowsFor(s, 'w1')).map((r) => r.date)).toEqual(['2026-09-08']));
+  // Generous timeout: on a cold Jest cache the reload for the new day can take over 1s.
+  await waitFor(async () => expect((await rowsFor(s, 'w1')).map((r) => r.date)).toEqual(['2026-09-08']), { timeout: 5000 });
 });
 
 const dayOffRow = (over: object = {}) => ({ id: 'd1', property_id: 'p1', date: '2026-09-07', name: 'Bandh', kind: 'closure', portion: 'full',
