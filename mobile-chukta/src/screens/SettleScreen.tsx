@@ -177,6 +177,9 @@ function SettleForm({ worker, property, due, today, reload, notice, setNotice, r
             right={opening > 0 ? money(opening) : undefined}
           />
         ) : null}
+        {draft.previousClosingPaise !== null && draft.previousClosingPaise !== opening ? (
+          <Muted>{t('settle.openingAdjusted', { amount: formatRupees(Math.abs(opening - draft.previousClosingPaise)) })}</Muted>
+        ) : null}
         <Row title={t('settle.earned')} right={money(draft.earnedPaise)} />
         <Row title={t('settle.paidInPeriod')} right={money(draft.paidInPeriodPaise)} />
         <Row title={t('settle.wageDue')} right={money(draft.wageDuePaise)} />

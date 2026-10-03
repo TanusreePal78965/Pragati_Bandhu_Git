@@ -16,6 +16,8 @@ export type SettlementDraft = {
   basePaise: number; offdayExtraPaise: number; overtimePaise: number; bonusPaise: number; deductionPaise: number;
   earnedPaise: number; paidInPeriodPaise: number; wageDuePaise: number; advanceOutstandingPaise: number;
   suggestedRecoveryPaise: number; suggestedPaidNowPaise: number; summary: SettlementSummary;
+  /** Closing of the latest active settlement before this period, or null when there is none. */
+  previousClosingPaise: number | null;
 };
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -25,7 +27,9 @@ const ZERO: LedgerResult = {
   basePaise: 0, offdayExtraPaise: 0, overtimePaise: 0, bonusPaise: 0, deductionPaise: 0,
 };
 
-export function buildSettlementDraft(input: { worker: Worker; settings: ResolvedSettings; period: Period; data: LedgerData }): SettlementDraft {
+export function buildSettlementDraft(input: {
+  worker: Worker; settings: ResolvedSettings; period: Period; data: LedgerData; previousClosingPaise?: number | null;
+}): SettlementDraft {
   const { worker, settings: s, period, data } = input;
   const ledger = (from: string, to: string) => calculateWorkerLedger({
     settings: s, ratePaise: worker.rate_paise, joiningDate: worker.joining_date, leftDate: worker.left_date,
@@ -48,6 +52,7 @@ export function buildSettlementDraft(input: { worker: Worker; settings: Resolved
     paidInPeriodPaise: cumE.paidPaise - cumS.paidPaise, wageDuePaise: wageDue, advanceOutstandingPaise: outstanding,
     suggestedRecoveryPaise: recovery, suggestedPaidNowPaise: Math.max(wageDue - recovery, 0),
     summary: { ...summarise(worker, s, period, data), explanation: ledger(period.start, period.end).explanation },
+    previousClosingPaise: input.previousClosingPaise ?? null,
   };
 }
 

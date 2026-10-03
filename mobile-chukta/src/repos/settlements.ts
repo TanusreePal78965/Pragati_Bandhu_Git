@@ -40,10 +40,13 @@ export async function loadLedgerData(db: SqlDb, worker: Worker, property: Proper
 
 export async function getDueSettlement(db: SqlDb, worker: Worker, property: Property, today: string): Promise<DueSettlement | null> {
   const settings = resolveSettings(worker, property);
-  const period = nextPeriod({ joiningDate: worker.joining_date, leftDate: worker.left_date,
-    lastSettledEnd: lastSettledEnd(await listSettlements(db, worker.id), worker.id), settings, today });
+  const rows = await listSettlements(db, worker.id);
+  const lastEnd = lastSettledEnd(rows, worker.id);
+  const period = nextPeriod({ joiningDate: worker.joining_date, leftDate: worker.left_date, lastSettledEnd: lastEnd, settings, today });
   if (!period || !isDue(period, today)) return null;
-  const draft = buildSettlementDraft({ worker, settings, period, data: await loadLedgerData(db, worker, property, period.end) });
+  const previous = lastEnd ? activeSettlements(rows).find((r) => r.period_end === lastEnd) : undefined;
+  const draft = buildSettlementDraft({ worker, settings, period, data: await loadLedgerData(db, worker, property, period.end),
+    previousClosingPaise: previous ? previous.closing_balance_paise : null });
   return { period, draft };
 }
 

@@ -114,3 +114,31 @@ test('paying nothing hides the mode and writes no payment', async () => {
   await waitFor(async () => expect(await s.db.getAllAsync('select paid_now_paise from settlements')).toEqual([{ paid_now_paise: 0 }]));
   expect(await s.db.getAllAsync('select id from wage_payments')).toEqual([]);
 });
+
+async function settledFirstWeek() {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  const w = worker({ joining_date: '2026-08-23' });
+  await upsertLocal(s.db, 'workers', w);
+  // 23–29 Aug: 6 days (Sun 23 Aug off) × ₹500 = ₹3000, paid ₹2500 → closing ₹500.
+  await settlements.settleWorker(s.repo, { worker: w, property: property(), periodStart: '2026-08-23', today: '2026-08-30',
+    paidNowPaise: 250000, recoveredPaise: 0, mode: 'cash' });
+  return s;
+}
+
+test('a changed rate since the last payslip explains the different carried-in amount', async () => {
+  const s = await settledFirstWeek();
+  // Rate raised to ₹600: carried in is now 6 × ₹600 − ₹2500 = ₹1100, ₹600 more than the payslip's ₹500.
+  await upsertLocal(s.db, 'workers', worker({ joining_date: '2026-08-23', rate_paise: 60000 }));
+  renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
+  expect(await screen.findByText('Ram · 30 Aug–5 Sep')).toBeTruthy();
+  expect(screen.getByText('₹1,100')).toBeTruthy();
+  expect(screen.getByText('Carried in changed by ₹600 since the last payslip (pay or entries were changed).')).toBeTruthy();
+});
+
+test('no carried-in note when the opening matches the last payslip', async () => {
+  const s = await settledFirstWeek();
+  renderScreen('Settle', SettleScreen, s, { workerId: 'w1' });
+  expect(await screen.findByText('₹500')).toBeTruthy();
+  expect(screen.queryByText(/since the last payslip/)).toBeNull();
+});
