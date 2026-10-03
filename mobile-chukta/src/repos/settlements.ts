@@ -51,6 +51,14 @@ function audit(ctx: RepoContext) {
   return { created_by: ctx.userId, created_by_role: ctx.role, created_at: ctx.now().toISOString(), server_updated_at: null };
 }
 
+// expo-sqlite transactions are not exclusive across concurrent calls on one connection; serialise settle/unlock per worker.
+const chains = new Map<string, Promise<unknown>>();
+function serial<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const run = (chains.get(key) ?? Promise.resolve()).catch(() => {}).then(fn);
+  chains.set(key, run);
+  return run.finally(() => { if (chains.get(key) === run) chains.delete(key); });
+}
+
 const whole = (n: number) => Number.isInteger(n) && n >= 0;
 
 export async function settleWorker(ctx: RepoContext, input: {
@@ -58,6 +66,12 @@ export async function settleWorker(ctx: RepoContext, input: {
 }): Promise<Settlement> {
   if (ctx.role !== 'owner') throw new Error('only the owner can settle');
   if (input.property.id !== input.worker.property_id) throw new Error('property does not match worker');
+  return serial(input.worker.id, () => settleLocked(ctx, input));
+}
+
+async function settleLocked(ctx: RepoContext, input: {
+  worker: Worker; property: Property; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
+}): Promise<Settlement> {
   const due = await getDueSettlement(ctx.db, input.worker, input.property, input.today);
   if (!due) throw new Error('nothing is due');
   const { draft, period } = due;
@@ -102,6 +116,10 @@ export async function unlockSettlement(ctx: RepoContext, settlementId: string, t
   const row = await ctx.db.getFirstAsync<Record<string, unknown>>('select * from settlements where id = ?', [settlementId]);
   if (!row) throw new Error('settlement not found');
   const target = parseSettlement(row);
+  return serial(target.worker_id, () => unlockLocked(ctx, target, today));
+}
+
+async function unlockLocked(ctx: RepoContext, target: Settlement, today: string): Promise<Settlement> {
   const all = await listSettlements(ctx.db, target.worker_id);
   if (target.voids_id || !activeSettlements(all).some((s) => s.id === target.id)) throw new Error('settlement is not active');
   if (lastSettledEnd(all, target.worker_id) !== target.period_end) throw new Error('unlock newer settlements first');

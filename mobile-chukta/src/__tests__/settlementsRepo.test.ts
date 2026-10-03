@@ -105,8 +105,18 @@ test('on a settled date a holiday rename is allowed but deactivating is refused'
 });
 
 test('a double tap settles once', async () => {
-  const c = await ctx();
-  const args = { worker: W, property: P, today: '2026-09-14', paidNowPaise: 100000, recoveredPaise: 0, mode: 'cash' as const };
+  const base = await ctx();
+  // Like expo-sqlite: every call yields to the event loop and transactions are not exclusive, so two taps really interleave.
+  const gap = async () => { await Promise.resolve(); await Promise.resolve(); };
+  const c: RepoContext = { ...base, db: {
+    execAsync: async (q) => { await gap(); return base.db.execAsync(q); },
+    runAsync: async (q, p) => { await gap(); return base.db.runAsync(q, p); },
+    getAllAsync: async (q, p) => { await gap(); return base.db.getAllAsync(q, p); },
+    getFirstAsync: async (q, p) => { await gap(); return base.db.getFirstAsync(q, p); },
+    withTransactionAsync: async (fn) => { await gap(); await fn(); },
+  } };
+  // On 6 Sep only the first week is due, so a second settle after the first has nothing left to settle.
+  const args = { worker: W, property: P, today: '2026-09-06', paidNowPaise: 100000, recoveredPaise: 0, mode: 'cash' as const };
   const results = await Promise.allSettled([settleWorker(c, args), settleWorker(c, args)]);
   expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
