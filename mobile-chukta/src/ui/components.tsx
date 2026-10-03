@@ -122,11 +122,13 @@ export function ScreenHeader({
 export function Card({
   children,
   style,
+  testID,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.card, style]} testID={testID}>{children}</View>;
 }
 
 export function HeroCard({

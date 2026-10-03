@@ -22,7 +22,7 @@ function parseShift(s: string): number | null | undefined {
   return n > 0 && n <= 24 ? n : undefined;
 }
 
-const paiseToInput = (p: number) => (p % 100 === 0 ? String(p / 100) : (p / 100).toFixed(2));
+export const paiseToInput = (p: number) => (p % 100 === 0 ? String(p / 100) : (p / 100).toFixed(2));
 
 // ---- worker ----
 export type WorkerFormValues = {
