@@ -41,6 +41,7 @@ test('settling writes the rows after confirming', async () => {
     await waitFor(async () => expect(await s.db.getAllAsync('select period_start, period_end, paid_now_paise from settlements'))
       .toEqual([{ period_start: '2026-08-30', period_end: '2026-09-05', paid_now_paise: 300000 }]));
     expect(s.afterWrite).toHaveBeenCalled();
+    expect((await screen.findByTestId('current-route')).props.children).toBe('Payslip');
   } finally {
     alert.mockRestore();
   }

@@ -4,7 +4,7 @@ import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useStackNav, type RootStackParamList } from '../app/routes';
 import { sessionToday, useLocalData, useManualRefresh, useSession } from '../app/session';
 import { closingBalance } from '../domain/settlement';
-import type { PaymentMode, Property, Worker } from '../domain/types';
+import type { PaymentMode, Property, Settlement, Worker } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { getProperty } from '../repos/properties';
 import { getDueSettlement, settleWorker, type DueSettlement } from '../repos/settlements';
@@ -135,8 +135,9 @@ function SettleForm({ worker, property, due, today, reload, notice, setNotice, r
     setBusy(true);
     setSaveError(null);
     setNotice(null);
+    let settled: Settlement;
     try {
-      await settleWorker(session.repo, {
+      settled = await settleWorker(session.repo, {
         worker, property, today, periodStart: period.start, paidNowPaise: paidNow, recoveredPaise: recovered,
         mode: paidNow > 0 ? mode : null, note,
       });
@@ -151,8 +152,7 @@ function SettleForm({ worker, property, due, today, reload, notice, setNotice, r
       return;
     }
     session.afterWrite();
-    // Task 11 switches this to navigation.replace('Payslip', { settlementId: s.id }).
-    navigation.goBack();
+    navigation.replace('Payslip', { settlementId: settled.id });
   }
 
   const err = (k: string) => (errors[k] ? t(errors[k]) : null);

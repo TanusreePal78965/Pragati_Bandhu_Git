@@ -6,6 +6,7 @@ import { useT } from '../i18n/useT';
 import { AdvancesScreen } from '../screens/AdvancesScreen';
 import { LanguageRoute } from '../screens/LanguageScreen';
 import { MoneyEntryScreen } from '../screens/MoneyEntryScreen';
+import { PayslipScreen } from '../screens/PayslipScreen';
 import { SettleScreen } from '../screens/SettleScreen';
 import { PropertiesScreen } from '../screens/PropertiesScreen';
 import { HolidayFormScreen } from '../screens/HolidayFormScreen';
@@ -97,6 +98,7 @@ export function SessionNavigator() {
         <Stack.Screen name="WorkerForm" component={WorkerFormScreen} />
         <Stack.Screen name="MoneyEntry" component={MoneyEntryScreen} />
         <Stack.Screen name="Settle" component={SettleScreen} />
+        <Stack.Screen name="Payslip" component={PayslipScreen} />
         <Stack.Screen name="StaffForm" component={StaffFormScreen} />
         <Stack.Screen name="SyncIssues" component={SyncIssuesScreen} />
       </Stack.Navigator>
