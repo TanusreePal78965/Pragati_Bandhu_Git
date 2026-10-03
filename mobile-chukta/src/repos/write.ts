@@ -5,9 +5,11 @@ import type { RepoContext } from './context';
 const toParam = (v: unknown): SqlParam => (v === undefined ? null : typeof v === 'boolean' ? (v ? 1 : 0) : (v as SqlParam));
 
 export const UPDATABLE_COLUMNS = {
-  properties: ['name', 'address', 'is_active', 'default_pay_basis', 'default_attendance_mode', 'shift_hours', 'weekly_off', 'monthly_divisor'],
+  properties: ['name', 'address', 'is_active', 'default_pay_basis', 'default_attendance_mode', 'shift_hours', 'weekly_off', 'monthly_divisor',
+    'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'],
   workers: ['name', 'phone', 'pay_basis', 'rate_paise', 'joining_date', 'status', 'left_date', 'attendance_mode', 'shift_hours',
-    'weekly_off_override', 'weekly_off', 'monthly_divisor'],
+    'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise'],
+  days_off: ['name', 'kind', 'portion', 'pay_rule', 'is_active'],
 } as const;
 export type SyncOp = 'insert' | 'update';
 
@@ -36,7 +38,7 @@ export async function insertAndEnqueue(ctx: RepoContext, table: SyncedTable, row
 
 /** Updates a mutable table locally and enqueues the patch only (server will UPDATE by id). */
 export async function updateAndEnqueue(
-  ctx: RepoContext, table: 'properties' | 'workers', id: string, patch: Record<string, unknown>,
+  ctx: RepoContext, table: keyof typeof UPDATABLE_COLUMNS, id: string, patch: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   // Validate all patch keys are updatable
   const updatable = UPDATABLE_COLUMNS[table];

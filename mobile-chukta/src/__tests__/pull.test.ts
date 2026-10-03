@@ -90,3 +90,12 @@ test('cursorFilter never emits an empty id comparison', () => {
   const f = cursorFilter({ ts: '2026-09-30T10:00:00+00:00', id: 'a1' });
   expect(f).toEqual({ kind: 'after', or: 'server_updated_at.gt.2026-09-30T10:00:00+00:00,and(server_updated_at.eq.2026-09-30T10:00:00+00:00,id.gt.a1)' });
 });
+
+test('pull stores rows of the Phase 2A tables', async () => {
+  const db = openTestDb();
+  await migrate(db);
+  const dayOff = { id: 'd1', property_id: 'p', date: '2026-10-20', name: 'Durga Puja', kind: 'holiday', portion: 'full',
+    pay_rule: 'by_basis', is_active: true, created_by: 'u', created_by_role: 'owner', created_at: 't', server_updated_at: '2026-10-01T00:00:00Z' };
+  await pullAll(db, fakeRemote({ days_off: [dayOff] }));
+  expect(await db.getFirstAsync('select name, is_active from days_off')).toEqual({ name: 'Durga Puja', is_active: 1 });
+});

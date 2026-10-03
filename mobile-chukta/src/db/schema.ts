@@ -1,18 +1,24 @@
 import type { SqlDb } from './sqlDb';
 
-export const SYNCED_TABLES = ['properties', 'staff_users', 'workers', 'attendance_entries', 'advance_entries', 'wage_payments'] as const;
+export const SYNCED_TABLES = [
+  'properties', 'staff_users', 'workers', 'days_off', 'attendance_entries', 'overtime_entries',
+  'advance_entries', 'wage_payments', 'earning_adjustments',
+] as const;
 export type SyncedTable = (typeof SYNCED_TABLES)[number];
 
 const ENTRY_AUDIT = ['created_by', 'created_by_role', 'created_at', 'server_updated_at'] as const;
 
 export const TABLE_COLUMNS: Record<SyncedTable, readonly string[]> = {
   properties: ['id', 'shop_id', 'name', 'address', 'is_active', 'default_pay_basis', 'default_attendance_mode', 'shift_hours',
-    'weekly_off', 'monthly_divisor', 'created_at', 'server_updated_at'],
+    'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', 'created_at', 'server_updated_at'],
   staff_users: ['id', 'property_id', 'name', 'auth_user_id', 'is_active', 'created_at', 'server_updated_at'],
   workers: ['id', 'property_id', 'name', 'phone', 'pay_basis', 'rate_paise', 'joining_date', 'status', 'left_date',
-    'attendance_mode', 'shift_hours', 'weekly_off_override', 'weekly_off', 'monthly_divisor', ...ENTRY_AUDIT],
-  attendance_entries: ['id', 'property_id', 'worker_id', 'date', 'status', 'hours', 'note', ...ENTRY_AUDIT],
+    'attendance_mode', 'shift_hours', 'weekly_off_override', 'weekly_off', 'monthly_divisor', 'offday_multiplier', 'ot_mode', 'ot_multiplier', 'ot_rate_paise', ...ENTRY_AUDIT],
+  attendance_entries: ['id', 'property_id', 'worker_id', 'date', 'status', 'hours', 'note', 'custom_amount_paise', ...ENTRY_AUDIT],
   advance_entries: ['id', 'property_id', 'worker_id', 'type', 'amount_paise', 'date', 'mode', 'note', 'voids_id', ...ENTRY_AUDIT],
+  days_off: ['id', 'property_id', 'date', 'name', 'kind', 'portion', 'pay_rule', 'is_active', ...ENTRY_AUDIT],
+  overtime_entries: ['id', 'property_id', 'worker_id', 'date', 'hours', 'custom_amount_paise', 'note', ...ENTRY_AUDIT],
+  earning_adjustments: ['id', 'property_id', 'worker_id', 'type', 'amount_paise', 'date', 'note', 'voids_id', ...ENTRY_AUDIT],
   wage_payments: ['id', 'property_id', 'worker_id', 'amount_paise', 'date', 'mode', 'note', 'voids_id', ...ENTRY_AUDIT],
 };
 
@@ -65,6 +71,38 @@ const SCHEMA_V2 = `
 create index if not exists idx_attendance_property_date on attendance_entries(property_id, date);
 `;
 
+// Phase 2A: days off, overtime, bonus/deduction, extra-pay settings (spec §4.6).
+const SCHEMA_V3 = `
+alter table properties add column offday_multiplier real not null default 1;
+alter table properties add column ot_mode text not null default 'multiplier';
+alter table properties add column ot_multiplier real not null default 1;
+alter table properties add column ot_rate_paise integer;
+alter table workers add column offday_multiplier real;
+alter table workers add column ot_mode text;
+alter table workers add column ot_multiplier real;
+alter table workers add column ot_rate_paise integer;
+alter table attendance_entries add column custom_amount_paise integer;
+create table if not exists days_off (
+  id text primary key, property_id text not null, date text not null, name text not null, kind text not null,
+  portion text not null default 'full', pay_rule text not null default 'by_basis', is_active integer not null default 1,
+  created_by text not null, created_by_role text not null, created_at text not null, server_updated_at text
+);
+create index if not exists idx_days_off_property_date on days_off(property_id, date);
+create table if not exists overtime_entries (
+  id text primary key, property_id text not null, worker_id text not null, date text not null, hours real not null,
+  custom_amount_paise integer, note text, created_by text not null, created_by_role text not null, created_at text not null,
+  server_updated_at text
+);
+create index if not exists idx_overtime_worker_date on overtime_entries(worker_id, date);
+create index if not exists idx_overtime_property_date on overtime_entries(property_id, date);
+create table if not exists earning_adjustments (
+  id text primary key, property_id text not null, worker_id text not null, type text not null, amount_paise integer not null,
+  date text not null, note text, voids_id text, created_by text not null, created_by_role text not null, created_at text not null,
+  server_updated_at text
+);
+create index if not exists idx_adjustments_worker on earning_adjustments(worker_id);
+`;
+
 export async function migrate(db: SqlDb): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>('pragma user_version');
   const version = row?.user_version ?? 0;
@@ -75,5 +113,11 @@ export async function migrate(db: SqlDb): Promise<void> {
   if (version < 2) {
     await db.execAsync(SCHEMA_V2);
     await db.execAsync('pragma user_version = 2');
+  }
+  if (version < 3) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(SCHEMA_V3);
+      await db.execAsync('pragma user_version = 3');
+    });
   }
 }
