@@ -260,6 +260,19 @@ test('a settled worker row shows Settled and has no controls; Shop closed is hid
   expect(screen.getByTestId('hours-w2')).toBeTruthy();
 });
 
+test('where Shop closed is hidden because of a settled row, a note says the period is settled', async () => {
+  await settledOn3Sep();
+  expect(await screen.findByText('Settled')).toBeTruthy();
+  expect(screen.getByTestId('closure-locked')).toHaveTextContent('This period is settled. Unlock it first to change entries.');
+});
+
+test('no settled note on a date with nothing settled', async () => {
+  const s = await seeded();
+  renderScreen('Tabs', TodayScreen, s);
+  expect(await screen.findByTestId('closure-open')).toBeTruthy();
+  expect(screen.queryByTestId('closure-locked')).toBeNull();
+});
+
 test('a settled row cannot be selected, and bulk marking skips it', async () => {
   const s = await settledOn3Sep();
   await screen.findByText('Settled');

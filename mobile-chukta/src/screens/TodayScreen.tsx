@@ -190,7 +190,9 @@ function TodayBody({ property }: { property: Property }) {
           </View>
           <Muted>{dayOff.portion === 'half' ? t('today.dayOffHalf', { name: dayOff.name }) : dayOff.name}</Muted>
         </Card>
-      ) : anySettled ? null : (
+      ) : anySettled ? (
+        <Muted testID="closure-locked">{t('settle.locked')}</Muted>
+      ) : (
         <ClosureCard key={date} onSave={saveClosure} />
       )}
 
