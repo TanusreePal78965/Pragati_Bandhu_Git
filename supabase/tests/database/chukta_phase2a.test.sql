@@ -68,10 +68,10 @@ select throws_ok($$ insert into chukta.days_off (id, property_id, date, name, ki
   '42501', null, 'other-shop owner cannot add days off');
 select throws_ok($$ insert into chukta.overtime_entries (id, property_id, worker_id, date, hours, created_by_role)
   values (gen_random_uuid(), 'e2000000-0000-0000-0000-00000000000a', 'e4000000-0000-0000-0000-00000000000a', '2026-09-15', 1, 'owner') $$,
-  '42501', null, 'other-shop owner cannot add overtime');
+  '23514', null, 'other-shop owner cannot add overtime'); -- consistency trigger rejects first: caller cannot see that worker
 select throws_ok($$ insert into chukta.earning_adjustments (id, property_id, worker_id, type, amount_paise, date, created_by_role)
   values (gen_random_uuid(), 'e2000000-0000-0000-0000-00000000000a', 'e4000000-0000-0000-0000-00000000000a', 'bonus', 100, '2026-09-15', 'owner') $$,
-  '42501', null, 'other-shop owner cannot add adjustments');
+  '23514', null, 'other-shop owner cannot add adjustments'); -- consistency trigger rejects first: caller cannot see that worker
 
 -- staff of property A
 select set_config('request.jwt.claims', json_build_object('sub', 'e0000000-0000-0000-0000-000000000051', 'role', 'authenticated',
@@ -92,7 +92,7 @@ select lives_ok($$ insert into chukta.overtime_entries (id, property_id, worker_
   'staff can add overtime without a custom amount');
 select throws_ok($$ insert into chukta.overtime_entries (id, property_id, worker_id, date, hours, created_by_role)
   values (gen_random_uuid(), 'e2000000-0000-0000-0000-00000000000b', 'e4000000-0000-0000-0000-00000000000b', '2026-09-16', 2, 'staff') $$,
-  '42501', null, 'staff cannot add overtime to another property');
+  '23514', null, 'staff cannot add overtime to another property'); -- consistency trigger rejects first: caller cannot see that worker
 select throws_ok($$ update chukta.workers set ot_mode = 'fixed', ot_rate_paise = 100 where id = 'e4000000-0000-0000-0000-00000000000a' $$,
   '42501', null, 'staff cannot change worker pay settings');
 select throws_ok($$ insert into chukta.workers (id, property_id, name, pay_basis, rate_paise, joining_date, ot_mode, created_by_role)
