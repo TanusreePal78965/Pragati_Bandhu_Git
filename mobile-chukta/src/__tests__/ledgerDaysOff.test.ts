@@ -74,3 +74,70 @@ test('the explanation counts paid and unpaid days off', () => {
   ]));
   expect(r.basePaise).toBe(r.earnedPaise);
 });
+
+// ---- Final-review money-path tests (spec section 5) ----
+const MONTH = { joiningDate: '2026-09-01', today: '2026-09-30' };
+
+test('monthly /26, 26000: all_unpaid full holiday + by-basis half closure', () => {
+  const s = S({ payBasis: 'monthly', monthlyDivisor: '26' });
+  const hol = off('2026-09-10', { pay_rule: 'all_unpaid' });
+  const half = off('2026-09-15', { kind: 'closure', portion: 'half' });
+  // perDay = 2,600,000 / 26 = 100,000; whole month so base = 2,600,000.
+  // Holiday all_unpaid deducts 1 day (100,000). By-basis half closure on monthly: off half paid (0.5) + open half
+  // worked (no entry = 0.5) = 1 -> no deduction. Total 2,600,000 - 100,000 = 2,500,000.
+  expect(run(s, 2600000, [hol, half], [], MONTH).earnedPaise).toBe(2500000);
+  // Absent on the open half: work half 0 -> deducts 0.5 day (50,000). Total 2,600,000 - 100,000 - 50,000 = 2,450,000.
+  expect(run(s, 2600000, [hol, half], [att('2026-09-15', 'absent')], MONTH).earnedPaise).toBe(2450000);
+});
+
+test('monthly /26, joined on the 15th, one unpaid holiday', () => {
+  const s = S({ payBasis: 'monthly', monthlyDivisor: '26' });
+  // Sept 15..30 = 16 days; Sundays 20 and 27 are weekly offs -> 14 eligible. perDay = 100,000.
+  // base = 14 * 100,000 = 1,400,000; unpaid holiday on Wed 23rd deducts 1 day -> 1,300,000.
+  const r = run(s, 2600000, [off('2026-09-23', { pay_rule: 'all_unpaid' })], [], { joiningDate: '2026-09-15', today: '2026-09-30' });
+  expect(r.earnedPaise).toBe(1300000);
+});
+
+test('monthly /30, half closure with 2 of 8 hours worked', () => {
+  const s = S({ payBasis: 'monthly', monthlyDivisor: '30', attendanceMode: 'hours' });
+  const att2 = [att('2026-09-15', 'hours', 2)];
+  // perDay = 3,000,000 / 30 = 100,000. Work half = min(2/8, 0.5) = 0.25.
+  // all_unpaid: off half 0 -> credit 0.25, deducts 0.75 day = 75,000 -> 2,925,000 (the reviewer's 29,250).
+  const unpaid = off('2026-09-15', { kind: 'closure', portion: 'half', pay_rule: 'all_unpaid' });
+  expect(run(s, 3000000, [unpaid], att2, MONTH).earnedPaise).toBe(2925000);
+  // by_basis (monthly = paid off half): credit 0.5 + 0.25 = 0.75, deducts 0.25 day = 25,000 -> 2,975,000.
+  const byBasis = off('2026-09-15', { kind: 'closure', portion: 'half' });
+  expect(run(s, 3000000, [byBasis], att2, MONTH).earnedPaise).toBe(2975000);
+});
+
+test('hourly 100/h, 8h shift, by-basis half closure, 6h worked -> open half capped at half a shift', () => {
+  const s = S({ payBasis: 'hourly', attendanceMode: 'hours' });
+  const half = off('2026-09-03', { kind: 'closure', portion: 'half' });
+  // Off half unpaid for hourly (0); work half = min(6/8, 0.5) = 0.5 -> 0.5 * 8h = 4h * 10,000 = 40,000.
+  expect(run(s, 10000, [half], [att('2026-09-03', 'hours', 6)], { joiningDate: '2026-09-03', today: '2026-09-03' }).earnedPaise).toBe(40000);
+});
+
+test('a half-portion days_off row on the weekly off counts as a full unpaid day off for a daily worker', () => {
+  const half = off('2026-09-06', { kind: 'closure', portion: 'half' });
+  // Sun 6th is the weekly off (always full, unpaid for daily). Other days Tue-Sat + Mon = 6 * 500 = 3,000.
+  const r = run(S(), 50000, [half]);
+  expect(r.earnedPaise).toBe(300000);
+  expect(r.explanation).toEqual(expect.arrayContaining([{ key: 'ledger.explain.daysOffUnpaid', params: { days: 1 } }]));
+  // Worked the whole day: a full day off, so work credit 1 * 500 * 1x = 500 extra (a half portion would give 0.5 open half only).
+  expect(run(S(), 50000, [half], [att('2026-09-06', 'present')]).earnedPaise).toBe(350000);
+});
+
+test('a day off dated after left_date is ignored', () => {
+  // Left 2026-09-04: Tue 1..Fri 4 = 4 days * 500 = 2,000. A paid holiday on Sat 5th adds nothing.
+  const r = run(S(), 50000, [off('2026-09-05', { pay_rule: 'all_paid' })], [], { leftDate: '2026-09-04' });
+  expect(r.earnedPaise).toBe(200000);
+});
+
+test('monthly /26 with a mid-month leaving date: paid vs unpaid holiday', () => {
+  const s = S({ payBasis: 'monthly', monthlyDivisor: '26' });
+  const left = { leftDate: '2026-09-12', today: '2026-09-30' };
+  // Sept 1..12 = 12 days; Sunday 6th is a weekly off -> 11 eligible. perDay = 100,000 -> base 1,100,000.
+  // Paid holiday on Wed 9th: no deduction -> 1,100,000. Unpaid: -100,000 -> 1,000,000.
+  expect(run(s, 2600000, [off('2026-09-09', { pay_rule: 'all_paid' })], [], left).earnedPaise).toBe(1100000);
+  expect(run(s, 2600000, [off('2026-09-09', { pay_rule: 'all_unpaid' })], [], left).earnedPaise).toBe(1000000);
+});
