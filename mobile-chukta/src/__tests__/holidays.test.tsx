@@ -4,11 +4,12 @@ jest.mock('../app/services', () => ({ authService: {}, staffApi: {} }));
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
 import * as daysOffRepo from '../repos/daysOff';
+import { settleWorker } from '../repos/settlements';
 import { upsertLocal } from '../repos/write';
 import { HolidayFormScreen } from '../screens/HolidayFormScreen';
 import { HolidaysScreen } from '../screens/HolidaysScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { property } from './helpers/fixtures';
+import { property, worker } from './helpers/fixtures';
 import { makeSession, OWNER, renderScreen, STAFF } from './helpers/session';
 
 beforeAll(() => initI18n('en'));
@@ -110,4 +111,19 @@ test('the name error clears when the name changes', async () => {
   await screen.findByText('Enter a name.');
   fireEvent.changeText(screen.getByTestId('holiday-name'), 'H');
   expect(screen.queryByText('Enter a name.')).toBeNull();
+});
+
+test('adding a holiday on a settled date shows the locked message', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  await upsertLocal(s.db, 'workers', worker());
+  await settleWorker(s.repo, { worker: worker(), property: property(), periodStart: '2026-09-01', today: '2026-09-07',
+    paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  renderScreen('HolidayForm', HolidayFormScreen, s);
+  fireEvent.changeText(await screen.findByTestId('holiday-name'), 'Bandh');
+  fireEvent.press(screen.getByTestId('holiday-date'));
+  fireEvent(screen.getByTestId('date-picker'), 'change', { type: 'set' }, new Date(2026, 8, 3));
+  fireEvent.press(screen.getByTestId('holiday-save'));
+  expect(await screen.findByText('This period is settled. Unlock it first to change entries.')).toBeTruthy();
+  expect(await rows(s)).toEqual([]);
 });

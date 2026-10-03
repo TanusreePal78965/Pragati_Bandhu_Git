@@ -6,6 +6,7 @@ import { sessionToday, useCurrentProperty, useSession } from '../app/session';
 import type { DayOffPayRule, DayOffPortion } from '../domain/types';
 import { useT } from '../i18n/useT';
 import { addDayOff, getDayOff, updateDayOff } from '../repos/daysOff';
+import { SettledError } from '../repos/lockGuard';
 import { Button, ErrorText, Field, Label, Loading, Screen, ScreenHeader, Segmented, StatusChip, SwitchRow } from '../ui/components';
 import { DateField } from '../ui/DateField';
 import { space } from '../ui/theme';
@@ -46,8 +47,8 @@ export function HolidayFormScreen() {
       } else {
         await addDayOff(session.repo, { propertyId: property!.id, date: v.date, name: v.name, kind: v.kind, portion: v.portion, payRule: v.payRule });
       }
-    } catch {
-      setSaveError('common.saveFailed');
+    } catch (e) {
+      setSaveError(e instanceof SettledError ? 'settle.locked' : 'common.saveFailed');
       setBusy(false);
       return;
     }

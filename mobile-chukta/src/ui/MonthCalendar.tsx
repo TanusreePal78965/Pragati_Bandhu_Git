@@ -8,7 +8,8 @@ import { colors, radius, shadows, space } from './theme';
 function cellLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => string): string {
   const base = baseLabel(c, t);
   const named = c.dayOff && (c.kind === 'off' || c.halfOff) ? (c.kind === 'off' ? c.dayOff.name : `${c.dayOff.name}, ${base}`) : base;
-  return c.otHours > 0 ? `${named}, ${t('today.overtimeValue', { hours: c.otHours })}` : named;
+  const withOt = c.otHours > 0 ? `${named}, ${t('today.overtimeValue', { hours: c.otHours })}` : named;
+  return c.settled ? `${withOt}, ${t('settle.settledChip')}` : withOt;
 }
 
 function baseLabel(c: DayCell, t: (k: string, p?: Record<string, unknown>) => string): string {
@@ -116,6 +117,7 @@ export function MonthCalendar({
               {c.dayOff && (c.kind === 'off' || c.halfOff) ? <Icon name="sunny-outline" size={12} color={textColor} /> : null}
               {c.workedOnOff ? <Icon name="add-outline" size={10} color={colors.primary} style={styles.badge} /> : null}
               {c.otHours > 0 ? <Text style={[styles.badge, styles.otBadge]}>{t('worker.otBadge')}</Text> : null}
+              {c.settled ? <Icon name="lock-closed-outline" size={10} color={colors.muted} style={styles.lock} /> : null}
               {c.entry?.status === 'hours' ? (
                 <Text style={[styles.small, { color: textColor }]}>
                   {t('today.hoursValue', { hours: c.entry.hours })}
@@ -197,6 +199,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 1,
     right: 2,
+  },
+  lock: {
+    position: 'absolute',
+    bottom: 1,
+    left: 2,
   },
   otBadge: {
     fontSize: 9,

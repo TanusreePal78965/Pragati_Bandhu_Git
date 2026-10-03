@@ -6,7 +6,9 @@ import type { AttendanceStatus, DayOffPortion, Property } from '../domain/types'
 import { useT } from '../i18n/useT';
 import { listAttendanceForDate, markAttendance } from '../repos/attendance';
 import { addDayOff, listDaysOff } from '../repos/daysOff';
+import { SettledError } from '../repos/lockGuard';
 import { addOvertime, listOvertimeForDate } from '../repos/overtime';
+import { listPropertySettlements } from '../repos/settlements';
 import { listWorkers } from '../repos/workers';
 import {
   Avatar,
@@ -63,6 +65,9 @@ function parseHours(s: string): number | null {
   return n >= 0 && n <= 24 ? n : null;
 }
 
+/** A write refused because its date is in a settled period gets its own message. */
+const saveErrorKey = (e: unknown) => (e instanceof SettledError ? 'settle.locked' : 'common.saveFailed');
+
 /** An owner's optional custom amount: '' and 0 mean "not set" (0 is never a meaningful custom pay); invalid gives undefined. */
 function parseCustomAmount(s: string): number | null | undefined {
   const p = parseOptionalAmount(s);
@@ -91,7 +96,7 @@ function TodayBody({ property }: { property: Property }) {
     const daysOff = await listDaysOff(s.db, property.id);
     const rows = buildTodayRows(
       await listWorkers(s.db, property.id, true), property, await listAttendanceForDate(s.db, property.id, date), date,
-      daysOff, await listOvertimeForDate(s.db, property.id, date),
+      daysOff, await listOvertimeForDate(s.db, property.id, date), await listPropertySettlements(s.db, property.id),
     );
     return { rows, dayOff: effectiveDayOffFor(daysOff, date) };
   }, [property, date]);
@@ -119,7 +124,7 @@ function TodayBody({ property }: { property: Property }) {
       }
       for (const id of workerIds) {
         const row = rows?.find((r) => r.worker.id === id);
-        if (!row || (bulk && row.isOff)) continue;
+        if (!row || (bulk && (row.isOff || row.settled))) continue;
         const list = byWorker.get(id);
         const cur = list ? effectiveAttendance(list).get(date) ?? null : null;
         const same = cur
@@ -131,8 +136,8 @@ function TodayBody({ property }: { property: Property }) {
         wrote = true;
       }
       setSelected(new Set());
-    } catch {
-      Alert.alert(t('common.saveFailed'));
+    } catch (e) {
+      Alert.alert(t(saveErrorKey(e)));
     } finally {
       writing.current = false;
       if (wrote) session.afterWrite();
@@ -160,6 +165,8 @@ function TodayBody({ property }: { property: Property }) {
 
   if (!data || !rows) return <Loading />;
   const { dayOff } = data;
+  // A closure on a date where anyone's pay period is settled would be refused, so don't offer it.
+  const anySettled = rows.some((r) => r.settled);
   return (
     <Screen
       header={<ScreenHeader title={t('tabs.today')} subtitle={property.name} />}
@@ -183,7 +190,7 @@ function TodayBody({ property }: { property: Property }) {
           </View>
           <Muted>{dayOff.portion === 'half' ? t('today.dayOffHalf', { name: dayOff.name }) : dayOff.name}</Muted>
         </Card>
-      ) : (
+      ) : anySettled ? null : (
         <ClosureCard key={date} onSave={saveClosure} />
       )}
 
@@ -260,8 +267,8 @@ function ClosureCard({ onSave }: { onSave: (name: string, portion: DayOffPortion
       await onSave(name, portion);
       setOpen(false);
       setReason('');
-    } catch {
-      Alert.alert(t('common.saveFailed'));
+    } catch (e) {
+      Alert.alert(t(saveErrorKey(e)));
     } finally {
       saving.current = false;
       setBusy(false);
@@ -390,8 +397,8 @@ function AttendanceRow({
     try {
       await onOvertime(h, amount);
       setOtOpen(false);
-    } catch {
-      Alert.alert(t('common.saveFailed'));
+    } catch (e) {
+      Alert.alert(t(saveErrorKey(e)));
     } finally {
       otSaving.current = false;
       setOtBusy(false);
@@ -401,6 +408,26 @@ function AttendanceRow({
   const statusLabel = current === 'hours'
     ? t('today.hoursValue', { hours: row.entry?.hours ?? 0 })
     : t(labelKey(current));
+
+  // A settled day is locked: show where it stands, with no controls and no selection.
+  if (row.settled) {
+    return (
+      <Card style={styles.workerCard}>
+        <Row
+          title={row.worker.name}
+          subtitle={subtitle}
+          left={<Avatar name={row.worker.name} id={id} size={40} />}
+          right={
+            <View style={styles.chips}>
+              <StatusChip label={t('settle.settledChip')} tone="info" icon="lock-closed-outline" testID={`settled-${id}`} />
+              <StatusChip label={statusLabel} tone={STATUS_TONE[current]} />
+            </View>
+          }
+          testID={`row-${id}`}
+        />
+      </Card>
+    );
+  }
 
   return (
     <Card style={styles.workerCard}>

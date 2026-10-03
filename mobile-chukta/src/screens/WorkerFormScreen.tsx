@@ -23,6 +23,7 @@ import {
 } from '../ui/components';
 import { DateField } from '../ui/DateField';
 import { ExtraPayFields } from '../ui/ExtraPayFields';
+import { PayCycleFields } from '../ui/PayCycleFields';
 import { ATTENDANCE_MODES, DIVISORS, PAY_BASES } from '../ui/options';
 import { RequireProperty } from '../ui/RequireProperty';
 import { space } from '../ui/theme';
@@ -77,7 +78,7 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
   const toggleOverrides = (on: boolean) => {
     setShowOverrides(on);
     if (!on) set({ attendanceMode: null, shiftHours: '', weeklyOffOverride: false, weeklyOff: null, monthlyDivisor: null,
-      offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '' });
+      offdayMultiplier: null, otMode: null, otMultiplier: null, otRate: '', payCycle: null, cycleEndWeekday: null });
   };
 
   async function save() {
@@ -154,6 +155,14 @@ function WorkerFormBody({ property, workerId }: { property: Property; workerId: 
             </View>
           ) : null}
           {isOwner ? <ExtraPayFields value={values} allowInherit errors={errors} testIDPrefix="worker-extra" onChange={set} /> : null}
+          {isOwner && values.payBasis === 'monthly' ? (
+            <Section title={t('payCycle.title')}>
+              <Muted>{t('payCycle.monthlyAlways')}</Muted>
+            </Section>
+          ) : null}
+          {isOwner && values.payBasis !== 'monthly' ? (
+            <PayCycleFields value={values} allowInherit testIDPrefix="worker-cycle" onChange={set} />
+          ) : null}
         </Section>
       ) : null}
 

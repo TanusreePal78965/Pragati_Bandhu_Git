@@ -104,3 +104,28 @@ test('owner sets fixed overtime ₹60/h and 2× day-off pay', async () => {
   await waitFor(async () => expect(await s.db.getFirstAsync('select offday_multiplier, ot_mode, ot_rate_paise from properties'))
     .toEqual({ offday_multiplier: 2, ot_mode: 'fixed', ot_rate_paise: 6000 }));
 });
+
+test('owner sets a monthly pay cycle', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('PropertyForm', PropertyFormScreen, s, { propertyId: 'p1' });
+  expect(await screen.findByText('Pay cycle')).toBeTruthy();
+  expect(screen.getByTestId('prop-cycle-end-6')).toBeTruthy(); // "As per pay type" may be weekly, so "Week ends on" shows
+  fireEvent.press(screen.getByTestId('prop-cycle-monthly'));
+  expect(screen.queryByTestId('prop-cycle-end-6')).toBeNull();
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select pay_cycle, cycle_end_weekday from properties'))
+    .toEqual({ pay_cycle: 'monthly', cycle_end_weekday: 6 }));
+});
+
+test('owner sets a weekly pay cycle ending Wednesday; the week end has no "none" option', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('PropertyForm', PropertyFormScreen, s, { propertyId: 'p1' });
+  fireEvent.press(await screen.findByTestId('prop-cycle-weekly'));
+  expect(screen.queryByTestId('prop-cycle-end--1')).toBeNull();
+  fireEvent.press(screen.getByTestId('prop-cycle-end-3'));
+  fireEvent.press(screen.getByTestId('save'));
+  await waitFor(async () => expect(await s.db.getFirstAsync('select pay_cycle, cycle_end_weekday from properties'))
+    .toEqual({ pay_cycle: 'weekly', cycle_end_weekday: 3 }));
+});

@@ -24,7 +24,9 @@ export type IconName =
   | 'add-outline'
   | 'gift-outline'
   | 'remove-circle-outline'
-  | 'storefront-outline';
+  | 'storefront-outline'
+  | 'lock-closed-outline'
+  | 'document-text-outline';
 
 interface IconProps {
   name: string;
