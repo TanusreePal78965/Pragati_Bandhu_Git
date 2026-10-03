@@ -62,7 +62,7 @@ function serial<T>(key: string, fn: () => Promise<T>): Promise<T> {
 const whole = (n: number) => Number.isInteger(n) && n >= 0;
 
 export async function settleWorker(ctx: RepoContext, input: {
-  worker: Worker; property: Property; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
+  worker: Worker; property: Property; periodStart: string; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
 }): Promise<Settlement> {
   if (ctx.role !== 'owner') throw new Error('only the owner can settle');
   if (input.property.id !== input.worker.property_id) throw new Error('property does not match worker');
@@ -70,10 +70,11 @@ export async function settleWorker(ctx: RepoContext, input: {
 }
 
 async function settleLocked(ctx: RepoContext, input: {
-  worker: Worker; property: Property; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
+  worker: Worker; property: Property; periodStart: string; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
 }): Promise<Settlement> {
   const due = await getDueSettlement(ctx.db, input.worker, input.property, input.today);
   if (!due) throw new Error('nothing is due');
+  if (due.period.start !== input.periodStart) throw new Error('period changed');
   const { draft, period } = due;
   if (!whole(input.paidNowPaise)) throw new Error('paid now must be whole paise ≥ 0');
   if (!whole(input.recoveredPaise) || input.recoveredPaise > draft.advanceOutstandingPaise) {
@@ -103,10 +104,10 @@ async function settleLocked(ctx: RepoContext, input: {
       type: 'repayment', amount_paise: input.recoveredPaise, date: period.end, mode: null, note: null, voids_id: null,
       settlement_id: id, ...audit(ctx) } });
   }
-  const expectedPrevEnd = period.start === input.worker.joining_date ? null : addDays(period.start, -1);
+  const expectedPrevEnd = input.periodStart === input.worker.joining_date ? null : addDays(input.periodStart, -1);
   await insertManyAndEnqueue(ctx, items, async () => {
     // Re-read inside the transaction: a second tap that raced past the first check must not settle the period twice.
-    if (lastSettledEnd(await listSettlements(ctx.db, input.worker.id), input.worker.id) !== expectedPrevEnd) throw new Error('nothing is due');
+    if (lastSettledEnd(await listSettlements(ctx.db, input.worker.id), input.worker.id) !== expectedPrevEnd) throw new Error('period changed');
   });
   return settlement;
 }
