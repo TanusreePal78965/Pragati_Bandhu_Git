@@ -40,8 +40,13 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
   const end = input.leftDate && compareDates(input.leftDate, stop) < 0 ? input.leftDate : stop;
   const first = w && compareDates(w.from, input.joiningDate) > 0 ? w.from : input.joiningDate;
   const dates = compareDates(first, end) <= 0 ? eachDate(first, end) : [];
-  const inWindow = (date: string) => !w || (compareDates(date, w.from) >= 0 && compareDates(date, w.to) <= 0);
-  const upToWindowEnd = (date: string) => !w || compareDates(date, w.to) <= 0;
+  // Money bounds apply only at window edges that are not the employment edges, so money dated before joining
+  // or after leaving still lands in the first / last window.
+  const moneyFrom = w && compareDates(w.from, input.joiningDate) > 0 ? w.from : null;
+  const moneyTo = w && !(input.leftDate && compareDates(w.to, input.leftDate) >= 0) ? w.to : null;
+  const inWindow = (date: string) =>
+    (moneyFrom === null || compareDates(date, moneyFrom) >= 0) && (moneyTo === null || compareDates(date, moneyTo) <= 0);
+  const upToWindowEnd = (date: string) => moneyTo === null || compareDates(date, moneyTo) <= 0;
   const byDate = effectiveAttendance(input.attendance);
   const offByDate = effectiveDaysOff(input.daysOff ?? []);
 

@@ -49,7 +49,7 @@ test('window to the day before a period = the opening balance', () => {
   expect(l.wageDuePaise).toBe(150000);
 });
 
-test('window: a void dated outside the window still cancels its target inside it', () => {
+test('window: a void created after the window (same date as its target) still cancels it', () => {
   const l = calculateWorkerLedger({ ...base, window: { from: '2026-09-06', to: '2026-09-12' }, advances: [], adjustments: [],
     payments: [pay('p2', '2026-09-10', 40000), pay('v2', '2026-09-10', 40000, { voids_id: 'p2', created_at: '2026-09-16T10:00:00Z' })] });
   expect(l.paidPaise).toBe(0);
@@ -66,4 +66,27 @@ test('monthly: a full calendar-month window equals the month in the all-time led
   const common = { ...base, settings: s, ratePaise: 3000000, advances: [], payments: [], adjustments: [] };
   const month = calculateWorkerLedger({ ...common, window: { from: '2026-09-01', to: '2026-09-30' } });
   expect(month.basePaise).toBe(3000000);
+});
+
+test('window: a settlement repayment counts as paid only inside the window', () => {
+  const advances = [adv('a1', 'advance', '2026-09-02', 30000), adv('r1', 'repayment', '2026-09-10', 20000, { settlement_id: 's1' })];
+  const inside = calculateWorkerLedger({ ...base, window: { from: '2026-09-06', to: '2026-09-12' }, advances, payments: [], adjustments: [] });
+  const outside = calculateWorkerLedger({ ...base, window: { from: '2026-09-13', to: '2026-09-19' }, advances, payments: [], adjustments: [] });
+  expect(inside.paidPaise).toBe(20000);
+  expect(outside.paidPaise).toBe(0);
+});
+
+test('window: money dated before joining counts in the first window only', () => {
+  const payments = [pay('p0', '2026-08-30', 7000)];
+  const first = calculateWorkerLedger({ ...base, window: { from: '2026-09-01', to: '2026-09-05' }, advances: [], payments, adjustments: [] });
+  const later = calculateWorkerLedger({ ...base, window: { from: '2026-09-06', to: '2026-09-12' }, advances: [], payments, adjustments: [] });
+  expect(first.paidPaise).toBe(7000);
+  expect(later.paidPaise).toBe(0);
+});
+
+test('window: money dated after leaving counts in the final window that reaches left_date', () => {
+  const payments = [pay('p9', '2026-09-14', 8000)];
+  const common = { ...base, leftDate: '2026-09-11', advances: [], payments, adjustments: [] };
+  expect(calculateWorkerLedger({ ...common, window: { from: '2026-09-06', to: '2026-09-12' } }).paidPaise).toBe(8000);
+  expect(calculateWorkerLedger({ ...common, window: { from: '2026-09-01', to: '2026-09-05' } }).paidPaise).toBe(0);
 });
