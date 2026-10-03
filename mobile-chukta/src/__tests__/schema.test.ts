@@ -32,6 +32,7 @@ test('migrate is idempotent from an existing v1 database (upgrade path)', async 
       hours real, note text, created_by text not null, created_by_role text not null, created_at text not null, server_updated_at text
     );
     create index if not exists idx_attendance_worker_date on attendance_entries(worker_id, date);
+    create table if not exists sync_cursor (table_name text primary key, cursor text not null);
     pragma user_version = 1;
   `);
   await migrate(db);
@@ -71,8 +72,12 @@ test('v2 → v3 upgrade adds the Phase 2A tables and columns without touching ex
     );
     create index idx_attendance_worker_date on attendance_entries(worker_id, date);
     create index idx_attendance_property_date on attendance_entries(property_id, date);
+    create table sync_cursor (table_name text primary key, cursor text not null);
     pragma user_version = 2;
   `);
+  for (const t of ['properties', 'workers', 'attendance_entries', 'advance_entries']) {
+    await db.runAsync('insert into sync_cursor (table_name, cursor) values (?, ?)', [t, '{}']);
+  }
   await db.runAsync(`insert into properties (id, shop_id, name, created_at) values ('p1', 's', 'Main', 't')`);
   await db.runAsync(`insert into workers (id, property_id, name, pay_basis, rate_paise, joining_date, created_by, created_by_role, created_at)
     values ('w1', 'p1', 'Ravi', 'daily', 50000, '2026-01-01', 'u', 'owner', 't')`);
@@ -92,6 +97,7 @@ test('v2 → v3 upgrade adds the Phase 2A tables and columns without touching ex
     { offday_multiplier: null, ot_mode: null, ot_multiplier: null, ot_rate_paise: null });
   expect(await db.getFirstAsync('select id, worker_id, date, status, custom_amount_paise from attendance_entries')).toEqual(
     { id: 'a1', worker_id: 'w1', date: '2026-10-01', status: 'present', custom_amount_paise: null });
+  expect((await db.getAllAsync<{ table_name: string }>('select table_name from sync_cursor')).map((r) => r.table_name)).toEqual(['advance_entries']);
   for (const t of ['days_off', 'overtime_entries', 'earning_adjustments']) {
     expect(await db.getFirstAsync("select name from sqlite_master where type = 'table' and name = ?", [t])).toEqual({ name: t });
   }

@@ -117,6 +117,8 @@ export async function migrate(db: SqlDb): Promise<void> {
   if (version < 3) {
     await db.withTransactionAsync(async () => {
       await db.execAsync(SCHEMA_V3);
+      // An older build dropped the new columns on pull; force one full re-pull of the tables that gained them.
+      await db.execAsync("delete from sync_cursor where table_name in ('properties', 'workers', 'attendance_entries')");
       await db.execAsync('pragma user_version = 3');
     });
   }
