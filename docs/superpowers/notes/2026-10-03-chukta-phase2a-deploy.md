@@ -4,11 +4,19 @@
 
 Read this first. Some numbers in the app can change after the update.
 
-- Attendance already marked on a worker's weekly off day is now paid as work on a day off, at 1x by default. Before, it was ignored for daily and hourly workers.
-- By-hours entries above the shift now pay automatic overtime, at 1x by default. Before, they were capped at the shift.
+- Attendance already marked on a weekly off now earns work-on-a-day-off pay for every pay type (daily, hourly, weekly and monthly), at 1x by default. Before, it earned nothing extra. The effect is usually small, because the old Today screen did not allow marking on a weekly off.
+- Automatic overtime applies to any worker with an hours entry above the shift, not only hourly-paid workers, at 1x by default. Before, hours above the shift were capped at the shift.
 - Because of the two points above, existing balances can go up after the update.
 - Staff can no longer set a worker's extra-pay settings. Staff closures always use "as per pay type".
 - If staff re-mark a day-off row, the owner's custom amount is dropped, because the newest entry wins.
+
+## Rollout order
+
+1. Run `supabase db push` first.
+2. Then update every phone (owner and staff).
+3. On the first sync after updating, each phone re-downloads properties, workers and attendance once.
+
+The pgTAP file (`chukta_phase2a.test.sql`, plan 33) has never been run against the live database. Run `supabase test db` and report the output.
 
 ## Steps
 
@@ -26,3 +34,9 @@ Read this first. Some numbers in the app can change after the update.
    - Staff: edit a worker's name. This must still work, and Extra pay must not be shown to staff.
    - Airplane mode on the staff phone, mark overtime, reconnect — the row syncs, no sync issues.
 5. Languages: switch to বাংলা and हिन्दी; check the Today banner, Holidays screen and explanation lines.
+
+## Open questions for the owner
+
+- (a) On a half closure, hours worked beyond half a shift earn nothing extra. For example, 6h worked on a half closure pays 4h. Is that wanted?
+- (b) Staff can mark a closure on a past date. Should that be limited to today?
+- (c) A custom amount of 0 is treated as "not set". Should 0 mean "worked, pay nothing extra"?
