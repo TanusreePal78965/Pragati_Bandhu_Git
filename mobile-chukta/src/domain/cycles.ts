@@ -14,13 +14,26 @@ export function periodFrom(start: string, s: CycleSettings): Period {
   return { start, end: addDays(start, ahead) };
 }
 
-/** The next period to settle: starts the day after `lastSettledEnd` (or on joining), end cut to leftDate. */
-export function nextPeriod(input: { joiningDate: string; leftDate: string | null; lastSettledEnd: string | null; settings: CycleSettings }): Period | null {
+/**
+ * The next period to settle: starts the day after `lastSettledEnd`, end cut to leftDate.
+ * With no settlement yet it catches up: it starts on joining and ends at the end of the latest period that ended before `today`
+ * (or is the normal joining period when even that has not ended).
+ */
+export function nextPeriod(input: {
+  joiningDate: string; leftDate: string | null; lastSettledEnd: string | null; settings: CycleSettings; today: string;
+}): Period | null {
   const start = input.lastSettledEnd ? addDays(input.lastSettledEnd, 1) : input.joiningDate;
   if (input.leftDate && compareDates(start, input.leftDate) > 0) return null;
-  const p = periodFrom(start, input.settings);
-  if (input.leftDate && compareDates(p.end, input.leftDate) > 0) return { start, end: input.leftDate };
-  return p;
+  let end = periodFrom(start, input.settings).end;
+  if (!input.lastSettledEnd) {
+    for (let i = 0; i < 1000 && !(input.leftDate && compareDates(end, input.leftDate) >= 0); i++) {
+      const next = periodFrom(addDays(end, 1), input.settings).end;
+      if (compareDates(next, input.today) >= 0) break;
+      end = next;
+    }
+  }
+  if (input.leftDate && compareDates(end, input.leftDate) > 0) return { start, end: input.leftDate };
+  return { start, end };
 }
 
 /** True when the period can be settled on `today`: it has ended (today is after its end). */

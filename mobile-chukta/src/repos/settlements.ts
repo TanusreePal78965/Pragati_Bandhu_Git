@@ -41,7 +41,7 @@ export async function loadLedgerData(db: SqlDb, worker: Worker, property: Proper
 export async function getDueSettlement(db: SqlDb, worker: Worker, property: Property, today: string): Promise<DueSettlement | null> {
   const settings = resolveSettings(worker, property);
   const period = nextPeriod({ joiningDate: worker.joining_date, leftDate: worker.left_date,
-    lastSettledEnd: lastSettledEnd(await listSettlements(db, worker.id), worker.id), settings });
+    lastSettledEnd: lastSettledEnd(await listSettlements(db, worker.id), worker.id), settings, today });
   if (!period || !isDue(period, today)) return null;
   const draft = buildSettlementDraft({ worker, settings, period, data: await loadLedgerData(db, worker, property, period.end) });
   return { period, draft };

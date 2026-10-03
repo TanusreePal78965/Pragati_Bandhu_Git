@@ -23,18 +23,22 @@ test('due list: one row per worker with an ended, unsettled period, oldest first
   await migrate(db);
   await upsertLocal(db, 'properties', property());
   await upsertLocal(db, 'workers', worker({ id: 'w1', name: 'Ram', joining_date: '2026-09-06' }));
-  await upsertLocal(db, 'workers', worker({ id: 'w2', name: 'Sita', joining_date: '2026-09-01' }));
+  await upsertLocal(db, 'workers', worker({ id: 'w2', name: 'Sita', joining_date: '2026-09-01', status: 'left', left_date: '2026-09-08' }));
   await upsertLocal(db, 'workers', worker({ id: 'w3', name: 'New', joining_date: '2026-09-13' }));
+  await upsertLocal(db, 'workers', worker({ id: 'w4', name: 'Asha', joining_date: '2026-09-01' }));
   const rows = await listDueSettlements(db, property(), '2026-09-14');
+  // No settlements yet, so each first period catches up to the last week that ended (Sat 12 Sep), cut to a leaving date.
+  // Sita 1–8 Sep: 7 working days (Sun 6 Sep off) × ₹500; Asha 1–12 Sep: 11 days; Ram 6–12 Sep: 6 days. New's week has not ended.
   expect(rows.map((r) => [r.worker.name, r.period.start, r.period.end, r.wageDuePaise])).toEqual([
-    ['Sita', '2026-09-01', '2026-09-05', 250000],
+    ['Sita', '2026-09-01', '2026-09-08', 350000],
+    ['Asha', '2026-09-01', '2026-09-12', 550000],
     ['Ram', '2026-09-06', '2026-09-12', 300000],
   ]);
   const c = { db, userId: 'u1', role: 'owner' as const, now: () => new Date('2026-09-14T10:00:00Z'), newId: (() => { let i = 0; return () => `id-${++i}`; })() };
-  await settleWorker(c, { worker: worker({ id: 'w2', name: 'Sita', joining_date: '2026-09-01' }), property: property(), periodStart: '2026-09-01', today: '2026-09-14',
-    paidNowPaise: 250000, recoveredPaise: 0, mode: 'cash' });
+  await settleWorker(c, { worker: worker({ id: 'w2', name: 'Sita', joining_date: '2026-09-01', status: 'left', left_date: '2026-09-08' }), property: property(),
+    periodStart: '2026-09-01', today: '2026-09-14', paidNowPaise: 350000, recoveredPaise: 0, mode: 'cash' });
   expect((await listDueSettlements(db, property(), '2026-09-14')).map((r) => [r.worker.name, r.period.start]))
-    .toEqual([['Ram', '2026-09-06'], ['Sita', '2026-09-06']]); // same end date → by name
+    .toEqual([['Asha', '2026-09-01'], ['Ram', '2026-09-06']]); // same end date → by name
 });
 
 const settlement = (over: Partial<Settlement> = {}): Settlement => ({
