@@ -20,6 +20,7 @@ type Input = {
   daysOff?: DayOff[];
   overtime?: OvertimeEntry[];
   adjustments?: EarningAdjustment[];
+  window?: { from: string; to: string };
 };
 
 const round2 = (x: number) => Math.round(x * 100) / 100;
@@ -34,8 +35,13 @@ function eachDate(from: string, to: string): string[] {
 export function calculateWorkerLedger(input: Input): LedgerResult {
   const { settings: s, ratePaise: rate } = input;
   const shift = s.shiftHours > 0 ? s.shiftHours : 8;
-  const end = input.leftDate && compareDates(input.leftDate, input.today) < 0 ? input.leftDate : input.today;
-  const dates = compareDates(input.joiningDate, end) <= 0 ? eachDate(input.joiningDate, end) : [];
+  const w = input.window;
+  const stop = w ? w.to : input.today;
+  const end = input.leftDate && compareDates(input.leftDate, stop) < 0 ? input.leftDate : stop;
+  const first = w && compareDates(w.from, input.joiningDate) > 0 ? w.from : input.joiningDate;
+  const dates = compareDates(first, end) <= 0 ? eachDate(first, end) : [];
+  const inWindow = (date: string) => !w || (compareDates(date, w.from) >= 0 && compareDates(date, w.to) <= 0);
+  const upToWindowEnd = (date: string) => !w || compareDates(date, w.to) <= 0;
   const byDate = effectiveAttendance(input.attendance);
   const offByDate = effectiveDaysOff(input.daysOff ?? []);
 
@@ -129,7 +135,7 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
       otHoursTotal += otHours;
     }
   }
-  const adjustments = activeMoneyRows(input.adjustments ?? []);
+  const adjustments = activeMoneyRows(input.adjustments ?? []).filter((a) => inWindow(a.date));
   const bonusPaise = adjustments.filter((a) => a.type === 'bonus').reduce((sum, a) => sum + a.amount_paise, 0);
   const deductionPaise = adjustments.filter((a) => a.type === 'deduction').reduce((sum, a) => sum + a.amount_paise, 0);
 
@@ -142,8 +148,14 @@ export function calculateWorkerLedger(input: Input): LedgerResult {
   if (deductionPaise > 0) explanation.push({ key: 'ledger.explain.deduction', params: { amount: deductionPaise } });
 
   const earnedPaise = basePaise + offdayExtraPaise + overtimePaise + bonusPaise - deductionPaise;
-  const paidPaise = activeMoneyRows(input.payments).reduce((sum, p) => sum + p.amount_paise, 0);
-  const advanceOutstandingPaise = activeMoneyRows(input.advances).reduce(
+  const activePayments = activeMoneyRows(input.payments).filter((p) => inWindow(p.date));
+  const activeAdvances = activeMoneyRows(input.advances);
+  // A repayment made at settlement is recovered out of wages: it is paid to the worker as well (spec 2D §5.3).
+  const settlementRepaid = activeAdvances
+    .filter((a) => a.type === 'repayment' && a.settlement_id && inWindow(a.date))
+    .reduce((sum, a) => sum + a.amount_paise, 0);
+  const paidPaise = activePayments.reduce((sum, p) => sum + p.amount_paise, 0) + settlementRepaid;
+  const advanceOutstandingPaise = activeAdvances.filter((a) => upToWindowEnd(a.date)).reduce(
     (sum, a) => sum + (a.type === 'advance' ? a.amount_paise : -a.amount_paise), 0);
 
   return {
