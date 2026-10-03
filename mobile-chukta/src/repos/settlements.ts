@@ -1,3 +1,4 @@
+import { addDays } from '../utils/dates';
 import type { SqlDb } from '../db/sqlDb';
 import { isDue, nextPeriod, type Period } from '../domain/cycles';
 import { activeSettlements, lastSettledEnd } from '../domain/lock';
@@ -56,6 +57,7 @@ export async function settleWorker(ctx: RepoContext, input: {
   worker: Worker; property: Property; today: string; paidNowPaise: number; recoveredPaise: number; mode: PaymentMode | null; note?: string;
 }): Promise<Settlement> {
   if (ctx.role !== 'owner') throw new Error('only the owner can settle');
+  if (input.property.id !== input.worker.property_id) throw new Error('property does not match worker');
   const due = await getDueSettlement(ctx.db, input.worker, input.property, input.today);
   if (!due) throw new Error('nothing is due');
   const { draft, period } = due;
@@ -87,7 +89,11 @@ export async function settleWorker(ctx: RepoContext, input: {
       type: 'repayment', amount_paise: input.recoveredPaise, date: period.end, mode: null, note: null, voids_id: null,
       settlement_id: id, ...audit(ctx) } });
   }
-  await insertManyAndEnqueue(ctx, items);
+  const expectedPrevEnd = period.start === input.worker.joining_date ? null : addDays(period.start, -1);
+  await insertManyAndEnqueue(ctx, items, async () => {
+    // Re-read inside the transaction: a second tap that raced past the first check must not settle the period twice.
+    if (lastSettledEnd(await listSettlements(ctx.db, input.worker.id), input.worker.id) !== expectedPrevEnd) throw new Error('nothing is due');
+  });
   return settlement;
 }
 

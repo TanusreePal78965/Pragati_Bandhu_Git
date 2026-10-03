@@ -2,10 +2,11 @@ import { openTestDb } from '../db/testing/betterSqliteDb';
 import { migrate } from '../db/schema';
 import type { RepoContext } from '../repos/context';
 import { markAttendance } from '../repos/attendance';
-import { addDayOff } from '../repos/daysOff';
-import { addAdvance, addPayment, listPayments, voidPayment } from '../repos/money';
+import { addDayOff, updateDayOff } from '../repos/daysOff';
+import { addAdjustment, addAdvance, addPayment, listPayments, voidPayment } from '../repos/money';
+import { addOvertime } from '../repos/overtime';
 import { getDueSettlement, listSettlements, settleWorker, unlockSettlement } from '../repos/settlements';
-import { upsertLocal } from '../repos/write';
+import { insertManyAndEnqueue, upsertLocal } from '../repos/write';
 import { property, worker } from './helpers/fixtures';
 
 async function ctx(role: RepoContext['role'] = 'owner'): Promise<RepoContext> {
@@ -80,10 +81,52 @@ test('a settled period is locked in every repo; unlocking frees it', async () =>
 test('only the latest settlement can be unlocked; staff cannot unlock', async () => {
   const c = await ctx();
   const first = await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null });
-  await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null });
-  await expect(unlockSettlement(c, first.id, '2026-09-14')).rejects.toThrow();
+  const second = await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  await expect(unlockSettlement(c, first.id, '2026-09-14')).rejects.toThrow('unlock newer settlements first');
   const staff = { ...c, role: 'staff' as const };
-  await expect(unlockSettlement(staff, first.id, '2026-09-14')).rejects.toThrow();
+  await expect(unlockSettlement(staff, second.id, '2026-09-14')).rejects.toThrow('only the owner can unlock');
+});
+
+test('overtime and adjustments are locked too', async () => {
+  const c = await ctx();
+  await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  await expect(addOvertime(c, { propertyId: 'p1', workerId: 'w1', date: '2026-09-03', hours: 2 })).rejects.toThrow('period is settled');
+  await expect(addAdjustment(c, { propertyId: 'p1', workerId: 'w1', type: 'bonus', amountPaise: 100, date: '2026-09-03' }))
+    .rejects.toThrow('period is settled');
+});
+
+test('on a settled date a holiday rename is allowed but deactivating is refused', async () => {
+  const c = await ctx();
+  await addDayOff(c, { propertyId: 'p1', date: '2026-09-04', name: 'H', kind: 'holiday', portion: 'full', payRule: 'by_basis' });
+  const [h] = await c.db.getAllAsync<{ id: string }>('select id from days_off');
+  await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null });
+  await updateDayOff(c, h.id, { name: 'Renamed', is_active: 1, portion: 'full', pay_rule: 'by_basis' });
+  await expect(updateDayOff(c, h.id, { name: 'Renamed', is_active: 0 })).rejects.toThrow('period is settled');
+});
+
+test('a double tap settles once', async () => {
+  const c = await ctx();
+  const args = { worker: W, property: P, today: '2026-09-14', paidNowPaise: 100000, recoveredPaise: 0, mode: 'cash' as const };
+  const results = await Promise.allSettled([settleWorker(c, args), settleWorker(c, args)]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await c.db.getFirstAsync('select count(*) as n from settlements')).toEqual({ n: 1 });
+  expect(await listPayments(c.db, 'w1')).toHaveLength(1);
+});
+
+test('a failing precheck writes nothing', async () => {
+  const c = await ctx();
+  await expect(insertManyAndEnqueue(c, [{ table: 'wage_payments', row: { id: 'x', property_id: 'p1', worker_id: 'w1', amount_paise: 1,
+    date: '2026-09-05', mode: 'cash', note: null, voids_id: null, settlement_id: null, created_by: 'u1', created_by_role: 'owner',
+    created_at: 't', server_updated_at: null } }], async () => { throw new Error('stale'); })).rejects.toThrow('stale');
+  expect(await listPayments(c.db, 'w1')).toHaveLength(0);
+  expect(await queue(c)).toHaveLength(0);
+});
+
+test('the property must match the worker', async () => {
+  const c = await ctx();
+  await expect(settleWorker(c, { worker: W, property: { ...P, id: 'other' }, today: '2026-09-14', paidNowPaise: 0, recoveredPaise: 0, mode: null }))
+    .rejects.toThrow('property does not match worker');
 });
 
 test('re-settling after unlock counts the earlier linked payment as paid in the period', async () => {
@@ -93,4 +136,13 @@ test('re-settling after unlock counts the earlier linked payment as paid in the 
   const due = await getDueSettlement(c.db, W, P, '2026-09-14');
   expect(due?.draft.paidInPeriodPaise).toBe(100000);
   expect(due?.draft.wageDuePaise).toBe(150000);
+});
+
+test('after an unlock the linked payment can be voided and the void is not linked', async () => {
+  const c = await ctx();
+  const s = await settleWorker(c, { worker: W, property: P, today: '2026-09-14', paidNowPaise: 100000, recoveredPaise: 0, mode: 'cash' });
+  await unlockSettlement(c, s.id, '2026-09-14');
+  const [linked] = await listPayments(c.db, 'w1');
+  const voided = await voidPayment(c, linked.id);
+  expect(voided).toMatchObject({ voids_id: linked.id, settlement_id: null, date: '2026-09-05' });
 });

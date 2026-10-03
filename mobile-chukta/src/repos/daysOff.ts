@@ -31,9 +31,9 @@ export async function updateDayOff(ctx: RepoContext, id: string, patch: DayOffPa
     if (!name) throw new Error('name is required');
     patch = { ...patch, name };
   }
-  if ('is_active' in patch || 'portion' in patch || 'pay_rule' in patch) {
-    const row = await getDayOff(ctx.db, id);
-    if (row) await assertPropertyDateOpen(ctx.db, row.property_id, row.date);
+  const row = await getDayOff(ctx.db, id);
+  if (row && (['is_active', 'portion', 'pay_rule'] as const).some((k) => k in patch && patch[k] !== row[k])) {
+    await assertPropertyDateOpen(ctx.db, row.property_id, row.date);
   }
   await updateAndEnqueue(ctx, 'days_off', id, patch);
 }

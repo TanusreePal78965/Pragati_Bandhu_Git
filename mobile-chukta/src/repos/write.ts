@@ -43,8 +43,11 @@ export async function insertAndEnqueue(ctx: RepoContext, table: SyncedTable, row
 }
 
 /** Several inserts as one unit: all rows land and are queued in this order, or none do. */
-export async function insertManyAndEnqueue(ctx: RepoContext, items: { table: SyncedTable; row: Record<string, unknown> }[]): Promise<void> {
+export async function insertManyAndEnqueue(
+  ctx: RepoContext, items: { table: SyncedTable; row: Record<string, unknown> }[], precheck?: () => Promise<void>,
+): Promise<void> {
   await ctx.db.withTransactionAsync(async () => {
+    if (precheck) await precheck();
     for (const it of items) await insertOne(ctx, it.table, it.row);
   });
 }
