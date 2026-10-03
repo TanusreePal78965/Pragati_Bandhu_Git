@@ -28,7 +28,7 @@ export function HolidayFormScreen() {
 
   useEffect(() => {
     if (!dayOffId) return;
-    void getDayOff(session.db, dayOffId).then((d) => setValues(holidayToFormValues(d, today)));
+    void getDayOff(session.db, dayOffId).then((d) => { if (d) setValues(holidayToFormValues(d, today)); });
   }, [dayOffId, session.db, today]);
 
   if (!values || !property) return <Loading />;
@@ -57,7 +57,7 @@ export function HolidayFormScreen() {
 
   return (
     <Screen header={<ScreenHeader title={t(dayOffId ? 'daysOff.edit' : 'daysOff.add')} showBack />}>
-      <Field label={t('daysOff.name')} value={values.name} onChangeText={(name) => set({ name })}
+      <Field label={t('daysOff.name')} value={values.name} onChangeText={(name) => { set({ name }); setErrors({}); }}
         error={errors.name ? t(errors.name) : undefined} testID="holiday-name" />
       {dayOffId ? null : (
         <>

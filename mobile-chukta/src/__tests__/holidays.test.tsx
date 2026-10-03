@@ -3,6 +3,7 @@ jest.mock('../app/services', () => ({ authService: {}, staffApi: {} }));
 
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { initI18n } from '../i18n';
+import * as daysOffRepo from '../repos/daysOff';
 import { upsertLocal } from '../repos/write';
 import { HolidayFormScreen } from '../screens/HolidayFormScreen';
 import { HolidaysScreen } from '../screens/HolidaysScreen';
@@ -70,4 +71,43 @@ test('staff do not see the Holidays row in Settings', async () => {
   renderScreen('Tabs', SettingsScreen, s);
   await screen.findByText('Main');
   expect(screen.queryByTestId('holidays')).toBeNull();
+});
+
+test('owner sees the Holidays row in Settings and it opens Holidays', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('Tabs', SettingsScreen, s);
+  fireEvent.press(await screen.findByTestId('holidays'));
+  expect((await screen.findByTestId('current-route')).props.children).toBe('Holidays');
+});
+
+test('a failed local save shows an error and enables Save again', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  const spy = jest.spyOn(daysOffRepo, 'addDayOff').mockRejectedValueOnce(new Error('disk'));
+  renderScreen('HolidayForm', HolidayFormScreen, s);
+  fireEvent.changeText(await screen.findByTestId('holiday-name'), 'Holi');
+  fireEvent.press(screen.getByTestId('holiday-save'));
+  expect(await screen.findByText('Could not save on this phone. Please try again.')).toBeTruthy();
+  expect(screen.getByTestId('holiday-save').props.accessibilityState.disabled).toBe(false);
+  expect(s.afterWrite).not.toHaveBeenCalled();
+  spy.mockRestore();
+});
+
+test('editing a day off that does not exist keeps showing the loader, not a blank form', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('HolidayForm', HolidayFormScreen, s, { dayOffId: 'missing' });
+  await new Promise((r) => setTimeout(r, 50));
+  expect(screen.queryByTestId('holiday-save')).toBeNull();
+});
+
+test('the name error clears when the name changes', async () => {
+  const s = await makeSession(OWNER);
+  await upsertLocal(s.db, 'properties', property());
+  renderScreen('HolidayForm', HolidayFormScreen, s);
+  fireEvent.press(await screen.findByTestId('holiday-save'));
+  await screen.findByText('Enter a name.');
+  fireEvent.changeText(screen.getByTestId('holiday-name'), 'H');
+  expect(screen.queryByText('Enter a name.')).toBeNull();
 });
