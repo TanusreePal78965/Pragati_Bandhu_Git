@@ -14,7 +14,7 @@ import {
 import db, { openUserDatabase, closeUserDatabase } from '../db/sqlite';
 import { restoreFromCloud } from './restoreService';
 import { emitRestoreEvent } from '../utils/restoreEvents';
-import { isDeviceConflict } from './deviceLock';
+import { isDeviceConflict, verifyActiveDevice } from './deviceLock';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -115,6 +115,8 @@ export const autoRestoreIfEmpty = async (): Promise<void> => {
     if (!(await getHasConsent())) return;
     const row = db.getFirstSync('SELECT COUNT(*) as count FROM products') as { count: number } | null;
     if ((row?.count ?? 0) !== 0) return;
+    // Pull only when the server confirms this device holds the session (not just the local flag).
+    if ((await verifyActiveDevice()) !== 'ok') return;
   } catch {
     return;
   }

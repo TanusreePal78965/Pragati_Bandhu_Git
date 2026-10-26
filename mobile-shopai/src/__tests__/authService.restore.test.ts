@@ -6,6 +6,8 @@ describe('autoRestoreIfEmpty', () => {
   let restoreFromCloud: jest.Mock;
   let events: string[];
   let consent: boolean;
+  let verify: string;
+  let conflictFlag: boolean;
 
   beforeEach(() => {
     jest.resetModules();
@@ -30,6 +32,13 @@ describe('autoRestoreIfEmpty', () => {
       storeShopSession: jest.fn(),
       getStoredShopId: jest.fn(),
     }));
+    verify = 'ok';
+    conflictFlag = false;
+    jest.doMock('../services/deviceLock', () => ({
+      isDeviceConflict: () => conflictFlag,
+      setDeviceConflict: (v: boolean) => { conflictFlag = v; },
+      verifyActiveDevice: jest.fn(async () => verify),
+    }));
     jest.doMock('../services/restoreService', () => ({ restoreFromCloud }));
     jest.doMock('../utils/restoreEvents', () => ({
       emitRestoreEvent: (e: string) => events.push(e),
@@ -45,6 +54,13 @@ describe('autoRestoreIfEmpty', () => {
 
   it('does nothing when products exist', async () => {
     testDb.runSync("INSERT INTO products (id, name) VALUES ('p1', 'x')");
+    await svc.autoRestoreIfEmpty();
+    expect(restoreFromCloud).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it.each(['unknown', 'conflict'])('does nothing when the device check is %s', async (v) => {
+    verify = v;
     await svc.autoRestoreIfEmpty();
     expect(restoreFromCloud).not.toHaveBeenCalled();
     expect(events).toEqual([]);

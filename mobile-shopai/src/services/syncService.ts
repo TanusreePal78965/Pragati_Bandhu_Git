@@ -11,13 +11,19 @@ import { fetchShopStatus, isPlanExpired } from './subscription';
 const PULL_INTERVAL_MS = 2 * 60 * 1000;
 let _lastPullAt = 0;
 
-const pullIfStale = (): void => {
-  if (isDeviceConflict()) return;
-  const now = Date.now();
-  if (now - _lastPullAt < PULL_INTERVAL_MS) return;
-  _lastPullAt = now;
-  // Fire-and-forget — non-blocking, non-critical
-  restoreFromCloud().catch(() => {});
+// Fire-and-forget — non-blocking, non-critical. Never rejects.
+const pullIfStale = async (): Promise<void> => {
+  try {
+    if (isDeviceConflict()) return;
+    if (Date.now() - _lastPullAt < PULL_INTERVAL_MS) return;
+    // The local flag alone is not enough: a pull must only run while the server confirms
+    // this device holds the session ('unknown' skips; the next trigger retries).
+    if ((await verifyActiveDevice()) !== 'ok') return;
+    _lastPullAt = Date.now();
+    await restoreFromCloud();
+  } catch {
+    // ignore
+  }
 };
 
 let unsubscribeNetInfo: (() => void) | null = null;
@@ -73,7 +79,11 @@ const checkShopStatus = async (
         // No device claimed yet (new shop or just cleared) — stamp this device.
         const updateActiveDevice = async () => {
           try {
-            await supabase.from('shops').update({ active_device_id: thisDeviceId }).eq('id', userId);
+            // Conditional: never overwrite a device that claimed the session meanwhile.
+            await supabase.from('shops')
+              .update({ active_device_id: thisDeviceId })
+              .eq('id', userId)
+              .is('active_device_id', null);
           } catch (_) {}
         };
         updateActiveDevice();
@@ -108,13 +118,16 @@ export const startSyncService = async (
   appStateSubscription = AppState.addEventListener(
     'change',
     async (state: AppStateStatus) => {
-      if (state === 'active') {
+      if (state !== 'active') return;
+      try {
         await checkShopStatus(onDeactivated, onDeviceConflict);
         const hasConsent = await getHasConsent();
         if (hasConsent) {
-          await flushSyncQueue();
-          pullIfStale();
+          await flushSyncQueue().catch(() => {});
+          void pullIfStale();
         }
+      } catch {
+        // Event handlers must never reject (unhandled promise rejection).
       }
     }
   );
@@ -126,13 +139,13 @@ export const startSyncService = async (
   // Flush and pull when network reconnects
   unsubscribeNetInfo = NetInfo.addEventListener(async (state: NetInfoState) => {
     if (state.isConnected) {
-      await flushSyncQueue();
-      pullIfStale();
+      await flushSyncQueue().catch(() => {});
+      void pullIfStale();
     }
   });
 
   // Flush immediately for items queued in last session
-  await flushSyncQueue();
+  await flushSyncQueue().catch(() => {});
 };
 
 /**
