@@ -112,7 +112,7 @@ export default function SettingsScreen() {
     const [versionClicks, setVersionClicks] = useState(0);
     const [showExport, setShowExport] = useState(false);
     const navigation = useNavigation();
-    const { logout, phone, setShopActive } = useAuth();
+    const { logout, phone, setShopActive, markDeviceConflict } = useAuth();
 
     useFocusEffect(
         useCallback(() => {
@@ -239,8 +239,7 @@ export default function SettingsScreen() {
 
                             updateShop({ aiConsent: true });
                             setCloudUploadText("Uploading data…");
-                            queueAllLocalData();
-                            await startSyncService(() => setShopActive(false), () => {});
+                            await startSyncService(() => setShopActive(false), () => markDeviceConflict(true));
                             await flushSyncQueue();
                             const refreshed = await getShopInfo();
                             setShopInfoState(refreshed);

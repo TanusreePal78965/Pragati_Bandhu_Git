@@ -16,9 +16,7 @@ let _currentDbKey: string | null = null;
 const db = new Proxy({} as SQLite.SQLiteDatabase, {
   get(_, prop: string | symbol) {
     if (!_db) {
-      const key = _currentDbKey || 'default';
-      _db = SQLite.openDatabaseSync(`shopai_${key}.db`);
-      initTables(_db);
+      throw new Error('Database not opened — call openUserDatabase first');
     }
     const val = (_db as any)[prop];
     return typeof val === 'function' ? val.bind(_db) : val;

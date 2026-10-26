@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { login as loginService, getStoredAuth, logout as logoutService } from '../services/authService';
+import { login as loginService, getStoredAuth, autoRestoreIfEmpty, logout as logoutService } from '../services/authService';
 import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { setDeviceConflict } from '../services/deviceLock';
 import { restoreFromCloud } from '../services/restoreService';
@@ -33,6 +33,8 @@ type AuthState = {
   setShopActive: (active: boolean) => void;
   /** Claims the session for this device — updates active_device_id in Supabase */
   claimSession: () => Promise<void>;
+  /** Marks this device as in conflict (or clears it) in state and in the device lock */
+  markDeviceConflict: (v: boolean) => void;
 };
 
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -88,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsShopActive((info?.isActive ?? true) && !isExpired);
           await startSyncService(
             () => setShopActive(false),
-            () => setIsDeviceConflict(true),
+            () => markDeviceConflict(true),
           );
         }
       })
@@ -110,8 +112,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsDeviceConflict(false);
     await startSyncService(
       () => setShopActive(false),
-      () => setIsDeviceConflict(true),
+      () => markDeviceConflict(true),
     );
+    // Fresh install / empty DB: pull cloud data without blocking the login.
+    void autoRestoreIfEmpty();
+  };
+
+  const markDeviceConflict = (v: boolean): void => {
+    setDeviceConflict(v);
+    setIsDeviceConflict(v);
   };
 
   const logout = async () => {
@@ -175,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         setShopActive,
         claimSession,
+        markDeviceConflict,
       }}
     >
       {children}
