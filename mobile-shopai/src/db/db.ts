@@ -877,6 +877,10 @@ export const getSalesByRange = (from: string, to: string): ReportData => {
  * 2. JSON import for cloud users: re-syncs restored rows and cancels any stale
  *    DELETE queue entries for the same IDs (addToSyncQueue deduplication removes
  *    them before inserting the new upsert entries).
+ *
+ * Every row is queued as an INSERT (absolute snapshot), so addToSyncQueue also drops
+ * any queued stock/udhar DELTAs for that row: the snapshot already contains them,
+ * and replaying one on top would double-count it.
  */
 export const queueAllLocalData = (): void => {
   // Shop — payload must match the camelCase shape syncUpsert expects

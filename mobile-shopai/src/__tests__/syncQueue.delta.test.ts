@@ -63,13 +63,38 @@ describe('sync queue: DELTA ops, promotion, stripped upserts', () => {
     expect(JSON.parse(r[1].payload).name).toBe('b');
   });
 
-  it('UPDATE after a queued INSERT is promoted to INSERT with the new payload (DELTA rows ignored)', () => {
+  it('UPDATE after a queued INSERT is promoted to INSERT, whose snapshot subsumes the DELTA', () => {
     q.addToSyncQueue('products', 'INSERT', 'P', { id: 'P', name: 'a', stock_quantity: 10 });
     q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
     q.addToSyncQueue('products', 'UPDATE', 'P', { id: 'P', name: 'b', stock_quantity: 7 });
     const r = rows();
-    expect(r.map((x) => x.operation)).toEqual(['DELTA', 'INSERT']);
-    expect(JSON.parse(r[1].payload)).toEqual({ id: 'P', name: 'b', stock_quantity: 7 });
+    expect(r.map((x) => x.operation)).toEqual(['INSERT']);
+    expect(JSON.parse(r[0].payload)).toEqual({ id: 'P', name: 'b', stock_quantity: 7 });
+  });
+
+  it('a fresh INSERT removes earlier queued DELTAs for the same row only', () => {
+    q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
+    q.addToSyncQueue('products', 'DELTA', 'Q', { delta: -1 });
+    q.addToSyncQueue('products', 'INSERT', 'P', { id: 'P', stock_quantity: 7 });
+    expect(rows().map((x) => [x.operation, x.data_id])).toEqual([['DELTA', 'Q'], ['INSERT', 'P']]);
+  });
+
+  it('a backed-off DELTA is not replayed after a later INSERT snapshot (no double count)', async () => {
+    // Cloud stock 10; local sale of 3 queued as a DELTA, which fails permanently
+    // (e.g. RPC not deployed yet -> PGRST202/404) and backs off.
+    q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
+    rpc.mockResolvedValueOnce({ error: { message: 'Could not find the function', code: 'PGRST202' }, status: 404 });
+    await q.flushSyncQueue();
+    expect(rows()[0].attempts).toBe(1);
+    // Enable-cloud re-queue: absolute snapshot with local stock 7 (already includes -3).
+    q.addToSyncQueue('products', 'INSERT', 'P', { id: 'P', name: 'Soap', stock_quantity: 7 });
+    q.retryStuckSyncItems();
+    testDb.runSync('UPDATE sync_queue SET next_attempt_at = 0');
+    await q.flushSyncQueue();
+    expect(rpc).toHaveBeenCalledTimes(1); // only the original failed attempt
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0]).toEqual({ id: 'P', name: 'Soap', stock_quantity: 7, shop_id: 'shop-uuid' });
+    expect(rows()).toHaveLength(0);
   });
 
   it('UPDATE with no queued INSERT stays UPDATE', () => {

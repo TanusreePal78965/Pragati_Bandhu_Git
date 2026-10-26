@@ -1,7 +1,7 @@
 -- supabase/tests/database/shopai_deltas.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(19);
 
 insert into public.shops (id, shop_name, owner_name, phone) values
   ('a0000000-0000-0000-0000-00000000000a', 'A', 'OA', '+919800000201'),
@@ -44,7 +44,15 @@ select lives_ok($$ select public.shopai_adjust_udhar('cust-a', -1000) $$, 'overs
 select is((select udhar_balance from public.customers where id = 'cust-a'), 0::numeric, 'udhar clamps at 0');
 select lives_ok($$ select public.shopai_adjust_udhar('cust-b', 50) $$, 'delta on another shop customer is a silent no-op');
 
+-- Chukta token for the same shop: RLS (jwt_app() = 'shopai') hides ShopAI rows.
+select set_config('request.jwt.claims', json_build_object(
+  'sub', gen_random_uuid(), 'role', 'authenticated', 'app', 'chukta',
+  'shop_id', 'a0000000-0000-0000-0000-00000000000a')::text, true);
+select lives_ok($$ select public.shopai_adjust_stock('prod-a', 5) $$, 'chukta token call is a silent no-op');
+
 reset role;
+select is((select stock_quantity from public.products where id = 'prod-a'), 0::numeric,
+  'chukta token did not change shopai product stock');
 select is(
   (select array[p.stock_quantity, c.udhar_balance] from public.products p, public.customers c
     where p.id = 'prod-b' and c.id = 'cust-b'),

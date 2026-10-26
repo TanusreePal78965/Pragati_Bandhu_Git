@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { importFromJson, BackupData, ImportSummary } from '../db/backup';
 import { getStoredShopId } from '../utils/storage';
 import { fetchAllRows } from './paging';
-import { getPendingIds } from '../db/syncQueue';
+import { getPendingIds, PendingIds } from '../db/syncQueue';
 
 export interface RestoreResult {
   success: boolean;
@@ -66,10 +66,25 @@ async function deleteByIds(
  * Safe to call on a non-empty database — existing rows with the same ID are
  * replaced with the cloud version. New rows are added.
  */
+const unionPendingIds = (a: PendingIds, b: PendingIds): PendingIds => {
+  const out: PendingIds = {};
+  for (const src of [a, b]) {
+    for (const [table, ids] of Object.entries(src)) {
+      const set = (out[table] ??= new Set());
+      ids.forEach((id) => set.add(id));
+    }
+  }
+  return out;
+};
+
 export const restoreFromCloud = async (): Promise<RestoreResult> => {
   try {
     const uuid = await getStoredShopId();
     if (!uuid) return { success: false, error: 'Not authenticated' };
+
+    // Snapshot pending ids before AND after the fetch: a queued edit (e.g. a DELTA) that
+    // flushes while we fetch would otherwise let the pull write its pre-change cloud value.
+    const pendingBefore = getPendingIds();
 
     // ── Fetch all tables individually — continue on per-table errors ──────────
     const tableErrors: Record<string, string> = {};
@@ -167,7 +182,7 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
     const hasErrors = Object.keys(tableErrors).length > 0;
     // Only a fully paged, error-free pull is a complete snapshot safe to reconcile against.
     const summary = importFromJson(backup, {
-      pending: getPendingIds(),
+      pending: unionPendingIds(pendingBefore, getPendingIds()),
       reconcile: !hasErrors,
     });
     return {

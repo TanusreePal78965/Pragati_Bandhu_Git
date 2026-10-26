@@ -86,8 +86,19 @@ describe('local stock/udhar writes queue DELTA ops', () => {
     expect(nonDelta[0].operation).toBe('INSERT');
     expect(nonDelta[0].payload.name).toBe('Green Tea');
     expect(nonDelta[0].payload.stock_quantity).toBe(7);
-    // The sale's DELTA precedes the promoted INSERT, whose absolute stock already includes it.
-    expect(ops.map((r) => r.operation)).toEqual(['DELTA', 'INSERT']);
+    // The promoted INSERT's absolute stock already includes the sale, so its DELTA is dropped.
+    expect(ops.map((r) => r.operation)).toEqual(['INSERT']);
+  });
+
+  it('the same product twice in one bill queues per-item DELTAs summing to the real (clamped) change', () => {
+    d.insertBill(
+      { customer_id: null, customer_name: null, payment_mode: 'cash', total_amount: 120, total_items: 2 } as any,
+      [item(4), item(8)] as any,
+    );
+    expect(stock('P')).toBe(0);
+    const ds = deltas('products', 'P');
+    expect(ds).toEqual([-4, -6]);
+    expect(ds.reduce((a: number, b: number) => a + b, 0)).toBe(-10);
   });
 
   it('(g) a udhar sale queues a customers DELTA equal to the bill total and no customers UPDATE', () => {

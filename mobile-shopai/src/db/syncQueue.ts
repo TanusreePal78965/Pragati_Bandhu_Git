@@ -56,7 +56,8 @@ export const addToSyncQueue = (
     }
     payload = { ...merged, ...payload };
   }
-  // DELTA entries (stock/udhar changes) are additive: never deduped, never dedupe others.
+  // DELTA entries (stock/udhar changes) are additive: a new DELTA never dedupes anything,
+  // and only an INSERT (absolute snapshot, below) removes queued DELTAs.
   if (operation !== 'DELTA') {
     // Promotion: an UPDATE replacing a not-yet-synced INSERT must stay an INSERT so the
     // first upload keeps the absolute stock/udhar that syncUpsert strips from UPDATEs.
@@ -68,9 +69,13 @@ export const addToSyncQueue = (
       if (queuedInsert) operation = 'INSERT';
     }
     // Remove any previously failed entries for the same record before inserting a fresh one,
-    // so exhausted-attempt items don't silently block re-syncs.
+    // so exhausted-attempt items don't silently block re-syncs. DELTAs survive, except under
+    // an INSERT (fresh or promoted): its absolute snapshot already contains every earlier
+    // delta, applied or not, so replaying one (e.g. after a backoff) would double-count it.
     db.runSync(
-      "DELETE FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation != 'DELTA'",
+      operation === 'INSERT'
+        ? 'DELETE FROM sync_queue WHERE table_name = ? AND data_id = ?'
+        : "DELETE FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation != 'DELTA'",
       [tableName, dataId]
     );
   }
