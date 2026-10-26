@@ -118,6 +118,8 @@ sync_queue
 
 **Deduplication rule:** Before inserting an INSERT/UPDATE/DELETE, the queue deletes any existing non-DELTA entry for the same `(table_name, data_id)`, so only the **latest** snapshot operation for a record is queued. The payload is a **full row snapshot**, except `shop` (merged, see Queue Errors below) and `DELTA` entries (see Stock and Udhar Deltas). `next_attempt_at` and `last_error` are added to existing databases by an `ALTER TABLE` migration in `sqlite.ts`.
 
+**Legacy queue migration:** `initTables` runs `migrateLegacySyncQueue` once per database file (`PRAGMA user_version` 0 → 1). It re-labels queued `products` / `customers` `UPDATE` rows from older builds as `INSERT`. Those payloads are full rows with absolute `stock_quantity` / `udhar_balance`, and `UPDATE` upserts now strip those columns, so without this an upgraded device would silently drop the change. UPDATEs queued after the upgrade are never rewritten.
+
 ### 3. Flush Trigger → Supabase
 
 A flush is triggered by any of:
@@ -129,7 +131,11 @@ A flush is triggered by any of:
 ```
 flushSyncQueue()  ─── syncQueue.ts
         │
-        ├─ [isFlushing = true]  ← mutex prevents concurrent runs
+        ├─ [flushingGeneration = generation]  ← mutex per sync generation
+        │
+        ├─ capture { generation, storedShopId }; after EVERY await below, if the
+        │  generation was bumped (logout) or the stored shop id changed, return
+        │  immediately without touching the queue
         │
         ├─ NetInfo.fetch() → offline? return early
         │
@@ -142,7 +148,7 @@ flushSyncQueue()  ─── syncQueue.ts
                 ├─ operation = 'DELTA' with an earlier INSERT for the same row queued? skip (stays queued)
                 │
                 ├─ operation = 'DELTA'?
-                │       └─ supabase.rpc('shopai_adjust_stock' | 'shopai_adjust_udhar')
+                │       └─ supabase.rpc('shopai_adjust_stock' | 'shopai_adjust_udhar', {..., p_delta, p_op_id})
                 │
                 ├─ operation = 'DELETE'?
                 │       └─ supabase.from(table).delete().eq('id', dataId)
@@ -256,7 +262,7 @@ checkShopStatus(onDeactivated)
 | Permanent error on one item (e.g. constraint violation) | `attempts + 1`, backoff, continue with remaining items |
 | Item fails 5 times | Kept in `sync_queue` but not fetched; surfaced as stuck with a Retry button (not dropped) |
 | App crashes mid-flush | Queue items not deleted until success; retried on next startup |
-| Concurrent flush calls | `isFlushing` mutex — second call returns immediately |
+| Concurrent flush calls | per-generation mutex (`flushingGeneration`) — second call in the same session returns immediately |
 | Session expired mid-flush | `JWT expired` / HTTP 401 is transient: flush stops without burning attempts; retried after token refresh |
 
 ---
@@ -297,8 +303,8 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 
 ## Pull Safety and Delete Convergence
 
-- **Pending rows are never overwritten.** Before and after fetching, `restoreFromCloud` snapshots `getPendingIds()` (every `sync_queue` row, any `attempts` value, including stuck ones) and passes the union to `importFromJson`. A row of `shop`, `categories`, `brands`, `products`, `customers` or `bills` (and the `bill_items` of a pending bill) with a queue entry is skipped by the pull.
-- **Delete convergence.** When the pull finishes with no `tableErrors`, `importFromJson` is called with `reconcile: true`: local `products`, `categories`, `brands` and `customers` that are absent from the cloud result and have no queue entry are deleted. So a row deleted on device A disappears on device B at its next pull. `bills`, `bill_items` and the logs are append-only history and are never reconciled. If any table failed to load, nothing is deleted.
+- **Pending rows are never overwritten.** Before and after fetching, `restoreFromCloud` snapshots `getPendingIds()` (every `sync_queue` row, any `attempts` value, including stuck ones). It also calls `beginPullTracking()` before the first fetch: while a tracker is active, `flushSyncQueue` records every row it syncs successfully, so a row queued **and** flushed during the fetch window (in neither snapshot, but possibly newer than the fetched cloud copy) is also protected. The union of the three sets goes to `importFromJson` as `pending`; the tracker is stopped in a `finally`. A row of `shop`, `categories`, `brands`, `products`, `customers` or `bills` (and the `bill_items` of a pending bill) in that set is skipped by the pull.
+- **Delete convergence.** When the pull finishes with no `tableErrors`, `importFromJson` is called with `reconcile: true` and `reconcileOnly` = the local ids of `products`, `categories`, `brands` and `customers` snapshotted at pull start (`snapshotLocalIds`). Local rows that existed at pull start, are absent from the cloud result and are not pending are deleted; rows created locally during the fetch are never reconciled away. So a row deleted on device A disappears on device B at its next pull. `bills`, `bill_items` and the logs are append-only history and are never reconciled. If any table failed to load, nothing is deleted.
 
 ---
 
@@ -318,7 +324,9 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 `services/deviceLock.ts` holds an in-memory conflict flag plus `verifyActiveDevice()`.
 
 - `verifyActiveDevice()` reads `shops.active_device_id, ai_consent` and returns `'conflict'` only when `ai_consent` is true and a non-null `active_device_id` differs from this device; `'ok'` otherwise; `'unknown'` on offline, error or no row. `ok`/`conflict` results are cached 60s; `unknown` is never cached. It sets the conflict flag.
-- `flushSyncQueue` returns early if the flag is set, and also when `verifyActiveDevice()` is not `'ok'` (conflict **or unknown**, retried on the next trigger). Background pulls (`pullIfStale`) and `autoRestoreIfEmpty` return early when the flag is set; they do not call `verifyActiveDevice` themselves, so a pull is not blocked by `'unknown'` alone.
+- `flushSyncQueue` returns early if the flag is set, and also when `verifyActiveDevice()` is not `'ok'` (conflict **or unknown**, retried on the next trigger). Background pulls (`pullIfStale`) and `autoRestoreIfEmpty` likewise run only when the flag is clear **and** `verifyActiveDevice()` returns `'ok'`.
+- `checkShopStatus` stamps an unclaimed session conditionally: `update({ active_device_id }).eq('id', shop).is('active_device_id', null)`, so it never overwrites a device that claimed the session meanwhile.
+- **Logout / shop switch**: `AuthContext.logout` calls `bumpSyncGeneration()`. An in-flight flush notices the new generation (or a changed stored shop id) after its next await and returns without writing or deleting queue rows, so shop A's rows never upload under shop B's session. `flushSyncQueue` never rejects (e.g. if the DB was closed), and the AppState/NetInfo handlers also swallow errors.
 - `checkShopStatus` (foreground) calls `verifyActiveDevice({ maxAgeMs: 0 })` and raises the conflict screen via `markDeviceConflict(true)` (sets the flag and UI state together). Settings "enable cloud backup" is wired to the same callback.
 - The `shop` update no longer writes `active_device_id`, so editing shop details can no longer steal the session from the active device.
 - **`claimSession`** (Device Conflict screen "use this device"): update `shops.active_device_id` to this device; if that errors, stay on the conflict screen. On success clear the flag, then `restoreFromCloud()` once (take the other device's final state) and then `flushSyncQueue()`.
@@ -328,7 +336,7 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 
 ## Login and DB Open
 
-- `autoRestoreIfEmpty()` (`authService.ts`) runs on fresh login (`AuthContext.login`) and on session recovery: if not in conflict, consent is on and local `products` is empty, it emits restore `start`, runs `restoreFromCloud()`, then `complete` (or `error` when the result is `success: false`). It does not block login.
+- `autoRestoreIfEmpty()` (`authService.ts`) runs on fresh login (`AuthContext.login`) and on session recovery: if not in conflict, consent is on, local `products` is empty and `verifyActiveDevice()` returns `'ok'`, it emits restore `start`, runs `restoreFromCloud()`, then `complete` (or `error` when the result is `success: false`). It does not block login.
 - The `db` proxy in `sqlite.ts` now throws `Database not opened - call openUserDatabase first` instead of silently opening a `shopai_default.db`, so no user data can land in a shared default file.
 - Cloud consent defaults to off (`EditShopScreen` no longer defaults `aiConsent` to true when no shop info exists).
 
@@ -338,8 +346,9 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 
 `products.stock_quantity` and `customers.udhar_balance` no longer sync as absolute values (last write wins). They sync as `DELTA` queue items so two devices selling offline add up.
 
-- **Queueing** (`db.ts`): `withDelta` reads the local value before and after the write and queues `{ delta: after - before }` (rounded to 4 decimals, skipped when 0). Local clamping `MAX(0, ...)` is therefore respected. Covers sales (`insertBill` stock deduction, now synced; before only udhar was), manual stock edits, udhar payments and udhar adjustments.
-- **Flush**: `DELTA` calls RPC `shopai_adjust_stock(p_product_id, p_delta)` or `shopai_adjust_udhar(p_customer_id, p_delta)` (migration `supabase/migrations/20261026100000_shopai_stock_udhar_deltas.sql`). Both are `SECURITY INVOKER` (RLS scopes the row to the shop), clamp the result at `greatest(0, ...)`, and are granted to `authenticated` only.
+- **Queueing** (`db.ts`): `withDelta` reads the local value before and after the write and queues `{ delta: after - before, op_id }` (rounded to 4 decimals, skipped when 0). `addToSyncQueue` gives every DELTA a random uuid-shaped `op_id`. Local clamping `MAX(0, ...)` is therefore respected. Covers sales (`insertBill` stock deduction, now synced; before only udhar was), manual stock edits, udhar payments and udhar adjustments.
+- **Flush**: `DELTA` calls RPC `shopai_adjust_stock(p_product_id text, p_delta numeric, p_op_id text)` or `shopai_adjust_udhar(p_customer_id text, p_delta numeric, p_op_id text)` (migration `supabase/migrations/20261026100000_shopai_stock_udhar_deltas.sql`). Both are `SECURITY INVOKER` (RLS scopes the row to the shop), clamp the result at `greatest(0, ...)`, and are granted to `authenticated` only. A DELTA without `op_id` fails permanently.
+- **Idempotency**: each RPC first inserts `p_op_id` into `public.shopai_applied_deltas (op_id text primary key, shop_id uuid default jwt_shop_id(), applied_at)` with `on conflict do nothing`, and adjusts only if that insert added a row (`FOUND`). A re-send after a lost response is therefore a no-op. The table has RLS policy `shopai_owner_access` (`jwt_app() = 'shopai'` and own `shop_id`), no anon access, and `select, insert` for `authenticated`. Rows are never pruned (no cleanup yet).
 - **Dedupe / promotion** (`addToSyncQueue`): a DELTA never dedupes anything (deltas are additive). An INSERT deletes all queued entries for the row including DELTAs, because its absolute snapshot already contains them. An UPDATE that finds a queued INSERT is promoted to INSERT so the first upload keeps the absolute stock/udhar. Other UPDATE/DELETE writes keep queued DELTAs.
 - **UPDATE payloads strip** `stock_quantity` (products) and `udhar_balance` (customers); absolute values travel only on INSERT.
 - **Ordering**: the flush skips a DELTA while an earlier INSERT for the same row is still queued (it would hit no cloud row, then be overwritten by the older snapshot). Skipped items stay queued.
