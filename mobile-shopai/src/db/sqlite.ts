@@ -189,6 +189,32 @@ export function initTables(database: SQLite.SQLiteDatabase): void {
   try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_amount REAL DEFAULT 0'); } catch (_) {}
   try { database.runSync("ALTER TABLE draft_bills ADD COLUMN discount_type TEXT DEFAULT 'none'"); } catch (_) {}
   try { database.runSync("UPDATE bills SET bill_date = datetime(bill_date) WHERE bill_date IS NOT NULL AND bill_date LIKE '%T%';"); } catch (_) {}
+
+  try {
+    migrateLegacySyncQueue(database);
+  } catch (e) {
+    // Not fatal; user_version stays 0 so the next open retries.
+    console.error('[sqlite] legacy sync_queue migration failed:', e);
+  }
+}
+
+/**
+ * One-time queue migration (PRAGMA user_version 0 -> 1), run once per database file.
+ *
+ * Builds before the delta-sync change queued products/customers 'UPDATE' rows whose
+ * payloads are full rows carrying the ABSOLUTE stock_quantity / udhar_balance. syncUpsert
+ * now strips those columns from UPDATEs (they sync as DELTAs), so such a legacy row would
+ * silently drop its stock/udhar change. Re-labelling it 'INSERT' keeps the old absolute
+ * upsert behaviour for exactly those rows. Guarded by user_version so UPDATEs queued
+ * after the upgrade (e.g. customer name edits) are never rewritten.
+ */
+export function migrateLegacySyncQueue(database: SQLite.SQLiteDatabase): void {
+  const row = database.getFirstSync('PRAGMA user_version') as { user_version: number } | null;
+  if ((row?.user_version ?? 0) >= 1) return;
+  database.runSync(
+    "UPDATE sync_queue SET operation = 'INSERT' WHERE operation = 'UPDATE' AND table_name IN ('products', 'customers')"
+  );
+  database.execSync('PRAGMA user_version = 1');
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
