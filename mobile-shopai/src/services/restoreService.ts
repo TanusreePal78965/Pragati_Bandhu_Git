@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { importFromJson, BackupData, ImportSummary } from '../db/backup';
 import { getStoredShopId } from '../utils/storage';
 import { fetchAllRows } from './paging';
+import { getPendingIds } from '../db/syncQueue';
 
 export interface RestoreResult {
   success: boolean;
@@ -163,8 +164,12 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       purchaseLog: stripShopId(purchaseLogData as any[] | null),
     };
 
-    const summary = importFromJson(backup);
     const hasErrors = Object.keys(tableErrors).length > 0;
+    // Only a fully paged, error-free pull is a complete snapshot safe to reconcile against.
+    const summary = importFromJson(backup, {
+      pending: getPendingIds(),
+      reconcile: !hasErrors,
+    });
     return {
       success: true,
       summary,

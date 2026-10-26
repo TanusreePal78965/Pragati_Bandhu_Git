@@ -48,6 +48,22 @@ export const getPendingSyncCount = (): number => {
   return result?.count ?? 0;
 };
 
+export type PendingIds = Record<string, Set<string>>;
+
+/**
+ * Every queued record, keyed by table_name, regardless of attempts — an
+ * exhausted entry is still an unsynced local change that a pull must not clobber.
+ */
+export const getPendingIds = (): PendingIds => {
+  const rows = db.getAllSync('SELECT table_name, data_id FROM sync_queue') as
+    { table_name: string; data_id: string }[];
+  const out: PendingIds = {};
+  for (const r of rows) {
+    (out[r.table_name] ??= new Set()).add(String(r.data_id));
+  }
+  return out;
+};
+
 /**
  * Flush all pending sync queue items directly to Supabase.
  * RLS policies on each table enforce shop isolation automatically —
