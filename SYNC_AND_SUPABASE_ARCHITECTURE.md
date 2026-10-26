@@ -33,18 +33,24 @@ User Action (add product, create bill, edit shop, etc.)
 CREATE TABLE sync_queue (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name  TEXT NOT NULL,
-  operation   TEXT NOT NULL,   -- 'INSERT' | 'UPDATE' | 'DELETE'
+  operation   TEXT NOT NULL,   -- 'INSERT' | 'UPDATE' | 'DELETE' | 'DELTA'
   data_id     TEXT NOT NULL,   -- the row's primary key in the target table
   payload     TEXT NOT NULL,   -- JSON blob sent to Supabase
-  attempts    INTEGER DEFAULT 0
+  attempts    INTEGER DEFAULT 0,
+  next_attempt_at INTEGER DEFAULT 0,  -- epoch ms; skipped by flush until then
+  last_error  TEXT                    -- last permanent error (500 chars)
 );
 ```
 
-**Deduplication rule:** Before every `INSERT` into `sync_queue`, any existing row with the same `(table_name, data_id)` is deleted first. This means only the latest version of a record is ever queued — no stale intermediate updates.
+**Deduplication rule:** Before queueing an INSERT/UPDATE/DELETE, any existing non-`DELTA` row with the same `(table_name, data_id)` is deleted first, so only the latest snapshot of a record is queued. `DELTA` rows are additive and never deduped; an INSERT (or an UPDATE promoted to INSERT because an INSERT was still queued) deletes them too, since its absolute snapshot already contains them. `shop` payloads are merged with earlier queued ones instead of replaced.
 
-**Max attempts:** `MAX_ATTEMPTS = 5`. Items that fail 5 times are silently skipped (not deleted — they stay in the table). A fresh `addToSyncQueue()` call resets the counter by deleting and re-inserting.
+**Legacy queue migration:** `initTables` (`sqlite.ts`) runs `migrateLegacySyncQueue` once per DB file (`PRAGMA user_version` 0 → 1): queued `products`/`customers` `UPDATE` rows from older builds (full rows with absolute stock/udhar) become `INSERT`, so the stripped-UPDATE rule does not drop their stock/udhar. UPDATEs queued after the upgrade are untouched.
 
-**Concurrent flush guard:** `isFlushing` flag prevents two simultaneous flushes (e.g. NetInfo + AppState events firing together).
+**Errors and attempts:** `MAX_ATTEMPTS = 5`. `classifySyncError` splits errors into transient (network `TypeError`, `JWT expired`, PGRST301/000/002, HTTP 401/408/429/5xx; flush stops, no attempt burned) and permanent (`attempts + 1`, `next_attempt_at = now + min(30s * 2^attempts, 1h)`, `last_error` saved). HTTP status is carried through `throwIfError`. At 5 attempts the item stays in the table but is not fetched; `getStuckSyncCount()` / `retryStuckSyncItems()` drive a Retry button on Home and Settings. A fresh `addToSyncQueue()` for the same row replaces a stuck snapshot entry.
+
+**Concurrent flush guard:** a per-generation flag (`flushingGeneration`) prevents two simultaneous flushes (e.g. NetInfo + AppState events firing together); a flush left over from a previous session cannot block the next one.
+
+**Generation guard:** `flushSyncQueue` captures the sync generation and stored shop id at start and re-checks both after every await; if `bumpSyncGeneration()` ran (called by `AuthContext.logout`) or the stored shop id changed, it returns without touching the queue. It never rejects to callers (errors such as a closed DB are logged).
 
 ---
 
@@ -55,8 +61,9 @@ CREATE TABLE sync_queue (
 | `shop` | INSERT / UPDATE | `{ shopName, ownerName, category, whatsappNumber, aiConsent, phone? }` |
 | `categories` | INSERT / UPDATE | `{ id, name, icon, icon_color }` |
 | `brands` | INSERT / UPDATE | `{ id, name, color }` |
-| `products` | INSERT / UPDATE | Full product row (all columns except `category_name`, `brand_name`) |
-| `customers` | INSERT / UPDATE | Full customer row |
+| `products` | INSERT / UPDATE | Full product row (all columns except `category_name`, `brand_name`); UPDATE omits `stock_quantity` |
+| `products` / `customers` | DELTA | `{ delta, op_id }` — change to `stock_quantity` / `udhar_balance`; `op_id` is a unique uuid-shaped id for idempotency |
+| `customers` | INSERT / UPDATE | Full customer row (UPDATE omits `udhar_balance`) |
 | `bills` | INSERT | `{ bill: {...}, items: [...], salesLog: [...] }` — compound payload, 3 tables |
 | `sales_log` | INSERT | Full sales_log row |
 | Any table | DELETE | `{ id }` |
@@ -69,12 +76,13 @@ CREATE TABLE sync_queue (
 
 **File:** [mobile-shopai/src/db/syncQueue.ts](mobile-shopai/src/db/syncQueue.ts)
 
-1. Checks network connectivity via `NetInfo.fetch()` — skips if offline.
-2. Loads all queue items with `attempts < 5`, ordered by `id ASC` (oldest first).
+1. Returns if the device-conflict flag is set; checks network via `NetInfo.fetch()` — skips if offline; then `verifyActiveDevice()` must be `'ok'` (60s cache; `'conflict'` or `'unknown'` aborts).
+2. Loads queue items with `attempts < 5 AND next_attempt_at <= now`, ordered by `id ASC` (oldest first).
 3. For each item:
-   - Calls `syncItem()` → `syncUpsert()` or `syncDelete()`.
-   - On success: deletes the row from `sync_queue`.
-   - On failure: increments `attempts` counter.
+   - A `DELTA` is skipped while an earlier `INSERT` for the same row is still queued.
+   - Calls `syncItem()` → `syncUpsert()`, `syncDelta()` or `syncDelete()`.
+   - On success: records the row for any active pull tracker (`beginPullTracking`), then deletes it from `sync_queue`.
+   - On failure: transient stops the flush untouched; permanent increments `attempts` and sets backoff (see section 2).
 4. `shop_id` (10-digit phone) is injected automatically from the live Supabase session — not stored in the payload.
 
 **`bill_items` special case:** `bill_items` has no `shop_id` column — RLS access is derived through the parent `bills` row. Upserted without `shop_id`.
@@ -178,7 +186,11 @@ Runs on:
 | Supabase Call | File | Tables |
 | --- | --- | --- |
 | `supabase.from(table).upsert({ ...payload, shop_id })` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):119 | `products`, `categories`, `brands`, `customers`, `sales_log` |
-| `supabase.from('shops').upsert(...)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):129 | `shops` — excludes `is_active` (admin-only field) |
+| `supabase.from('shops').update(...)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts) | `shops` — excludes `is_active` and never writes `active_device_id` |
+| `supabase.rpc('shopai_adjust_stock', { p_product_id, p_delta, p_op_id })` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts) `syncDelta` | `products.stock_quantity` — `DELTA` ops |
+| `supabase.rpc('shopai_adjust_udhar', { p_customer_id, p_delta, p_op_id })` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts) `syncDelta` | `customers.udhar_balance` — `DELTA` ops |
+
+**Delta RPCs** (migration `supabase/migrations/20261026100000_shopai_stock_udhar_deltas.sql`): `shopai_adjust_stock(p_product_id text, p_delta numeric, p_op_id text)` and `shopai_adjust_udhar(p_customer_id text, p_delta numeric, p_op_id text)` are `SECURITY INVOKER` (the caller's RLS scopes the row to its shop), set `value = greatest(0, coalesce(value, 0) + p_delta)`, and are executable by `authenticated` only. They are idempotent: each first inserts `p_op_id` into `public.shopai_applied_deltas (op_id text primary key, shop_id uuid default jwt_shop_id(), applied_at timestamptz)` `on conflict do nothing` and adjusts only when that insert added a row, so a retry after a lost response is a no-op. That table has RLS (`shopai_owner_access`: `jwt_app() = 'shopai'` and own `shop_id`), no anon access, `select, insert` for `authenticated`; rows are not pruned. **Deploy order:** apply the migration to the live project BEFORE shipping the app build that queues `DELTA`. The pgTAP test `supabase/tests/database/shopai_deltas.test.sql` has not been run (no Docker); run `supabase test db`. Limits: the clamp makes deltas non-commutative if a backed-off delta is overtaken; deltas are rounded to 4 decimals; old app builds still send absolute stock/udhar.
 | `supabase.from('bills').upsert(...)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):152 | `bills` + `bill_items` + `sales_log` (compound) |
 | `supabase.from(table).delete().eq('id', dataId)` | [syncQueue.ts](mobile-shopai/src/db/syncQueue.ts):179 | Any table — triggered by DELETE operations |
 
@@ -189,7 +201,8 @@ Called when: user grants consent on a fresh install with existing cloud data (au
 | Call | Tables fetched |
 | --- | --- |
 | `supabase.from('shops').select('*').eq('id', phone)` | Shop info |
-| `supabase.from('categories/brands/products/customers/bills/sales_log').select('*').eq('shop_id', phone)` | All data tables |
+| `supabase.from('categories/brands/products/customers/bills/sales_log/purchase_log').select('*').eq('shop_id', phone).order('id').range(from, to)` | All data tables, paged 1000 rows at a time (PostgREST `max_rows` cap) |
+| `supabase.from('shops').select('active_device_id, ai_consent')` | `verifyActiveDevice()` — device lock check |
 | `supabase.from('bill_items').select('*').in('bill_id', [...])` | Bill items (chunked, 100 IDs per request) |
 
 ### Cloud Delete (restoreService.ts)
@@ -315,14 +328,14 @@ restoreFromCloud()
   │
   ├─ supabase.auth.getSession()  → get phone (shop id)
   │
-  ├─ Parallel fetch (Promise.all):
-  │     shops          → .select('*').eq('id', phone)
-  │     categories     → .select('*').eq('shop_id', phone)
-  │     brands         → .select('*').eq('shop_id', phone)
-  │     products       → .select('*').eq('shop_id', phone)
-  │     customers      → .select('*').eq('shop_id', phone)
-  │     bills          → .select('*').eq('shop_id', phone)
-  │     sales_log      → .select('*').eq('shop_id', phone)
+  ├─ beginPullTracking()  ← records every row flushed during the fetch (stopped in finally)
+  ├─ getPendingIds() snapshot (all sync_queue rows, any attempts)
+  ├─ snapshotLocalIds()  ← products/categories/brands/customers ids at pull start
+  │
+  ├─ Sequential fetch, per-table errors collected in tableErrors:
+  │     shops          → .select(<granted columns>).eq('id', phone)
+  │     categories, brands, products, customers, bills, sales_log, purchase_log
+  │                    → fetchAllRows: .eq('shop_id', phone).order('id').range(from, to), 1000/page
   │
   ├─ bill_items  → chunked fetch (100 bill IDs per request — PostgREST URL limit)
   │
@@ -331,7 +344,9 @@ restoreFromCloud()
   │     • Normalise bill_date TIMESTAMPTZ → ISO 8601 UTC string (SQLite date queries)
   │     • Map shop row columns → SQLite shape (snake_case, ai_consent as 0/1)
   │
-  └─ importFromJson(backup)  → SQLite INSERT OR REPLACE (single transaction)
+  └─ importFromJson(backup, { pending: before ∪ after ∪ flushed-during-pull,
+                               reconcile: no tableErrors, reconcileOnly: ids at pull start })
+        → SQLite INSERT OR REPLACE (single transaction)
         → returns ImportSummary { categories, brands, products, customers, bills, billItems, salesLog }
 ```
 
@@ -342,9 +357,14 @@ restoreFromCloud()
 **File:** [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts)
 
 - Runs inside a single `db.withTransactionSync()` — all-or-nothing.
-- Uses `INSERT OR REPLACE` on every row — **idempotent**. Safe to run on a non-empty DB. Existing rows with the same `id` are replaced with the cloud version. New rows are added.
+- Uses `INSERT OR REPLACE` on every row — **idempotent**. Safe to run on a non-empty DB. Existing rows with the same `id` are replaced with the cloud version, except rows with any queued `sync_queue` entry (see below). New rows are added.
 - Does NOT touch `sync_queue` or `suggestions_cache`.
 - Does NOT call `addToSyncQueue()` — restored rows don't need to be re-pushed to Supabase.
+- Restores pack columns (`purchase_uom`, `units_per_pack`), bill discount columns (`discount_percent/amount/type`) and `bill_items.display_qty`.
+- **Pending rows are skipped:** rows whose `(table, id)` has any `sync_queue` entry (any `attempts`) are never overwritten (shop, categories, brands, products, customers, bills; bill_items follow their bill).
+- **Delete convergence:** with `reconcile: true` (a pull with no `tableErrors`), local products/categories/brands/customers missing from the cloud and not pending are deleted — only among the ids in `reconcileOnly` (rows that existed when the pull began), so rows created during the fetch survive. Bills, bill_items and logs are never reconciled.
+- **Device lock:** background pulls (`pullIfStale`) and `autoRestoreIfEmpty` run only when the conflict flag is clear and `verifyActiveDevice()` returns `'ok'`; `checkShopStatus` stamps an unclaimed session only via `.is('active_device_id', null)`; `claimSession` clears the flag, restores once, then flushes. `services/deviceLock.ts` + `verifyActiveDevice` (60s cache) gate flush; shop updates no longer write `active_device_id`. Still client-enforced: the old session's JWT stays valid and a stale-ok window of up to 60s exists.
+- **Fresh login:** `autoRestoreIfEmpty()` restores when consent is on and local `products` is empty. The `db` proxy throws before `openUserDatabase`, and consent defaults to off.
 
 ---
 
@@ -377,7 +397,7 @@ deleteFromCloud()
 | --- | --- | --- |
 | Direction | Supabase → SQLite | SQLite → Supabase |
 | When | Fresh install / manual | Foreground / network / explicit |
-| Strategy | `INSERT OR REPLACE` (merge) | `upsert` (overwrite by id) |
+| Strategy | `INSERT OR REPLACE` (merge; cloud pull skips rows with queued sync entries and reconciles deletes only after a fully successful pull) | `upsert` (overwrite by id) |
 | Blocking? | Auto: non-blocking. Manual: blocking with spinner | Non-blocking (background) |
 | Triggers `addToSyncQueue`? | No | N/A (it is the queue flush) |
 | Consent required? | Auto-restore: yes (`ai_consent = true`). Manual: user must be cloud user | Yes |
@@ -427,7 +447,7 @@ handleImportJson()
   │
   └─ proceedWithImport(parsed)
         │
-        ├─ importFromJson(parsed)  → INSERT OR REPLACE into SQLite (single transaction)
+        ├─ importFromJson(parsed)  → INSERT OR REPLACE into SQLite (single transaction); called with no opts, so no pending-skip and no reconcile (those apply only to cloud pulls)
         │
         └─ if aiConsent = true:
               queueAllLocalData()   ← re-queues every SQLite row as upserts

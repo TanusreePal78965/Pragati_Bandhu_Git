@@ -33,7 +33,7 @@ export default function EditShopScreen() {
     const [ownerName, setOwnerName] = useState("");
     const [category, setCategory] = useState("");
     const [whatsappNumber, setWhatsappNumber] = useState("");
-    const [aiConsent, setAiConsent] = useState(true);
+    const [aiConsent, setAiConsent] = useState(false);
     const [phone, setPhone] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +45,7 @@ export default function EditShopScreen() {
                 setOwnerName(info.ownerName ?? "");
                 setCategory(info.category ?? "");
                 setWhatsappNumber(info.whatsappNumber ?? "");
-                setAiConsent(info.aiConsent ?? true);
+                setAiConsent(info.aiConsent ?? false);
                 setPhone(info.phone ?? "");
             }
             setIsLoading(false);

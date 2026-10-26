@@ -16,9 +16,7 @@ let _currentDbKey: string | null = null;
 const db = new Proxy({} as SQLite.SQLiteDatabase, {
   get(_, prop: string | symbol) {
     if (!_db) {
-      const key = _currentDbKey || 'default';
-      _db = SQLite.openDatabaseSync(`shopai_${key}.db`);
-      initTables(_db);
+      throw new Error('Database not opened — call openUserDatabase first');
     }
     const val = (_db as any)[prop];
     return typeof val === 'function' ? val.bind(_db) : val;
@@ -27,7 +25,7 @@ const db = new Proxy({} as SQLite.SQLiteDatabase, {
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-function initTables(database: SQLite.SQLiteDatabase): void {
+export function initTables(database: SQLite.SQLiteDatabase): void {
   database.execSync(`
     PRAGMA journal_mode = WAL;
 
@@ -154,7 +152,9 @@ function initTables(database: SQLite.SQLiteDatabase): void {
       data_id TEXT NOT NULL,
       payload TEXT,
       created_at TEXT DEFAULT (datetime('now')),
-      attempts INTEGER DEFAULT 0
+      attempts INTEGER DEFAULT 0,
+      next_attempt_at INTEGER DEFAULT 0,
+      last_error TEXT
     );
 
     CREATE TABLE IF NOT EXISTS shop (
@@ -172,6 +172,8 @@ function initTables(database: SQLite.SQLiteDatabase): void {
   `);
 
   // Additive migrations — safe to run on every open (ALTER TABLE fails silently if column exists)
+  try { database.runSync('ALTER TABLE sync_queue ADD COLUMN next_attempt_at INTEGER DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE sync_queue ADD COLUMN last_error TEXT'); } catch (_) {}
   try { database.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
   try { database.runSync('ALTER TABLE shop ADD COLUMN allow_out_of_stock_billing INTEGER DEFAULT 0'); } catch (_) {}
   try { database.runSync('ALTER TABLE products ADD COLUMN track_stock INTEGER DEFAULT 1'); } catch (_) {}
@@ -187,6 +189,32 @@ function initTables(database: SQLite.SQLiteDatabase): void {
   try { database.runSync('ALTER TABLE draft_bills ADD COLUMN discount_amount REAL DEFAULT 0'); } catch (_) {}
   try { database.runSync("ALTER TABLE draft_bills ADD COLUMN discount_type TEXT DEFAULT 'none'"); } catch (_) {}
   try { database.runSync("UPDATE bills SET bill_date = datetime(bill_date) WHERE bill_date IS NOT NULL AND bill_date LIKE '%T%';"); } catch (_) {}
+
+  try {
+    migrateLegacySyncQueue(database);
+  } catch (e) {
+    // Not fatal; user_version stays 0 so the next open retries.
+    console.error('[sqlite] legacy sync_queue migration failed:', e);
+  }
+}
+
+/**
+ * One-time queue migration (PRAGMA user_version 0 -> 1), run once per database file.
+ *
+ * Builds before the delta-sync change queued products/customers 'UPDATE' rows whose
+ * payloads are full rows carrying the ABSOLUTE stock_quantity / udhar_balance. syncUpsert
+ * now strips those columns from UPDATEs (they sync as DELTAs), so such a legacy row would
+ * silently drop its stock/udhar change. Re-labelling it 'INSERT' keeps the old absolute
+ * upsert behaviour for exactly those rows. Guarded by user_version so UPDATEs queued
+ * after the upgrade (e.g. customer name edits) are never rewritten.
+ */
+export function migrateLegacySyncQueue(database: SQLite.SQLiteDatabase): void {
+  const row = database.getFirstSync('PRAGMA user_version') as { user_version: number } | null;
+  if ((row?.user_version ?? 0) >= 1) return;
+  database.runSync(
+    "UPDATE sync_queue SET operation = 'INSERT' WHERE operation = 'UPDATE' AND table_name IN ('products', 'customers')"
+  );
+  database.execSync('PRAGMA user_version = 1');
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

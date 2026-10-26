@@ -9,10 +9,12 @@ import {
   getOrCreateDeviceId,
   storeShopSession,
   getStoredShopId,
+  getHasConsent,
 } from '../utils/storage';
 import db, { openUserDatabase, closeUserDatabase } from '../db/sqlite';
 import { restoreFromCloud } from './restoreService';
 import { emitRestoreEvent } from '../utils/restoreEvents';
+import { isDeviceConflict, verifyActiveDevice } from './deviceLock';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -101,6 +103,32 @@ export const login = async (phone: string, password: string): Promise<ShopRecord
   return shop;
 };
 
+/**
+ * If cloud consent is on, this device is not in conflict and local SQLite has
+ * no products, pull everything from Supabase in the background. Emits
+ * 'start' then 'complete'/'error' only when it actually restores.
+ * restoreFromCloud reports failure via {success:false}, so that counts as 'error'.
+ */
+export const autoRestoreIfEmpty = async (): Promise<void> => {
+  try {
+    if (isDeviceConflict()) return;
+    if (!(await getHasConsent())) return;
+    const row = db.getFirstSync('SELECT COUNT(*) as count FROM products') as { count: number } | null;
+    if ((row?.count ?? 0) !== 0) return;
+    // Pull only when the server confirms this device holds the session (not just the local flag).
+    if ((await verifyActiveDevice()) !== 'ok') return;
+  } catch {
+    return;
+  }
+  emitRestoreEvent('start');
+  try {
+    const result = await restoreFromCloud();
+    emitRestoreEvent(result && result.success === false ? 'error' : 'complete');
+  } catch {
+    emitRestoreEvent('error');
+  }
+};
+
 // ─── Session ──────────────────────────────────────────────────────────────────
 
 /**
@@ -187,20 +215,8 @@ export const getStoredAuth = async (): Promise<{
 
         shopInfo = recovered;
 
-        // Auto-restore: if cloud consent is on and local SQLite is empty,
-        // pull all tables from Supabase in the background. The user will see
-        // their data appear on the home screen without any manual action.
-        if (recovered.aiConsent) {
-          const { count } = db.getFirstSync(
-            'SELECT COUNT(*) as count FROM products'
-          ) as { count: number };
-          if (count === 0) {
-            emitRestoreEvent('start');
-            restoreFromCloud()
-              .then(() => emitRestoreEvent('complete'))
-              .catch(() => emitRestoreEvent('error'));
-          }
-        }
+        // Auto-restore (consent already stored above): pull from cloud if local is empty.
+        void autoRestoreIfEmpty();
       }
     } catch {
       // Network unavailable or shop not found — fall through with local info only

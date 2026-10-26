@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { importFromJson, BackupData, ImportSummary } from '../db/backup';
+import { importFromJson, snapshotLocalIds, BackupData, ImportSummary } from '../db/backup';
 import { getStoredShopId } from '../utils/storage';
+import { fetchAllRows } from './paging';
+import { getPendingIds, beginPullTracking, PendingIds } from '../db/syncQueue';
 
 export interface RestoreResult {
   success: boolean;
@@ -35,9 +37,10 @@ async function fetchByIds(
   const results: any[] = [];
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await supabase.from(table).select('*').in(column, chunk);
-    if (error) throw error;
-    if (data) results.push(...data);
+    const rows = await fetchAllRows<any>((from, to) =>
+      supabase.from(table).select('*').in(column, chunk).order('id').range(from, to) as any,
+    );
+    results.push(...rows);
   }
   return results;
 }
@@ -63,10 +66,31 @@ async function deleteByIds(
  * Safe to call on a non-empty database — existing rows with the same ID are
  * replaced with the cloud version. New rows are added.
  */
+const unionPendingIds = (...sources: PendingIds[]): PendingIds => {
+  const out: PendingIds = {};
+  for (const src of sources) {
+    for (const [table, ids] of Object.entries(src)) {
+      const set = (out[table] ??= new Set());
+      ids.forEach((id) => set.add(id));
+    }
+  }
+  return out;
+};
+
 export const restoreFromCloud = async (): Promise<RestoreResult> => {
+  let stopTracking: (() => PendingIds) | null = null;
   try {
     const uuid = await getStoredShopId();
     if (!uuid) return { success: false, error: 'Not authenticated' };
+
+    // Local edits must survive a pull whose fetched cloud copy may predate them. Protected:
+    // ids pending before the fetch, ids pending after it, and ids flushed during it
+    // (queued and synced inside the window, so in neither snapshot).
+    stopTracking = beginPullTracking();
+    const pendingBefore = getPendingIds();
+    // Reconcile may only delete rows that already existed when the pull began; rows
+    // created locally during the fetch are absent from the cloud copy for that reason alone.
+    const localIdsAtStart = snapshotLocalIds();
 
     // ── Fetch all tables individually — continue on per-table errors ──────────
     const tableErrors: Record<string, string> = {};
@@ -85,17 +109,27 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       }
     };
 
+    // Page through each shop-scoped table (PostgREST max_rows = 1000); a stable
+    // ORDER BY id is required for range paging.
+    const pagedQuery = (table: string) =>
+      safeQuery(
+        fetchAllRows<any>((from, to) =>
+          supabase.from(table).select('*').eq('shop_id', uuid).order('id').range(from, to) as any,
+        ).then(data => ({ data, error: null })) as any,
+        table,
+      ) as Promise<any[] | null>;
+
     // Select exactly the columns granted to `authenticated` under the RLS
     // lockdown — select('*') would pull is_superadmin/auth_user_id and fail
     // the whole query with 42501.
     const shopData      = await safeQuery(supabase.from('shops').select('id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, active_device_id, created_at, last_synced_at, allow_out_of_stock_billing').eq('id', uuid).single() as any, 'shops');
-    const categoriesData = await safeQuery(supabase.from('categories').select('*').eq('shop_id', uuid) as any, 'categories');
-    const brandsData     = await safeQuery(supabase.from('brands').select('*').eq('shop_id', uuid) as any, 'brands');
-    const productsData   = await safeQuery(supabase.from('products').select('*').eq('shop_id', uuid) as any, 'products');
-    const customersData  = await safeQuery(supabase.from('customers').select('*').eq('shop_id', uuid) as any, 'customers');
-    const billsData      = await safeQuery(supabase.from('bills').select('*').eq('shop_id', uuid) as any, 'bills');
-    const salesLogData   = await safeQuery(supabase.from('sales_log').select('*').eq('shop_id', uuid) as any, 'sales_log');
-    const purchaseLogData = await safeQuery(supabase.from('purchase_log').select('*').eq('shop_id', uuid) as any, 'purchase_log');
+    const categoriesData = await pagedQuery('categories');
+    const brandsData     = await pagedQuery('brands');
+    const productsData   = await pagedQuery('products');
+    const customersData  = await pagedQuery('customers');
+    const billsData      = await pagedQuery('bills');
+    const salesLogData   = await pagedQuery('sales_log');
+    const purchaseLogData = await pagedQuery('purchase_log');
 
     // Fetch bill_items separately, chunked to handle shops with many bills (C3)
     const billIds = ((billsData as any[] | null) ?? []).map((b: any) => b.id);
@@ -151,8 +185,13 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
       purchaseLog: stripShopId(purchaseLogData as any[] | null),
     };
 
-    const summary = importFromJson(backup);
     const hasErrors = Object.keys(tableErrors).length > 0;
+    // Only a fully paged, error-free pull is a complete snapshot safe to reconcile against.
+    const summary = importFromJson(backup, {
+      pending: unionPendingIds(pendingBefore, getPendingIds(), stopTracking()),
+      reconcile: !hasErrors,
+      reconcileOnly: localIdsAtStart,
+    });
     return {
       success: true,
       summary,
@@ -161,6 +200,8 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
   } catch (e: any) {
     console.error('[restoreService] restoreFromCloud error:', e);
     return { success: false, error: e?.message ?? 'Restore failed' };
+  } finally {
+    stopTracking?.();
   }
 };
 
@@ -191,8 +232,15 @@ export const deleteFromCloud = async (): Promise<DeleteFromCloudResult> => {
     if (plErr) tableErrors['purchase_log'] = plErr.message;
 
     // 2. bill_items — no shop_id; delete via parent bill IDs in chunks (C3)
-    const { data: billRows, error: billFetchErr } = await supabase
-      .from('bills').select('id').eq('shop_id', uuid);
+    let billRows: any[] | null = null;
+    let billFetchErr: { message: string } | null = null;
+    try {
+      billRows = await fetchAllRows<any>((from, to) =>
+        supabase.from('bills').select('id').eq('shop_id', uuid).order('id').range(from, to) as any,
+      );
+    } catch (e: any) {
+      billFetchErr = { message: e?.message ?? 'Unknown error' };
+    }
     if (billFetchErr) {
       tableErrors['bill_items'] = `Could not fetch bill IDs: ${billFetchErr.message}`;
     } else {

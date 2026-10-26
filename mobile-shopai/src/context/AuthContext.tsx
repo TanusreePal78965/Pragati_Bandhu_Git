@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { login as loginService, getStoredAuth, logout as logoutService } from '../services/authService';
+import { login as loginService, getStoredAuth, autoRestoreIfEmpty, logout as logoutService } from '../services/authService';
 import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
+import { setDeviceConflict } from '../services/deviceLock';
+import { restoreFromCloud } from '../services/restoreService';
+import { flushSyncQueue, bumpSyncGeneration } from '../db/syncQueue';
 import { startSyncService, stopSyncService } from '../services/syncService';
 import { onRestoreEvent } from '../utils/restoreEvents';
 
@@ -30,6 +33,8 @@ type AuthState = {
   setShopActive: (active: boolean) => void;
   /** Claims the session for this device — updates active_device_id in Supabase */
   claimSession: () => Promise<void>;
+  /** Marks this device as in conflict (or clears it) in state and in the device lock */
+  markDeviceConflict: (v: boolean) => void;
 };
 
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -85,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsShopActive((info?.isActive ?? true) && !isExpired);
           await startSyncService(
             () => setShopActive(false),
-            () => setIsDeviceConflict(true),
+            () => markDeviceConflict(true),
           );
         }
       })
@@ -107,14 +112,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsDeviceConflict(false);
     await startSyncService(
       () => setShopActive(false),
-      () => setIsDeviceConflict(true),
+      () => markDeviceConflict(true),
     );
+    // Fresh install / empty DB: pull cloud data without blocking the login.
+    void autoRestoreIfEmpty();
+  };
+
+  const markDeviceConflict = (v: boolean): void => {
+    setDeviceConflict(v);
+    setIsDeviceConflict(v);
   };
 
   const logout = async () => {
     loggingOutRef.current = true;
     try {
+      // Any in-flight flush belongs to this session: make it stop before its next write.
+      bumpSyncGeneration();
       stopSyncService();
+      setDeviceConflict(false);
       await logoutService();
       setIsAuthenticated(false);
       setIsShopActive(true);
@@ -139,15 +154,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const deviceId = await getOrCreateDeviceId();
       const shopId = await getStoredShopId();
-      if (shopId) {
-        await supabase.from('shops')
-          .update({ active_device_id: deviceId })
-          .eq('id', shopId);
-      }
+      if (!shopId) return;
+      const { error } = await supabase.from('shops')
+        .update({ active_device_id: deviceId })
+        .eq('id', shopId);
+      // Keep the conflict screen up if the claim did not land.
+      if (error) return;
+      setDeviceConflict(false);
+      setIsDeviceConflict(false);
+      // Take the other device's final state before this one writes anything.
+      restoreFromCloud()
+        .catch(() => {})
+        .then(() => flushSyncQueue())
+        .catch(() => {});
     } catch {
-      // Non-critical — conflict screen will retry on next foreground
+      // Non-critical — conflict screen stays; user can retry
     }
-    setIsDeviceConflict(false);
   };
 
   return (
@@ -164,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         setShopActive,
         claimSession,
+        markDeviceConflict,
       }}
     >
       {children}

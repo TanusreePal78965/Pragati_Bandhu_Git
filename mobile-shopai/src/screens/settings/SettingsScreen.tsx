@@ -28,7 +28,7 @@ import { useAuth } from "../../context/AuthContext";
 import { getShopInfo, setShopInfo as persistShopInfo, StoredShopInfo, clearAllUserData, setHasConsent, getStoredShopId } from "../../utils/storage";
 import { getAppVersion, getAppVersionCode } from "../../lib/version";
 import { supabase } from "../../lib/supabase";
-import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
+import { getPendingSyncCount, flushSyncQueue, getStuckSyncCount, retryStuckSyncItems } from "../../db/syncQueue";
 import { exportAsSql, queueAllLocalData, updateShop, getShop, resetShopTestData } from "../../db/db";
 import { exportAsJson, importFromJson, clearAllLocalData } from "../../db/backup";
 import { restoreFromCloud, deleteFromCloud } from "../../services/restoreService";
@@ -101,6 +101,7 @@ export default function SettingsScreen() {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [shopInfo, setShopInfoState] = useState<StoredShopInfo | null>(null);
     const [syncPendingCount, setSyncPendingCount] = useState(0);
+    const [stuckSyncCount, setStuckSyncCount] = useState(0);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
     const [isEnablingCloud, setIsEnablingCloud] = useState(false);
@@ -111,7 +112,7 @@ export default function SettingsScreen() {
     const [versionClicks, setVersionClicks] = useState(0);
     const [showExport, setShowExport] = useState(false);
     const navigation = useNavigation();
-    const { logout, phone, setShopActive } = useAuth();
+    const { logout, phone, setShopActive, markDeviceConflict } = useAuth();
 
     useFocusEffect(
         useCallback(() => {
@@ -145,12 +146,25 @@ export default function SettingsScreen() {
                     setShopInfoState(info ? { ...info, allowOutOfStockBilling: isAllowed } : null);
                     setAllowOutOfStock(isAllowed);
                     setSyncPendingCount(getPendingSyncCount());
+                    setStuckSyncCount(getStuckSyncCount());
                 }
             };
             loadLatestInfo();
             return () => { cancelled = true; };
         }, [])
     );
+
+    const handleRetryStuck = async () => {
+        setIsSyncing(true);
+        try {
+            retryStuckSyncItems();
+            await flushSyncQueue();
+        } finally {
+            setSyncPendingCount(getPendingSyncCount());
+            setStuckSyncCount(getStuckSyncCount());
+            setIsSyncing(false);
+        }
+    };
 
     const handleSyncNow = async () => {
         setIsSyncing(true);
@@ -160,6 +174,7 @@ export default function SettingsScreen() {
         } finally {
             const afterCount = getPendingSyncCount();
             setSyncPendingCount(afterCount);
+            setStuckSyncCount(getStuckSyncCount());
             setIsSyncing(false);
             const synced = beforeCount - afterCount;
             if (synced > 0 && afterCount === 0) {
@@ -224,8 +239,7 @@ export default function SettingsScreen() {
 
                             updateShop({ aiConsent: true });
                             setCloudUploadText("Uploading data…");
-                            queueAllLocalData();
-                            await startSyncService(() => setShopActive(false), () => {});
+                            await startSyncService(() => setShopActive(false), () => markDeviceConflict(true));
                             await flushSyncQueue();
                             const refreshed = await getShopInfo();
                             setShopInfoState(refreshed);
@@ -705,6 +719,20 @@ export default function SettingsScreen() {
                                 : syncPendingCount > 0
                                     ? `Sync Now (${syncPendingCount} pending)`
                                     : "Sync Now"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {Boolean(shopInfo?.aiConsent) && stuckSyncCount > 0 && (
+                    <TouchableOpacity
+                        style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+                        onPress={handleRetryStuck}
+                        disabled={isSyncing}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="alert-circle-outline" size={20} color="#B45309" />
+                        <Text style={styles.syncButtonText}>
+                            {`${stuckSyncCount} change${stuckSyncCount > 1 ? "s" : ""} could not sync — Retry`}
                         </Text>
                     </TouchableOpacity>
                 )}

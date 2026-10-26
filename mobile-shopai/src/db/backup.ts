@@ -1,4 +1,5 @@
 import db from './sqlite';
+import type { PendingIds } from './syncQueue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,17 @@ export const exportAsJson = (): BackupData => {
  * Idempotent — safe to run on a non-empty database (merges, not overwrites).
  * Returns a count of rows inserted per table.
  */
-export const importFromJson = (data: BackupData): ImportSummary => {
+export const importFromJson = (
+  data: BackupData,
+  opts: {
+    pending?: PendingIds;
+    reconcile?: boolean;
+    /** When set, reconcile may delete only these local ids (those that existed when the pull began). */
+    reconcileOnly?: PendingIds;
+  } = {},
+): ImportSummary => {
+  const pending = opts.pending ?? {};
+  const isPending = (table: string, id: any) => pending[table]?.has(String(id)) ?? false;
   const summary: ImportSummary = {
     categories: 0,
     brands: 0,
@@ -81,7 +92,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
   db.withTransactionSync(() => {
     // Shop
-    if (data.shop) {
+    if (data.shop && !isPending('shop', data.shop.id)) {
       db.runSync(
         `INSERT OR REPLACE INTO shop
            (id, shop_name, owner_name, phone, whatsapp_number, business_category, ai_consent, is_active, allow_out_of_stock_billing, created_at)
@@ -103,6 +114,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Categories
     for (const row of data.categories ?? []) {
+      if (isPending('categories', row.id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO categories (id, name, icon, icon_color) VALUES (?, ?, ?, ?)`,
         [row.id, row.name, row.icon ?? 'grid-outline', row.icon_color ?? '#1a57db']
@@ -112,6 +124,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Brands
     for (const row of data.brands ?? []) {
+      if (isPending('brands', row.id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO brands (id, name, color) VALUES (?, ?, ?)`,
         [row.id, row.name, row.color ?? '#1a57db']
@@ -121,10 +134,11 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Products
     for (const row of data.products ?? []) {
+      if (isPending('products', row.id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO products
-           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, track_stock, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, track_stock, purchase_uom, units_per_pack, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id, row.name,
           row.category_id ?? null,
@@ -135,6 +149,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           row.min_stock_threshold ?? 5,
           row.uom ?? 'Pcs',
           row.track_stock ?? 1,
+          row.purchase_uom ?? null,
+          row.units_per_pack ?? null,
           row.updated_at ?? new Date().toISOString(),
         ]
       );
@@ -143,6 +159,7 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Customers
     for (const row of data.customers ?? []) {
+      if (isPending('customers', row.id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO customers (id, name, phone, address, udhar_balance, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
         [row.id, row.name, row.phone ?? null, row.address ?? null, row.udhar_balance ?? 0, row.created_at ?? new Date().toISOString()]
@@ -152,10 +169,11 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Bills
     for (const row of data.bills ?? []) {
+      if (isPending('bills', row.id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO bills
-           (id, customer_id, customer_name, payment_mode, total_amount, total_items, bill_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.customer_id ?? null,
@@ -163,6 +181,9 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           row.payment_mode ?? 'cash',
           row.total_amount,
           row.total_items,
+          row.discount_percent ?? 0,
+          row.discount_amount ?? 0,
+          row.discount_type ?? 'none',
           row.bill_date ?? new Date().toISOString(),
         ]
       );
@@ -171,15 +192,17 @@ export const importFromJson = (data: BackupData): ImportSummary => {
 
     // Bill Items
     for (const row of data.billItems ?? []) {
+      if (isPending('bills', row.bill_id)) continue;
       db.runSync(
         `INSERT OR REPLACE INTO bill_items
-           (id, bill_id, product_id, product_name, qty, unit_price, line_total, purchase_price)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, bill_id, product_id, product_name, qty, unit_price, line_total, purchase_price, display_qty)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id, row.bill_id,
           row.product_id, row.product_name,
           row.qty, row.unit_price, row.line_total,
-          row.purchase_price ?? 0
+          row.purchase_price ?? 0,
+          row.display_qty ?? null,
         ]
       );
       summary.billItems++;
@@ -210,9 +233,39 @@ export const importFromJson = (data: BackupData): ImportSummary => {
       );
       summary.purchaseLog++;
     }
+
+    // Reconcile: with a complete pull, drop local rows the cloud no longer has,
+    // unless they carry unsynced local changes. Bills and logs are append-only
+    // history and are never reconciled.
+    if (opts.reconcile) {
+      const reconcileTable = (table: string, rows: any[] | undefined) => {
+        const keep = new Set((rows ?? []).map(r => String(r.id)));
+        const locals = db.getAllSync(`SELECT id FROM ${table}`) as { id: string }[];
+        for (const { id } of locals) {
+          const candidate = !opts.reconcileOnly || (opts.reconcileOnly[table]?.has(String(id)) ?? false);
+          if (candidate && !keep.has(String(id)) && !isPending(table, id)) {
+            db.runSync(`DELETE FROM ${table} WHERE id = ?`, [id]);
+          }
+        }
+      };
+      reconcileTable('products', data.products);
+      reconcileTable('categories', data.categories);
+      reconcileTable('brands', data.brands);
+      reconcileTable('customers', data.customers);
+    }
   });
 
   return summary;
+};
+
+/** Local ids of the reconcilable tables, snapshotted at pull start (see reconcileOnly). */
+export const snapshotLocalIds = (): PendingIds => {
+  const out: PendingIds = {};
+  for (const table of ['products', 'categories', 'brands', 'customers']) {
+    const rows = db.getAllSync(`SELECT id FROM ${table}`) as { id: string }[];
+    out[table] = new Set(rows.map((r) => String(r.id)));
+  }
+  return out;
 };
 
 // ─── Clear ────────────────────────────────────────────────────────────────────
