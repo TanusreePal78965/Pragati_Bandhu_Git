@@ -130,11 +130,41 @@ describe('sync queue: DELTA ops, promotion, stripped upserts', () => {
   it('(f) flush executes DELTAs via rpc with the right params', async () => {
     q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
     q.addToSyncQueue('customers', 'DELTA', 'C', { delta: 120.5 });
+    const [opP, opC] = rows().map((x) => JSON.parse(x.payload).op_id);
+    expect([typeof opP, typeof opC]).toEqual(['string', 'string']);
     await q.flushSyncQueue();
-    expect(rpc).toHaveBeenNthCalledWith(1, 'shopai_adjust_stock', { p_product_id: 'P', p_delta: -3 });
-    expect(rpc).toHaveBeenNthCalledWith(2, 'shopai_adjust_udhar', { p_customer_id: 'C', p_delta: 120.5 });
+    expect(rpc).toHaveBeenNthCalledWith(1, 'shopai_adjust_stock', { p_product_id: 'P', p_delta: -3, p_op_id: opP });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'shopai_adjust_udhar', { p_customer_id: 'C', p_delta: 120.5, p_op_id: opC });
     expect(upsert).not.toHaveBeenCalled();
     expect(rows()).toHaveLength(0);
+  });
+
+  it('every DELTA gets its own uuid-shaped op_id', () => {
+    q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
+    q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
+    const ids = rows().map((x) => JSON.parse(x.payload).op_id);
+    expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it('a retry after a lost response re-sends the same op_id (server dedupes it)', async () => {
+    q.addToSyncQueue('products', 'DELTA', 'P', { delta: -3 });
+    rpc.mockRejectedValueOnce(new TypeError('Network request failed'));
+    await q.flushSyncQueue();
+    await q.flushSyncQueue();
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0][1].p_op_id).toBe(rpc.mock.calls[1][1].p_op_id);
+    expect(rows()).toHaveLength(0);
+  });
+
+  it('a DELTA without op_id is rejected permanently, not sent', async () => {
+    testDb.runSync(
+      "INSERT INTO sync_queue (table_name, operation, data_id, payload) VALUES ('products', 'DELTA', 'P', ?)",
+      [JSON.stringify({ delta: -1 })],
+    );
+    await q.flushSyncQueue();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(rows()[0].attempts).toBe(1);
   });
 
   it('a transient rpc failure leaves the DELTA untouched', async () => {

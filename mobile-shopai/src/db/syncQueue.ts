@@ -38,12 +38,22 @@ export const classifySyncError = (e: unknown): 'transient' | 'permanent' => {
   return 'permanent';
 };
 
+/** Random RFC 4122 v4-shaped id; op_ids are a global primary key in shopai_applied_deltas. */
+export const newOpId = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+
 export const addToSyncQueue = (
   tableName: string,
   operation: string,
   dataId: string,
   payload: any
 ) => {
+  // Each DELTA carries its own op_id so the server applies it at most once, even when a
+  // response is lost and the client re-sends.
+  if (operation === 'DELTA' && !payload?.op_id) payload = { ...payload, op_id: newOpId() };
   // Shop updates are partial; a later one must not drop fields from an earlier unsynced one.
   if (tableName === 'shop') {
     const olds = db.getAllSync(
@@ -219,13 +229,15 @@ async function syncItem(
 // instead of overwriting each other. RLS (SECURITY INVOKER) scopes the row to this shop.
 async function syncDelta(tableName: string, dataId: string, payload: any): Promise<void> {
   const delta = Number(payload?.delta);
+  const opId = payload?.op_id;
   if (!Number.isFinite(delta)) throw new Error(`Invalid delta for ${tableName}/${dataId}`);
+  if (typeof opId !== 'string' || !opId) throw new Error(`Missing op_id for ${tableName}/${dataId}`);
   switch (tableName) {
     case 'products':
-      throwIfError(await supabase.rpc('shopai_adjust_stock', { p_product_id: dataId, p_delta: delta }));
+      throwIfError(await supabase.rpc('shopai_adjust_stock', { p_product_id: dataId, p_delta: delta, p_op_id: opId }));
       break;
     case 'customers':
-      throwIfError(await supabase.rpc('shopai_adjust_udhar', { p_customer_id: dataId, p_delta: delta }));
+      throwIfError(await supabase.rpc('shopai_adjust_udhar', { p_customer_id: dataId, p_delta: delta, p_op_id: opId }));
       break;
     default:
       throw new Error(`DELTA not supported for table: ${tableName}`);
