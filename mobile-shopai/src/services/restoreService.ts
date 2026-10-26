@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabase';
-import { importFromJson, BackupData, ImportSummary } from '../db/backup';
+import { importFromJson, snapshotLocalIds, BackupData, ImportSummary } from '../db/backup';
 import { getStoredShopId } from '../utils/storage';
 import { fetchAllRows } from './paging';
-import { getPendingIds, PendingIds } from '../db/syncQueue';
+import { getPendingIds, beginPullTracking, PendingIds } from '../db/syncQueue';
 
 export interface RestoreResult {
   success: boolean;
@@ -66,9 +66,9 @@ async function deleteByIds(
  * Safe to call on a non-empty database — existing rows with the same ID are
  * replaced with the cloud version. New rows are added.
  */
-const unionPendingIds = (a: PendingIds, b: PendingIds): PendingIds => {
+const unionPendingIds = (...sources: PendingIds[]): PendingIds => {
   const out: PendingIds = {};
-  for (const src of [a, b]) {
+  for (const src of sources) {
     for (const [table, ids] of Object.entries(src)) {
       const set = (out[table] ??= new Set());
       ids.forEach((id) => set.add(id));
@@ -78,13 +78,19 @@ const unionPendingIds = (a: PendingIds, b: PendingIds): PendingIds => {
 };
 
 export const restoreFromCloud = async (): Promise<RestoreResult> => {
+  let stopTracking: (() => PendingIds) | null = null;
   try {
     const uuid = await getStoredShopId();
     if (!uuid) return { success: false, error: 'Not authenticated' };
 
-    // Snapshot pending ids before AND after the fetch: a queued edit (e.g. a DELTA) that
-    // flushes while we fetch would otherwise let the pull write its pre-change cloud value.
+    // Local edits must survive a pull whose fetched cloud copy may predate them. Protected:
+    // ids pending before the fetch, ids pending after it, and ids flushed during it
+    // (queued and synced inside the window, so in neither snapshot).
+    stopTracking = beginPullTracking();
     const pendingBefore = getPendingIds();
+    // Reconcile may only delete rows that already existed when the pull began; rows
+    // created locally during the fetch are absent from the cloud copy for that reason alone.
+    const localIdsAtStart = snapshotLocalIds();
 
     // ── Fetch all tables individually — continue on per-table errors ──────────
     const tableErrors: Record<string, string> = {};
@@ -182,8 +188,9 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
     const hasErrors = Object.keys(tableErrors).length > 0;
     // Only a fully paged, error-free pull is a complete snapshot safe to reconcile against.
     const summary = importFromJson(backup, {
-      pending: unionPendingIds(pendingBefore, getPendingIds()),
+      pending: unionPendingIds(pendingBefore, getPendingIds(), stopTracking()),
       reconcile: !hasErrors,
+      reconcileOnly: localIdsAtStart,
     });
     return {
       success: true,
@@ -193,6 +200,8 @@ export const restoreFromCloud = async (): Promise<RestoreResult> => {
   } catch (e: any) {
     console.error('[restoreService] restoreFromCloud error:', e);
     return { success: false, error: e?.message ?? 'Restore failed' };
+  } finally {
+    stopTracking?.();
   }
 };
 

@@ -141,6 +141,29 @@ export const getPendingIds = (): PendingIds => {
   return out;
 };
 
+// ─── Pull tracking ──────────────────────────────────────────────────────────
+// A pull's fetch spans several requests. A row queued AND flushed inside that window is
+// in neither pending snapshot, yet the fetched cloud copy may predate it. While a tracker
+// is active, every successfully flushed row is recorded so the pull can skip it.
+const pullTrackers = new Set<PendingIds>();
+
+/** Starts recording flushed rows; the returned function stops (idempotent) and returns them. */
+export const beginPullTracking = (): (() => PendingIds) => {
+  const flushed: PendingIds = {};
+  pullTrackers.add(flushed);
+  return () => {
+    pullTrackers.delete(flushed);
+    return flushed;
+  };
+};
+
+/** Test/diagnostic helper: number of trackers still active. */
+export const activePullTrackerCount = (): number => pullTrackers.size;
+
+const recordFlushed = (tableName: string, dataId: string): void => {
+  for (const t of pullTrackers) (t[tableName] ??= new Set()).add(String(dataId));
+};
+
 /**
  * Flush all pending sync queue items directly to Supabase.
  * RLS policies on each table enforce shop isolation automatically —
@@ -183,6 +206,7 @@ export const flushSyncQueue = async () => {
       try {
         const payload = JSON.parse(item.payload);
         await syncItem(item.table_name, item.operation, item.data_id, payload);
+        recordFlushed(item.table_name, item.data_id);
         db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
       } catch (e) {
         console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, e);

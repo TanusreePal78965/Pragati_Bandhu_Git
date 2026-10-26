@@ -196,3 +196,58 @@ describe('sync queue: DELTA ops, promotion, stripped upserts', () => {
     expect(r.map((x) => [x.operation, x.attempts])).toEqual([['INSERT', 1], ['DELTA', 0]]);
   });
 });
+
+describe('pull tracking', () => {
+  let testDb: TestDb;
+  let q: typeof import('../db/syncQueue');
+
+  beforeEach(() => {
+    jest.resetModules();
+    testDb = createTestDb();
+    mockSqliteModule(testDb);
+    jest.doMock('../lib/supabase', () => ({
+      supabase: {
+        auth: { getSession: jest.fn().mockResolvedValue({ data: { session: {} } }) },
+        from: jest.fn(() => ({ upsert: jest.fn().mockResolvedValue({ error: null }) })),
+        rpc: jest.fn().mockResolvedValue({ error: null }),
+      },
+    }));
+    jest.doMock('@react-native-community/netinfo', () => ({
+      __esModule: true,
+      default: { fetch: jest.fn().mockResolvedValue({ isConnected: true }) },
+    }));
+    jest.doMock('../utils/storage', () => ({
+      getOrCreateDeviceId: jest.fn(),
+      getStoredShopId: jest.fn().mockResolvedValue('shop-uuid'),
+      getHasConsent: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock('../services/deviceLock', () => ({
+      isDeviceConflict: () => false,
+      verifyActiveDevice: jest.fn().mockResolvedValue('ok'),
+    }));
+    q = require('../db/syncQueue');
+  });
+  afterEach(() => testDb.closeSync());
+
+  it('records flushed rows per active tracker; nested trackers finish independently', async () => {
+    const stopOuter = q.beginPullTracking();
+    q.addToSyncQueue('products', 'UPDATE', 'A', { id: 'A' });
+    await q.flushSyncQueue();
+    const stopInner = q.beginPullTracking();
+    q.addToSyncQueue('customers', 'UPDATE', 'B', { id: 'B' });
+    await q.flushSyncQueue();
+    const inner = stopInner();
+    q.addToSyncQueue('products', 'DELTA', 'C', { delta: 1 });
+    await q.flushSyncQueue();
+    const outer = stopOuter();
+    expect(Object.keys(inner)).toEqual(['customers']);
+    expect([...inner.customers]).toEqual(['B']);
+    expect([...outer.products].sort()).toEqual(['A', 'C']);
+    expect([...outer.customers]).toEqual(['B']);
+    expect(q.activePullTrackerCount()).toBe(0);
+    stopOuter(); // idempotent
+    q.addToSyncQueue('products', 'UPDATE', 'D', { id: 'D' });
+    await q.flushSyncQueue();
+    expect(outer.products.has('D')).toBe(false);
+  });
+});

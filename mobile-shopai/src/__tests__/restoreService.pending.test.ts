@@ -22,9 +22,10 @@ describe('restoreFromCloud pending protection', () => {
       .fn()
       .mockReturnValueOnce({ products: new Set(['P']), customers: new Set(['C']) })
       .mockReturnValueOnce({ customers: new Set(['C']), products: new Set(['Q']) });
-    jest.doMock('../db/syncQueue', () => ({ getPendingIds }));
+    const flushedDuringPull = { products: new Set(['F']) };
+    jest.doMock('../db/syncQueue', () => ({ getPendingIds, beginPullTracking: () => () => flushedDuringPull }));
     const importFromJson = jest.fn().mockReturnValue({});
-    jest.doMock('../db/backup', () => ({ importFromJson }));
+    jest.doMock('../db/backup', () => ({ importFromJson, snapshotLocalIds: () => ({ products: new Set(['P']) }) }));
 
     const { restoreFromCloud } = require('../services/restoreService');
     const result = await restoreFromCloud();
@@ -33,7 +34,8 @@ describe('restoreFromCloud pending protection', () => {
     expect(getPendingIds).toHaveBeenCalledTimes(2);
     expect(getPendingIds.mock.invocationCallOrder[0]).toBeLessThan(from.mock.invocationCallOrder[0]);
     const { pending } = importFromJson.mock.calls[0][1];
-    expect([...pending.products].sort()).toEqual(['P', 'Q']);
+    expect([...pending.products].sort()).toEqual(['F', 'P', 'Q']);
+    expect([...importFromJson.mock.calls[0][1].reconcileOnly.products]).toEqual(['P']);
     expect([...pending.customers]).toEqual(['C']);
   });
 });

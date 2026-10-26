@@ -70,7 +70,12 @@ export const exportAsJson = (): BackupData => {
  */
 export const importFromJson = (
   data: BackupData,
-  opts: { pending?: PendingIds; reconcile?: boolean } = {},
+  opts: {
+    pending?: PendingIds;
+    reconcile?: boolean;
+    /** When set, reconcile may delete only these local ids (those that existed when the pull began). */
+    reconcileOnly?: PendingIds;
+  } = {},
 ): ImportSummary => {
   const pending = opts.pending ?? {};
   const isPending = (table: string, id: any) => pending[table]?.has(String(id)) ?? false;
@@ -237,7 +242,8 @@ export const importFromJson = (
         const keep = new Set((rows ?? []).map(r => String(r.id)));
         const locals = db.getAllSync(`SELECT id FROM ${table}`) as { id: string }[];
         for (const { id } of locals) {
-          if (!keep.has(String(id)) && !isPending(table, id)) {
+          const candidate = !opts.reconcileOnly || (opts.reconcileOnly[table]?.has(String(id)) ?? false);
+          if (candidate && !keep.has(String(id)) && !isPending(table, id)) {
             db.runSync(`DELETE FROM ${table} WHERE id = ?`, [id]);
           }
         }
@@ -250,6 +256,16 @@ export const importFromJson = (
   });
 
   return summary;
+};
+
+/** Local ids of the reconcilable tables, snapshotted at pull start (see reconcileOnly). */
+export const snapshotLocalIds = (): PendingIds => {
+  const out: PendingIds = {};
+  for (const table of ['products', 'categories', 'brands', 'customers']) {
+    const rows = db.getAllSync(`SELECT id FROM ${table}`) as { id: string }[];
+    out[table] = new Set(rows.map((r) => String(r.id)));
+  }
+  return out;
 };
 
 // ─── Clear ────────────────────────────────────────────────────────────────────

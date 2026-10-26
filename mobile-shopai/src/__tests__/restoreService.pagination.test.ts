@@ -56,7 +56,7 @@ describe('restoreFromCloud pagination', () => {
       getStoredShopId: jest.fn().mockResolvedValue('shop1'),
     }));
     const importFromJson = jest.fn().mockReturnValue({});
-    jest.doMock('../db/backup', () => ({ importFromJson }));
+    jest.doMock('../db/backup', () => ({ importFromJson, snapshotLocalIds: () => ({}) }));
 
     const { restoreFromCloud } = require('../services/restoreService');
     const result = await restoreFromCloud();
