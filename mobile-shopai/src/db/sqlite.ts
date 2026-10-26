@@ -27,7 +27,7 @@ const db = new Proxy({} as SQLite.SQLiteDatabase, {
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-function initTables(database: SQLite.SQLiteDatabase): void {
+export function initTables(database: SQLite.SQLiteDatabase): void {
   database.execSync(`
     PRAGMA journal_mode = WAL;
 
