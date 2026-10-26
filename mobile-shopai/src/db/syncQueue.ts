@@ -56,12 +56,24 @@ export const addToSyncQueue = (
     }
     payload = { ...merged, ...payload };
   }
-  // Remove any previously failed entries for the same record before inserting a fresh one,
-  // so exhausted-attempt items don't silently block re-syncs.
-  db.runSync(
-    'DELETE FROM sync_queue WHERE table_name = ? AND data_id = ?',
-    [tableName, dataId]
-  );
+  // DELTA entries (stock/udhar changes) are additive: never deduped, never dedupe others.
+  if (operation !== 'DELTA') {
+    // Promotion: an UPDATE replacing a not-yet-synced INSERT must stay an INSERT so the
+    // first upload keeps the absolute stock/udhar that syncUpsert strips from UPDATEs.
+    if (operation === 'UPDATE') {
+      const queuedInsert = db.getFirstSync(
+        "SELECT id FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation = 'INSERT' LIMIT 1",
+        [tableName, dataId]
+      );
+      if (queuedInsert) operation = 'INSERT';
+    }
+    // Remove any previously failed entries for the same record before inserting a fresh one,
+    // so exhausted-attempt items don't silently block re-syncs.
+    db.runSync(
+      "DELETE FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation != 'DELTA'",
+      [tableName, dataId]
+    );
+  }
   db.runSync(
     'INSERT INTO sync_queue (table_name, operation, data_id, payload) VALUES (?, ?, ?, ?)',
     [tableName, operation, dataId, JSON.stringify(payload)]
@@ -146,6 +158,13 @@ export const flushSyncQueue = async () => {
     if (queue.length === 0) return;
 
     for (const item of queue) {
+      // A DELTA must apply after the row's first upload: while an earlier INSERT for the
+      // same row is still queued (failed or backed off), the RPC would silently hit no row
+      // and the change would be lost when the INSERT later lands with its older snapshot.
+      if (item.operation === 'DELTA' && db.getFirstSync(
+        "SELECT 1 FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation = 'INSERT' AND id < ? LIMIT 1",
+        [item.table_name, item.data_id, item.id]
+      )) continue;
       try {
         const payload = JSON.parse(item.payload);
         await syncItem(item.table_name, item.operation, item.data_id, payload);
@@ -184,10 +203,36 @@ async function syncItem(
 ): Promise<void> {
   if (operation === 'DELETE') {
     await syncDelete(tableName, dataId);
+  } else if (operation === 'DELTA') {
+    await syncDelta(tableName, dataId, payload);
   } else {
-    await syncUpsert(tableName, payload);
+    await syncUpsert(tableName, operation, payload);
   }
 }
+
+// Stock/udhar changes are applied server-side as deltas so concurrent devices add up
+// instead of overwriting each other. RLS (SECURITY INVOKER) scopes the row to this shop.
+async function syncDelta(tableName: string, dataId: string, payload: any): Promise<void> {
+  const delta = Number(payload?.delta);
+  if (!Number.isFinite(delta)) throw new Error(`Invalid delta for ${tableName}/${dataId}`);
+  switch (tableName) {
+    case 'products':
+      throwIfError(await supabase.rpc('shopai_adjust_stock', { p_product_id: dataId, p_delta: delta }));
+      break;
+    case 'customers':
+      throwIfError(await supabase.rpc('shopai_adjust_udhar', { p_customer_id: dataId, p_delta: delta }));
+      break;
+    default:
+      throw new Error(`DELTA not supported for table: ${tableName}`);
+  }
+}
+
+// Absolute stock/udhar values travel only on INSERT (first upload); on UPDATE they are
+// owned by DELTA ops and must not overwrite the server's running total.
+const DELTA_OWNED_COLUMN: Record<string, string> = {
+  products: 'stock_quantity',
+  customers: 'udhar_balance',
+};
 
 // Derives the shop UUID from the locally stored login session.
 async function getShopId(): Promise<string> {
@@ -196,7 +241,7 @@ async function getShopId(): Promise<string> {
   return uuid;
 }
 
-async function syncUpsert(tableName: string, payload: any): Promise<void> {
+async function syncUpsert(tableName: string, operation: string, payload: any): Promise<void> {
   switch (tableName) {
     case 'products':
     case 'categories':
@@ -206,9 +251,12 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
     case 'purchase_log': {
       // RLS requires shop_id = UUID on every row — inject it from the live session.
       const shopId = await getShopId();
+      const row = { ...payload };
+      const owned = DELTA_OWNED_COLUMN[tableName];
+      if (owned && operation === 'UPDATE') delete row[owned];
       throwIfError(await supabase
         .from(tableName)
-        .upsert({ ...payload, shop_id: shopId }, { onConflict: 'id' }));
+        .upsert({ ...row, shop_id: shopId }, { onConflict: 'id' }));
       break;
     }
 

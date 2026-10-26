@@ -5,6 +5,32 @@ import { addToSyncQueue } from './syncQueue';
 const genId = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+// ─── Stock / udhar deltas ────────────────────────────────────────────────────
+// Stock and udhar sync as server-applied deltas (see syncQueue 'DELTA'), computed from
+// the actual local before/after values so local clamping (MAX(0, ...)) is respected.
+type DeltaTarget = { table: 'products'; column: 'stock_quantity' } | { table: 'customers'; column: 'udhar_balance' };
+const STOCK: DeltaTarget = { table: 'products', column: 'stock_quantity' };
+const UDHAR: DeltaTarget = { table: 'customers', column: 'udhar_balance' };
+
+const readDeltaValue = (t: DeltaTarget, id: string): number | null => {
+  const row = db.getFirstSync(`SELECT ${t.column} AS v FROM ${t.table} WHERE id = ?`, [id]) as { v: number | null } | null;
+  return row ? Number(row.v ?? 0) : null;
+};
+
+const queueDelta = (t: DeltaTarget, id: string, before: number | null, after: number | null): void => {
+  if (before === null || after === null) return;
+  const delta = Math.round((after - before) * 1e4) / 1e4;
+  if (delta === 0 || !Number.isFinite(delta)) return;
+  addToSyncQueue(t.table, 'DELTA', id, { delta });
+};
+
+/** Runs `write` and queues a DELTA for the actual change it made to `id`'s stock/udhar. */
+const withDelta = (t: DeltaTarget, id: string, write: () => void): void => {
+  const before = readDeltaValue(t, id);
+  write();
+  queueDelta(t, id, before, readDeltaValue(t, id));
+};
+
 // ─── Shop ─────────────────────────────────────────────────────────────────────
 
 export interface ShopInfo {
@@ -413,14 +439,21 @@ export const updateProduct = (
       .map((k) => `${k} = ?`)
       .join(', ');
     const values = [...Object.values(fields), id];
-    db.runSync(`UPDATE products SET ${sets}, updated_at = datetime('now') WHERE id = ?`, values);
-    // Re-read the full row — partial payloads would corrupt Supabase if the INSERT
-    // hasn't synced yet (deduplication deletes the INSERT queue entry on every UPDATE).
-    const full = db.getFirstSync('SELECT * FROM products WHERE id = ?', [id]) as Product | null;
-    if (full) {
-      const { category_name: _c, brand_name: _b, ...syncPayload } = full;
-      addToSyncQueue('products', 'UPDATE', id, syncPayload);
-    }
+    db.withTransactionSync(() => {
+      const write = () =>
+        db.runSync(`UPDATE products SET ${sets}, updated_at = datetime('now') WHERE id = ?`, values);
+      // The DELTA is queued before the UPDATE: if the UPDATE is promoted to an INSERT, its
+      // absolute stock already includes this change and the earlier DELTA hits no cloud row.
+      if ('stock_quantity' in fields) withDelta(STOCK, id, write);
+      else write();
+      // Re-read the full row — partial payloads would corrupt Supabase if the INSERT
+      // hasn't synced yet (an UPDATE replacing a queued INSERT is promoted to INSERT).
+      const full = db.getFirstSync('SELECT * FROM products WHERE id = ?', [id]) as Product | null;
+      if (full) {
+        const { category_name: _c, brand_name: _b, ...syncPayload } = full;
+        addToSyncQueue('products', 'UPDATE', id, syncPayload);
+      }
+    });
   } catch (e) {
     console.error('updateProduct error:', e);
     throw e;
@@ -429,15 +462,15 @@ export const updateProduct = (
 
 export const updateProductStock = (id: string, newQty: number): void => {
   try {
-    db.runSync(
-      `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
-      [newQty, id]
-    );
-    const full = db.getFirstSync('SELECT * FROM products WHERE id = ?', [id]) as Product | null;
-    if (full) {
-      const { category_name: _c, brand_name: _b, ...syncPayload } = full;
-      addToSyncQueue('products', 'UPDATE', id, syncPayload);
-    }
+    // Only stock changes here, and stock syncs as a DELTA — an UPDATE would carry nothing.
+    db.withTransactionSync(() => {
+      withDelta(STOCK, id, () =>
+        db.runSync(
+          `UPDATE products SET stock_quantity = ?, updated_at = datetime('now') WHERE id = ?`,
+          [newQty, id]
+        )
+      );
+    });
   } catch (e) {
     console.error('updateProductStock error:', e);
     throw e;
@@ -568,38 +601,42 @@ export const updateCustomer = (
  */
 export const recordUdharPayment = (id: string, paymentAmount: number): void => {
   try {
-    db.runSync(
-      `UPDATE customers SET udhar_balance = MAX(0, udhar_balance - ?) WHERE id = ?`,
-      [paymentAmount, id]
-    );
-    const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
-    if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
+    db.withTransactionSync(() => {
+      // Balance syncs as the actual (clamped) negative DELTA.
+      withDelta(UDHAR, id, () =>
+        db.runSync(
+          `UPDATE customers SET udhar_balance = MAX(0, udhar_balance - ?) WHERE id = ?`,
+          [paymentAmount, id]
+        )
+      );
+      const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
 
-    // Log the udhar payment transaction in bills table so history is recorded
-    const billId = `bill_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const customerName = updated?.name ?? 'Customer';
+      // Log the udhar payment transaction in bills table so history is recorded
+      const billId = `bill_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const customerName = updated?.name ?? 'Customer';
 
-    db.runSync(
-      `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
-       VALUES (?, ?, ?, 'udhar_clear', ?, 0, 0, 0, 'none', datetime('now'))`,
-      [billId, id, customerName, paymentAmount]
-    );
+      db.runSync(
+        `INSERT INTO bills (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
+         VALUES (?, ?, ?, 'udhar_clear', ?, 0, 0, 0, 'none', datetime('now'))`,
+        [billId, id, customerName, paymentAmount]
+      );
 
-    addToSyncQueue('bills', 'INSERT', billId, {
-      bill: {
-        id: billId,
-        customer_id: id,
-        customer_name: customerName,
-        payment_mode: 'udhar_clear',
-        total_amount: paymentAmount,
-        total_items: 0,
-        discount_percent: 0,
-        discount_amount: 0,
-        discount_type: 'none',
-        bill_date: new Date().toISOString(),
-      },
-      items: [],
-      salesLog: [],
+      addToSyncQueue('bills', 'INSERT', billId, {
+        bill: {
+          id: billId,
+          customer_id: id,
+          customer_name: customerName,
+          payment_mode: 'udhar_clear',
+          total_amount: paymentAmount,
+          total_items: 0,
+          discount_percent: 0,
+          discount_amount: 0,
+          discount_type: 'none',
+          bill_date: new Date().toISOString(),
+        },
+        items: [],
+        salesLog: [],
+      });
     });
   } catch (e) {
     console.error('recordUdharPayment error:', e);
@@ -609,10 +646,12 @@ export const recordUdharPayment = (id: string, paymentAmount: number): void => {
 
 export const updateCustomerUdhar = (id: string, deltaAmount: number): void => {
   try {
-    db.runSync('UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?', [deltaAmount, id]);
-    // Re-read the full row so the upsert payload is safe and complete (no non-existent delta column)
-    const updated = db.getFirstSync('SELECT * FROM customers WHERE id = ?', [id]) as Customer | null;
-    if (updated) addToSyncQueue('customers', 'UPDATE', id, updated);
+    // Only the balance changes, and it syncs as a DELTA.
+    db.withTransactionSync(() => {
+      withDelta(UDHAR, id, () =>
+        db.runSync('UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?', [deltaAmount, id])
+      );
+    });
   } catch (e) {
     console.error('updateCustomerUdhar error:', e);
     throw e;
@@ -661,10 +700,12 @@ export const insertBill = (
           [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null]
         );
 
-        // 3. Deduct stock (clamp at 0 so stock never goes negative)
-        db.runSync(
-          `UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = datetime('now') WHERE id = ?`,
-          [item.qty, item.product_id]
+        // 3. Deduct stock (clamp at 0 so stock never goes negative); queue the actual change.
+        withDelta(STOCK, item.product_id, () =>
+          db.runSync(
+            `UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = datetime('now') WHERE id = ?`,
+            [item.qty, item.product_id]
+          )
         );
 
         // 4. Append sales log
@@ -693,11 +734,14 @@ export const insertBill = (
         });
       }
 
-      // 5. If udhar → increment customer balance
+      // 5. If udhar → increment customer balance (synced as a DELTA)
       if (bill.payment_mode === 'udhar' && bill.customer_id) {
-        db.runSync(
-          'UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?',
-          [bill.total_amount, bill.customer_id]
+        const customerId = bill.customer_id;
+        withDelta(UDHAR, customerId, () =>
+          db.runSync(
+            'UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?',
+            [bill.total_amount, customerId]
+          )
         );
       }
 
@@ -708,16 +752,6 @@ export const insertBill = (
         items: billItemsForSync,
         salesLog: salesLogForSync,
       });
-
-      if (bill.payment_mode === 'udhar' && bill.customer_id) {
-        const updatedCustomer = db.getFirstSync(
-          'SELECT * FROM customers WHERE id = ?',
-          [bill.customer_id]
-        ) as Customer | null;
-        if (updatedCustomer) {
-          addToSyncQueue('customers', 'UPDATE', bill.customer_id, updatedCustomer);
-        }
-      }
     });
 
     return billId;
@@ -1208,9 +1242,12 @@ export const finalizeDraft = (
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [itemId, billId, item.product_id, item.product_name, item.qty, item.unit_price, item.line_total, item.display_qty ?? null, costPrice]
         );
-        db.runSync(
-          `UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = datetime('now') WHERE id = ?`,
-          [item.qty, item.product_id]
+        // Clamp at 0 like insertBill; queue the actual change.
+        withDelta(STOCK, item.product_id, () =>
+          db.runSync(
+            `UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = datetime('now') WHERE id = ?`,
+            [item.qty, item.product_id]
+          )
         );
         db.runSync(
           `INSERT INTO sales_log (id, product_id, product_name, qty_sold, sale_amount)
@@ -1233,9 +1270,12 @@ export const finalizeDraft = (
       }
 
       if (paymentMode === 'udhar' && customer?.id) {
-        db.runSync(
-          `UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?`,
-          [totalAmount, customer.id]
+        const customerId = customer.id;
+        withDelta(UDHAR, customerId, () =>
+          db.runSync(
+            `UPDATE customers SET udhar_balance = udhar_balance + ? WHERE id = ?`,
+            [totalAmount, customerId]
+          )
         );
       }
 
@@ -1254,14 +1294,6 @@ export const finalizeDraft = (
         items: billItemsForSync,
         salesLog: salesLogForSync,
       });
-
-      if (paymentMode === 'udhar' && customer?.id) {
-        const updatedCustomer = db.getFirstSync(
-          'SELECT * FROM customers WHERE id = ?',
-          [customer.id]
-        ) as Customer | null;
-        if (updatedCustomer) addToSyncQueue('customers', 'UPDATE', customer.id, updatedCustomer);
-      }
 
       // Delete draft — cascade removes draft_bill_items
       db.runSync(`DELETE FROM draft_bill_items WHERE draft_id = ?`, [draftId]);
