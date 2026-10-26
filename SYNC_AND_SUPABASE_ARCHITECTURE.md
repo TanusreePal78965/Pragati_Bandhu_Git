@@ -350,13 +350,13 @@ restoreFromCloud()
 **File:** [mobile-shopai/src/db/backup.ts](mobile-shopai/src/db/backup.ts)
 
 - Runs inside a single `db.withTransactionSync()` — all-or-nothing.
-- Uses `INSERT OR REPLACE` on every row — **idempotent**. Safe to run on a non-empty DB. Existing rows with the same `id` are replaced with the cloud version. New rows are added.
+- Uses `INSERT OR REPLACE` on every row — **idempotent**. Safe to run on a non-empty DB. Existing rows with the same `id` are replaced with the cloud version, except rows with any queued `sync_queue` entry (see below). New rows are added.
 - Does NOT touch `sync_queue` or `suggestions_cache`.
 - Does NOT call `addToSyncQueue()` — restored rows don't need to be re-pushed to Supabase.
 - Restores pack columns (`purchase_uom`, `units_per_pack`), bill discount columns (`discount_percent/amount/type`) and `bill_items.display_qty`.
 - **Pending rows are skipped:** rows whose `(table, id)` has any `sync_queue` entry (any `attempts`) are never overwritten (shop, categories, brands, products, customers, bills; bill_items follow their bill).
 - **Delete convergence:** with `reconcile: true` (a pull with no `tableErrors`), local products/categories/brands/customers missing from the cloud and not pending are deleted. Bills, bill_items and logs are never reconciled.
-- **Device lock:** background pulls and `autoRestoreIfEmpty` do nothing while the conflict flag is set; `claimSession` clears the flag, restores once, then flushes. `services/deviceLock.ts` + `verifyActiveDevice` (60s cache) gate flush; shop upserts no longer write `active_device_id`. Still client-enforced: the old session's JWT stays valid and a stale-ok window of up to 60s exists.
+- **Device lock:** background pulls and `autoRestoreIfEmpty` do nothing while the conflict flag is set; `claimSession` clears the flag, restores once, then flushes. `services/deviceLock.ts` + `verifyActiveDevice` (60s cache) gate flush; shop updates no longer write `active_device_id`. Still client-enforced: the old session's JWT stays valid and a stale-ok window of up to 60s exists.
 - **Fresh login:** `autoRestoreIfEmpty()` restores when consent is on and local `products` is empty. The `db` proxy throws before `openUserDatabase`, and consent defaults to off.
 
 ---
@@ -390,7 +390,7 @@ deleteFromCloud()
 | --- | --- | --- |
 | Direction | Supabase → SQLite | SQLite → Supabase |
 | When | Fresh install / manual | Foreground / network / explicit |
-| Strategy | `INSERT OR REPLACE` (merge) | `upsert` (overwrite by id) |
+| Strategy | `INSERT OR REPLACE` (merge; cloud pull skips rows with queued sync entries and reconciles deletes only after a fully successful pull) | `upsert` (overwrite by id) |
 | Blocking? | Auto: non-blocking. Manual: blocking with spinner | Non-blocking (background) |
 | Triggers `addToSyncQueue`? | No | N/A (it is the queue flush) |
 | Consent required? | Auto-restore: yes (`ai_consent = true`). Manual: user must be cloud user | Yes |
@@ -440,7 +440,7 @@ handleImportJson()
   │
   └─ proceedWithImport(parsed)
         │
-        ├─ importFromJson(parsed)  → INSERT OR REPLACE into SQLite (single transaction)
+        ├─ importFromJson(parsed)  → INSERT OR REPLACE into SQLite (single transaction); called with no opts, so no pending-skip and no reconcile (those apply only to cloud pulls)
         │
         └─ if aiConsent = true:
               queueAllLocalData()   ← re-queues every SQLite row as upserts

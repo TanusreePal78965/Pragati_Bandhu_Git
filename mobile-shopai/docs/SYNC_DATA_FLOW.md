@@ -36,8 +36,8 @@ Sync behaviour depends on whether the user chose "Cloud Backup" during shop setu
 | `shop` | `shops` | INSERT, UPDATE | `id = phone` |
 | `categories` | `categories` | INSERT, UPDATE, DELETE | `shop_id` |
 | `brands` | `brands` | INSERT, UPDATE, DELETE | `shop_id` |
-| `products` | `products` | INSERT, UPDATE, DELETE | `shop_id` |
-| `customers` | `customers` | INSERT, UPDATE | `shop_id` |
+| `products` | `products` | INSERT, UPDATE, DELETE, DELTA (stock) | `shop_id` |
+| `customers` | `customers` | INSERT, UPDATE, DELTA (udhar) | `shop_id` |
 | `bills` | `bills` | INSERT only (immutable) | `shop_id` |
 | `bill_items` | `bill_items` | INSERT only (via bills) | via parent bill RLS |
 | `sales_log` | `sales_log` | INSERT only (via bills) | `shop_id` |
@@ -52,8 +52,8 @@ Sync behaviour depends on whether the user chose "Cloud Backup" during shop setu
 
 | Aspect | SQLite | Supabase | Handled By |
 |--------|--------|----------|-----------|
-| Table name for shop | `shop` (singular) | `shops` (plural) | `syncQueue.ts:169` maps name |
-| `shop_id` column | Not present (single-shop device) | Required on all tables except `bill_items` | `syncQueue.ts:108` injects from JWT |
+| Table name for shop | `shop` (singular) | `shops` (plural) | `syncUpsert` / `syncDelete` map the name in `syncQueue.ts` |
+| `shop_id` column | Not present (single-shop device) | Required on all tables except `bill_items` | `syncUpsert` (`getShopId`) injects from the stored session |
 | Booleans | `INTEGER 0/1` | `BOOLEAN` | Postgres accepts 0/1 implicitly |
 | Timestamps | `TEXT` via `datetime('now')` | `TIMESTAMPTZ` | Postgres parses ISO-8601 strings |
 | Phone format | 10-digit (`9876543210`) | E.164 in auth (`+919876543210`) | RLS uses `right(auth.jwt() ->> 'phone', 10)` |
@@ -83,7 +83,7 @@ Sync behaviour depends on whether the user chose "Cloud Backup" during shop setu
 User taps "Save Product"
         │
         ▼
-insertProduct() ─── db.ts:306
+insertProduct() ─── db.ts
         │
         ▼
 db.runSync("INSERT INTO products ...")   ← SQLite write (sync, instant)
@@ -127,7 +127,7 @@ A flush is triggered by any of:
 - User taps "Sync Now" in Settings — all users (explicit action)
 
 ```
-flushSyncQueue()  ─── syncQueue.ts:50
+flushSyncQueue()  ─── syncQueue.ts
         │
         ├─ [isFlushing = true]  ← mutex prevents concurrent runs
         │
@@ -156,7 +156,7 @@ flushSyncQueue()  ─── syncQueue.ts:50
                                 │       supabase.from(table).upsert({...payload, shop_id}, {onConflict:'id'})
                                 │
                                 ├─ shop:
-                                │       supabase.from('shops').upsert({id:phone, shop_name, ...}, {onConflict:'id'})
+                                │       supabase.from('shops').update({shop_name, ...}).eq('id', uuid)
                                 │
                                 └─ bills (compound):
                                         supabase.from('bills').upsert({...bill, shop_id})
@@ -193,7 +193,7 @@ The JWT is attached automatically by the Supabase client on every request. Shop 
 Bills are the most critical write path because they touch 4 tables atomically:
 
 ```
-NewBillScreen → insertBill(bill, items)   ─── db.ts:436
+NewBillScreen → insertBill(bill, items)   ─── db.ts
         │
         ▼
 db.withTransactionSync(() => {
@@ -320,7 +320,7 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 - `verifyActiveDevice()` reads `shops.active_device_id, ai_consent` and returns `'conflict'` only when `ai_consent` is true and a non-null `active_device_id` differs from this device; `'ok'` otherwise; `'unknown'` on offline, error or no row. `ok`/`conflict` results are cached 60s; `unknown` is never cached. It sets the conflict flag.
 - `flushSyncQueue` returns early if the flag is set, and also when `verifyActiveDevice()` is not `'ok'` (conflict **or unknown**, retried on the next trigger). Background pulls (`pullIfStale`) and `autoRestoreIfEmpty` return early when the flag is set; they do not call `verifyActiveDevice` themselves, so a pull is not blocked by `'unknown'` alone.
 - `checkShopStatus` (foreground) calls `verifyActiveDevice({ maxAgeMs: 0 })` and raises the conflict screen via `markDeviceConflict(true)` (sets the flag and UI state together). Settings "enable cloud backup" is wired to the same callback.
-- The `shop` upsert no longer writes `active_device_id`, so editing shop details can no longer steal the session from the active device.
+- The `shop` update no longer writes `active_device_id`, so editing shop details can no longer steal the session from the active device.
 - **`claimSession`** (Device Conflict screen "use this device"): update `shops.active_device_id` to this device; if that errors, stay on the conflict screen. On success clear the flag, then `restoreFromCloud()` once (take the other device's final state) and then `flushSyncQueue()`.
 - **Known limits**: this is still client-enforced. The previous session's JWT stays valid, so a modified or offline client can still write; a device that was offline can write until its next successful check; and a cached `'ok'` leaves a stale-ok window of up to 60s. Real enforcement needs server-side session revocation.
 
