@@ -4,6 +4,7 @@ import { flushSyncQueue } from '../db/syncQueue';
 import { getHasConsent, getShopInfo, setShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { supabase } from '../lib/supabase';
 import { restoreFromCloud } from './restoreService';
+import { isDeviceConflict, verifyActiveDevice } from './deviceLock';
 import { fetchShopStatus, isPlanExpired } from './subscription';
 
 // Minimum ms between background pulls — avoids hammering Supabase on rapid app switches
@@ -11,6 +12,7 @@ const PULL_INTERVAL_MS = 2 * 60 * 1000;
 let _lastPullAt = 0;
 
 const pullIfStale = (): void => {
+  if (isDeviceConflict()) return;
   const now = Date.now();
   if (now - _lastPullAt < PULL_INTERVAL_MS) return;
   _lastPullAt = now;
@@ -62,6 +64,11 @@ const checkShopStatus = async (
     // Device conflict — only for online (aiConsent) users.
     if (status.aiConsent) {
       const thisDeviceId = await getOrCreateDeviceId();
+      if ((await verifyActiveDevice({ maxAgeMs: 0 })) === 'conflict') {
+        // Another device holds the session — block access.
+        onDeviceConflict();
+        return;
+      }
       if (!status.activeDeviceId) {
         // No device claimed yet (new shop or just cleared) — stamp this device.
         const updateActiveDevice = async () => {
@@ -70,10 +77,6 @@ const checkShopStatus = async (
           } catch (_) {}
         };
         updateActiveDevice();
-      } else if (status.activeDeviceId !== thisDeviceId) {
-        // Another device holds the session — block access.
-        onDeviceConflict();
-        return;
       }
     }
   } catch {

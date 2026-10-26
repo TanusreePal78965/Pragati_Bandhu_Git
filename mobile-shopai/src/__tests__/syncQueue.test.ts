@@ -33,6 +33,10 @@ describe('sync queue robustness', () => {
       getStoredShopId: jest.fn().mockResolvedValue('shop-uuid'),
       getHasConsent: jest.fn().mockResolvedValue(false),
     }));
+    jest.doMock('../services/deviceLock', () => ({
+      isDeviceConflict: () => false,
+      verifyActiveDevice: jest.fn().mockResolvedValue('ok'),
+    }));
     jest.spyOn(console, 'error').mockImplementation(() => {});
     q = require('../db/syncQueue');
   });

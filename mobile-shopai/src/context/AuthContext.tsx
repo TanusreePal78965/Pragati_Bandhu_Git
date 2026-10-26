@@ -2,6 +2,9 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { supabase } from '../lib/supabase';
 import { login as loginService, getStoredAuth, logout as logoutService } from '../services/authService';
 import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
+import { setDeviceConflict } from '../services/deviceLock';
+import { restoreFromCloud } from '../services/restoreService';
+import { flushSyncQueue } from '../db/syncQueue';
 import { startSyncService, stopSyncService } from '../services/syncService';
 import { onRestoreEvent } from '../utils/restoreEvents';
 
@@ -115,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loggingOutRef.current = true;
     try {
       stopSyncService();
+      setDeviceConflict(false);
       await logoutService();
       setIsAuthenticated(false);
       setIsShopActive(true);
@@ -139,15 +143,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const deviceId = await getOrCreateDeviceId();
       const shopId = await getStoredShopId();
-      if (shopId) {
-        await supabase.from('shops')
-          .update({ active_device_id: deviceId })
-          .eq('id', shopId);
-      }
+      if (!shopId) return;
+      const { error } = await supabase.from('shops')
+        .update({ active_device_id: deviceId })
+        .eq('id', shopId);
+      // Keep the conflict screen up if the claim did not land.
+      if (error) return;
+      setDeviceConflict(false);
+      setIsDeviceConflict(false);
+      // Take the other device's final state before this one writes anything.
+      restoreFromCloud()
+        .catch(() => {})
+        .then(() => flushSyncQueue())
+        .catch(() => {});
     } catch {
-      // Non-critical — conflict screen will retry on next foreground
+      // Non-critical — conflict screen stays; user can retry
     }
-    setIsDeviceConflict(false);
   };
 
   return (

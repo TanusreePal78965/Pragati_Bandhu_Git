@@ -1,7 +1,8 @@
 import db from './sqlite';
 import { supabase } from '../lib/supabase';
 import NetInfo from '@react-native-community/netinfo';
-import { getOrCreateDeviceId, getStoredShopId, getHasConsent } from '../utils/storage';
+import { getStoredShopId, getHasConsent } from '../utils/storage';
+import { isDeviceConflict, verifyActiveDevice } from '../services/deviceLock';
 
 const MAX_ATTEMPTS = 5;
 const BACKOFF_BASE_MS = 30000;
@@ -124,6 +125,8 @@ export const getPendingIds = (): PendingIds => {
 export const flushSyncQueue = async () => {
   // Guard against concurrent flushes (e.g. NetInfo + AppState firing simultaneously)
   if (isFlushing) return;
+  // A device that lost the session must never write; 'unknown' also aborts (retry on next trigger).
+  if (isDeviceConflict()) return;
   isFlushing = true;
 
   try {
@@ -132,6 +135,8 @@ export const flushSyncQueue = async () => {
 
     const state = await NetInfo.fetch();
     if (!state.isConnected) return;
+
+    if ((await verifyActiveDevice()) !== 'ok') return;
 
     const queue = db.getAllSync(
       'SELECT * FROM sync_queue WHERE attempts < ? AND next_attempt_at <= ? ORDER BY id ASC',
@@ -209,15 +214,13 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
 
     case 'shop': {
       const uuid = await getShopId();
-      const deviceId = await getOrCreateDeviceId();
       // phone is intentionally ignored — it's the login identifier and RLS no
       // longer grants authenticated UPDATE on shops.phone. This also drops
       // any `phone` field left over in queued entries from older app versions.
       const { shopName, ownerName, category, whatsappNumber, allowOutOfStockBilling } = payload;
 
-      const updatePayload: any = {
-        active_device_id: deviceId,
-      };
+      // active_device_id is deliberately never written here: only claimSession may take the session.
+      const updatePayload: any = {};
       if (shopName !== undefined) updatePayload.shop_name = shopName;
       if (ownerName !== undefined) updatePayload.owner_name = ownerName;
       if (category !== undefined) updatePayload.business_category = category ?? null;
