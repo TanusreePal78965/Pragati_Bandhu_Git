@@ -7,7 +7,14 @@ import { isDeviceConflict, verifyActiveDevice } from '../services/deviceLock';
 const MAX_ATTEMPTS = 5;
 const BACKOFF_BASE_MS = 30000;
 const BACKOFF_MAX_MS = 3600000;
-let isFlushing = false;
+// Bumped on logout: a flush started for one session must never write another session's
+// queue rows to the cloud, or touch the next user's database, after it resumes.
+let syncGeneration = 0;
+let flushingGeneration: number | null = null;
+
+export const bumpSyncGeneration = (): void => {
+  syncGeneration++;
+};
 
 interface SyncItem {
   id: number;
@@ -172,21 +179,34 @@ const recordFlushed = (tableName: string, dataId: string): void => {
  * Sales (bills) carry a compound payload: { bill, items, salesLog }
  * and are upserted across three tables sequentially.
  */
-export const flushSyncQueue = async () => {
-  // Guard against concurrent flushes (e.g. NetInfo + AppState firing simultaneously)
-  if (isFlushing) return;
+export const flushSyncQueue = async (): Promise<void> => {
+  const generation = syncGeneration;
+  // Guard against concurrent flushes (e.g. NetInfo + AppState firing simultaneously).
+  // Per generation: a flush stuck on an old session must not block the new one.
+  if (flushingGeneration === generation) return;
   // A device that lost the session must never write; 'unknown' also aborts (retry on next trigger).
   if (isDeviceConflict()) return;
-  isFlushing = true;
+  flushingGeneration = generation;
 
   try {
+    const shopId = await getStoredShopId();
+    // After every await: same session generation and same logged-in shop, else stop
+    // without touching the queue (it may now be another user's database).
+    const stillCurrent = async (): Promise<boolean> =>
+      syncGeneration === generation && (await getStoredShopId()) === shopId;
+    if (!shopId || syncGeneration !== generation) return;
+
     const { data } = await supabase.auth.getSession();
+    if (!(await stillCurrent())) return;
     if (!data.session) return;
 
     const state = await NetInfo.fetch();
+    if (!(await stillCurrent())) return;
     if (!state.isConnected) return;
 
-    if ((await verifyActiveDevice()) !== 'ok') return;
+    const device = await verifyActiveDevice();
+    if (!(await stillCurrent())) return;
+    if (device !== 'ok') return;
 
     const queue = db.getAllSync(
       'SELECT * FROM sync_queue WHERE attempts < ? AND next_attempt_at <= ? ORDER BY id ASC',
@@ -203,27 +223,36 @@ export const flushSyncQueue = async () => {
         "SELECT 1 FROM sync_queue WHERE table_name = ? AND data_id = ? AND operation = 'INSERT' AND id < ? LIMIT 1",
         [item.table_name, item.data_id, item.id]
       )) continue;
+      let failure: unknown = null;
       try {
         const payload = JSON.parse(item.payload);
         await syncItem(item.table_name, item.operation, item.data_id, payload);
+      } catch (e) {
+        failure = e ?? new Error('Sync failed');
+      }
+      if (!(await stillCurrent())) return;
+      if (!failure) {
         recordFlushed(item.table_name, item.data_id);
         db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
-      } catch (e) {
-        console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, e);
-        // Transient: leave the row untouched and stop — the rest would fail the same way.
-        if (classifySyncError(e) === 'transient') break;
-        const attempts = item.attempts + 1;
-        const delay = Math.min(BACKOFF_BASE_MS * 2 ** attempts, BACKOFF_MAX_MS);
-        const err = e as { message?: unknown };
-        const lastError = String(typeof err?.message === 'string' ? err.message : e).slice(0, 500);
-        db.runSync(
-          'UPDATE sync_queue SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE id = ?',
-          [attempts, Date.now() + delay, lastError, item.id]
-        );
+        continue;
       }
+      console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, failure);
+      // Transient: leave the row untouched and stop — the rest would fail the same way.
+      if (classifySyncError(failure) === 'transient') break;
+      const attempts = item.attempts + 1;
+      const delay = Math.min(BACKOFF_BASE_MS * 2 ** attempts, BACKOFF_MAX_MS);
+      const err = failure as { message?: unknown };
+      const lastError = String(typeof err?.message === 'string' ? err.message : failure).slice(0, 500);
+      db.runSync(
+        'UPDATE sync_queue SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE id = ?',
+        [attempts, Date.now() + delay, lastError, item.id]
+      );
     }
+  } catch (e) {
+    // Never reject to callers (e.g. the database was closed by a logout mid-flush).
+    console.error('[syncQueue] flush aborted:', e);
   } finally {
-    isFlushing = false;
+    if (flushingGeneration === generation) flushingGeneration = null;
   }
 };
 

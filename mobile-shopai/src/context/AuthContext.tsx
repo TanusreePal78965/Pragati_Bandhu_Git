@@ -4,7 +4,7 @@ import { login as loginService, getStoredAuth, autoRestoreIfEmpty, logout as log
 import { getShopInfo, getOrCreateDeviceId, getStoredShopId } from '../utils/storage';
 import { setDeviceConflict } from '../services/deviceLock';
 import { restoreFromCloud } from '../services/restoreService';
-import { flushSyncQueue } from '../db/syncQueue';
+import { flushSyncQueue, bumpSyncGeneration } from '../db/syncQueue';
 import { startSyncService, stopSyncService } from '../services/syncService';
 import { onRestoreEvent } from '../utils/restoreEvents';
 
@@ -126,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     loggingOutRef.current = true;
     try {
+      // Any in-flight flush belongs to this session: make it stop before its next write.
+      bumpSyncGeneration();
       stopSyncService();
       setDeviceConflict(false);
       await logoutService();
