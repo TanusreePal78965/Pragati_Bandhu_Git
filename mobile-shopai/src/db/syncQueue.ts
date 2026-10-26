@@ -24,9 +24,14 @@ interface SyncItem {
 export const classifySyncError = (e: unknown): 'transient' | 'permanent' => {
   const err = (e ?? {}) as { name?: string; message?: unknown; status?: unknown; code?: unknown };
   const message = typeof err.message === 'string' ? err.message : '';
-  if (e instanceof TypeError || err.name === 'TypeError') return 'transient';
+  // A TypeError is only a network failure when its message says so; a programming
+  // TypeError must be permanent so it backs off instead of blocking the queue forever.
+  if (
+    (e instanceof TypeError || err.name === 'TypeError') &&
+    /network request failed|failed to fetch|load failed|network|timeout|aborted/i.test(message)
+  ) return 'transient';
   if (message.includes('Network request failed') || message.includes('JWT expired')) return 'transient';
-  if (err.code === 'PGRST301') return 'transient';
+  if (err.code === 'PGRST301' || err.code === 'PGRST000' || err.code === 'PGRST002') return 'transient';
   const status = Number(err.status);
   if (status === 401 || status === 408 || status === 429 || status >= 500) return 'transient';
   return 'permanent';
@@ -159,6 +164,13 @@ export const flushSyncQueue = async () => {
   }
 };
 
+// postgrest-js drops the HTTP status from `error`; it lives on the response.
+function throwIfError(res: { error: any; status?: number }): void {
+  if (!res.error) return;
+  const { error, status } = res;
+  throw Object.assign(new Error(error.message ?? 'Request failed'), error, { status });
+}
+
 async function syncItem(
   tableName: string,
   operation: string,
@@ -189,10 +201,9 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
     case 'purchase_log': {
       // RLS requires shop_id = UUID on every row — inject it from the live session.
       const shopId = await getShopId();
-      const { error } = await supabase
+      throwIfError(await supabase
         .from(tableName)
-        .upsert({ ...payload, shop_id: shopId }, { onConflict: 'id' });
-      if (error) throw error;
+        .upsert({ ...payload, shop_id: shopId }, { onConflict: 'id' }));
       break;
     }
 
@@ -213,8 +224,7 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
       if (whatsappNumber !== undefined) updatePayload.whatsapp_number = whatsappNumber ?? null;
       if (allowOutOfStockBilling !== undefined) updatePayload.allow_out_of_stock_billing = allowOutOfStockBilling ? true : false;
 
-      const { error } = await supabase.from('shops').update(updatePayload).eq('id', uuid);
-      if (error) throw error;
+      throwIfError(await supabase.from('shops').update(updatePayload).eq('id', uuid));
       break;
     }
 
@@ -223,24 +233,21 @@ async function syncUpsert(tableName: string, payload: any): Promise<void> {
       const shopId = await getShopId();
       const { bill, items, salesLog } = payload;
 
-      const { error: billError } = await supabase
+      throwIfError(await supabase
         .from('bills')
-        .upsert({ ...bill, shop_id: shopId }, { onConflict: 'id' });
-      if (billError) throw billError;
+        .upsert({ ...bill, shop_id: shopId }, { onConflict: 'id' }));
 
       if (items?.length) {
         // bill_items has no shop_id — RLS derives access via parent bill.
-        const { error: itemsError } = await supabase
+        throwIfError(await supabase
           .from('bill_items')
-          .upsert(items, { onConflict: 'id' });
-        if (itemsError) throw itemsError;
+          .upsert(items, { onConflict: 'id' }));
       }
 
       if (salesLog?.length) {
-        const { error: logError } = await supabase
+        throwIfError(await supabase
           .from('sales_log')
-          .upsert(salesLog.map((l: any) => ({ ...l, shop_id: shopId })), { onConflict: 'id' });
-        if (logError) throw logError;
+          .upsert(salesLog.map((l: any) => ({ ...l, shop_id: shopId })), { onConflict: 'id' }));
       }
       break;
     }
@@ -257,9 +264,8 @@ async function syncDelete(tableName: string, dataId: string): Promise<void> {
     // has no DELETE on shops under the RLS lockdown.
     return;
   }
-  const { error } = await supabase
+  throwIfError(await supabase
     .from(tableName)
     .delete()
-    .eq('id', dataId);
-  if (error) throw error;
+    .eq('id', dataId));
 }
