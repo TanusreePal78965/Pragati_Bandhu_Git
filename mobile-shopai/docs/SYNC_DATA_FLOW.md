@@ -107,14 +107,16 @@ The user never waits for the network. The local database is the source of truth.
 sync_queue
 ├── id          INTEGER  -- autoincrement, FIFO order key
 ├── table_name  TEXT     -- 'products', 'customers', 'bills', 'shop', etc.
-├── operation   TEXT     -- 'INSERT' | 'UPDATE' | 'DELETE'
+├── operation   TEXT     -- 'INSERT' | 'UPDATE' | 'DELETE' | 'DELTA'
 ├── data_id     TEXT     -- primary key of the record being synced
 ├── payload     TEXT     -- JSON string of full record data
-├── attempts    INTEGER  -- retry counter (max 5)
+├── attempts    INTEGER  -- permanent-failure counter (MAX_ATTEMPTS = 5)
+├── next_attempt_at INTEGER -- epoch ms; flush skips the item until then (default 0)
+├── last_error  TEXT     -- last permanent error message (max 500 chars)
 └── created_at  TEXT     -- when the item was enqueued
 ```
 
-**Deduplication rule:** Before inserting, the queue deletes any existing entry for the same `(table_name, data_id)`. This means only the **latest** operation for a given record is ever in the queue at one time. The payload is always a **full row snapshot** (not a diff), ensuring safe upserts.
+**Deduplication rule:** Before inserting an INSERT/UPDATE/DELETE, the queue deletes any existing non-DELTA entry for the same `(table_name, data_id)`, so only the **latest** snapshot operation for a record is queued. The payload is a **full row snapshot**, except `shop` (merged, see Queue Errors below) and `DELTA` entries (see Stock and Udhar Deltas). `next_attempt_at` and `last_error` are added to existing databases by an `ALTER TABLE` migration in `sqlite.ts`.
 
 ### 3. Flush Trigger → Supabase
 
@@ -131,9 +133,16 @@ flushSyncQueue()  ─── syncQueue.ts:50
         │
         ├─ NetInfo.fetch() → offline? return early
         │
-        ├─ SELECT * FROM sync_queue WHERE attempts < 5 ORDER BY id ASC
+        ├─ conflict flag set, or verifyActiveDevice() != 'ok'? return (see Device Lock)
+        │
+        ├─ SELECT * FROM sync_queue WHERE attempts < 5 AND next_attempt_at <= now ORDER BY id ASC
         │
         └─ for each item:
+                │
+                ├─ operation = 'DELTA' with an earlier INSERT for the same row queued? skip (stays queued)
+                │
+                ├─ operation = 'DELTA'?
+                │       └─ supabase.rpc('shopai_adjust_stock' | 'shopai_adjust_udhar')
                 │
                 ├─ operation = 'DELETE'?
                 │       └─ supabase.from(table).delete().eq('id', dataId)
@@ -156,9 +165,9 @@ flushSyncQueue()  ─── syncQueue.ts:50
 ```
 
 On success: `DELETE FROM sync_queue WHERE id = ?`
-On failure: `UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?`
+On failure: classified by `classifySyncError` (see Queue Errors and Backoff). Transient: item untouched, flush stops. Permanent: `attempts + 1`, `next_attempt_at` set, `last_error` stored, flush continues.
 
-After 5 failures, the item is no longer fetched (filtered out by `attempts < 5`).
+After 5 permanent failures the item is no longer fetched, but it stays in the table and is shown to the user as stuck (Retry button).
 
 ### 4. RLS Enforcement on Supabase
 
@@ -191,10 +200,10 @@ db.withTransactionSync(() => {
     INSERT INTO bills (...)                     ← 1. create bill
     for each item:
         INSERT INTO bill_items (...)            ← 2. line items
-        UPDATE products SET stock_quantity - ?  ← 3. deduct stock
+        UPDATE products SET stock_quantity - ?  ← 3. deduct stock (queues a stock DELTA)
         INSERT INTO sales_log (...)             ← 4. sales record
     if payment_mode = 'udhar':
-        UPDATE customers SET udhar_balance + ?  ← 5. credit balance
+        UPDATE customers SET udhar_balance + ?  ← 5. credit balance (queues an udhar DELTA)
 })
         │
         ▼  (transaction committed — all or nothing)
@@ -205,9 +214,8 @@ addToSyncQueue('bills', 'INSERT', billId, {
     salesLog: [{ id, product_id, qty_sold, sale_amount }, ...]
 })
         │
-if payment_mode = 'udhar':
-    re-read customer row from SQLite
-    addToSyncQueue('customers', 'UPDATE', customerId, fullCustomerRow)
+(the stock/udhar DELTAs are queued by withDelta inside the transaction;
+ no full customer UPDATE is queued any more)
 ```
 
 On sync, the bill payload is upserted across three Supabase tables sequentially. If any step fails, the entire queue item is retried as a unit.
@@ -244,11 +252,12 @@ checkShopStatus(onDeactivated)
 | Scenario | Behaviour |
 |---------|-----------|
 | Network offline during flush | `NetInfo.fetch()` returns false → skip entire flush, try next trigger |
-| Single item fails (e.g. Supabase error) | `attempts + 1`, continue flushing remaining items |
-| Item fails 5 times | Filtered out of future flushes, effectively dropped |
+| Transient error (offline, expired JWT, 401/408/429/5xx) | Item untouched, flush stops; next trigger retries. No attempt burned |
+| Permanent error on one item (e.g. constraint violation) | `attempts + 1`, backoff, continue with remaining items |
+| Item fails 5 times | Kept in `sync_queue` but not fetched; surfaced as stuck with a Retry button (not dropped) |
 | App crashes mid-flush | Queue items not deleted until success; retried on next startup |
 | Concurrent flush calls | `isFlushing` mutex — second call returns immediately |
-| Session expired mid-flush | `getShopId()` throws → item fails, attempts increment; auto-refresh may recover next flush |
+| Session expired mid-flush | `JWT expired` / HTTP 401 is transient: flush stops without burning attempts; retried after token refresh |
 
 ---
 
@@ -279,14 +288,89 @@ RLS policies extract phone: right(auth.jwt() ->> 'phone', 10)
 
 ---
 
+## Restore Completeness
+
+- `importFromJson` (`db/backup.ts`) now restores every column the app writes: `products.purchase_uom` / `units_per_pack`, `bills.discount_percent` / `discount_amount` / `discount_type`, and `bill_items.display_qty`. Missing values fall back to `null` / `0` / `'none'`.
+- `restoreFromCloud` (`services/restoreService.ts`) pages every shop-scoped table with `fetchAllRows` (`services/paging.ts`): `order('id')` plus `.range(from, to)`, 1000 rows per page, stopping on a short page. This works around the PostgREST 1000-row cap that previously truncated large tables silently. `bill_items` are fetched in 100-bill-id chunks, each chunk also paged.
+
+---
+
+## Pull Safety and Delete Convergence
+
+- **Pending rows are never overwritten.** Before and after fetching, `restoreFromCloud` snapshots `getPendingIds()` (every `sync_queue` row, any `attempts` value, including stuck ones) and passes the union to `importFromJson`. A row of `shop`, `categories`, `brands`, `products`, `customers` or `bills` (and the `bill_items` of a pending bill) with a queue entry is skipped by the pull.
+- **Delete convergence.** When the pull finishes with no `tableErrors`, `importFromJson` is called with `reconcile: true`: local `products`, `categories`, `brands` and `customers` that are absent from the cloud result and have no queue entry are deleted. So a row deleted on device A disappears on device B at its next pull. `bills`, `bill_items` and the logs are append-only history and are never reconciled. If any table failed to load, nothing is deleted.
+
+---
+
+## Queue Errors and Backoff
+
+- **Classification** (`classifySyncError`): *transient* = `TypeError` whose message matches a network failure (`network request failed`, `failed to fetch`, `load failed`, `network`, `timeout`, `aborted`), message containing `Network request failed` or `JWT expired`, PostgREST codes `PGRST301` / `PGRST000` / `PGRST002`, or HTTP status 401, 408, 429, or >= 500. Everything else (including a `TypeError` that is a programming bug) is *permanent*.
+- **HTTP status** is not on postgrest-js `error`, so `throwIfError(res)` rethrows it as `Error` with `{...error, status}` for every Supabase call in the flush.
+- **Transient**: the item is left untouched and the flush loop stops (the remaining items would fail the same way). No attempt is consumed.
+- **Permanent**: `attempts + 1`, `last_error` stored (500 chars), `next_attempt_at = now + min(30s * 2^attempts, 1h)`. The loop continues with the next item.
+- **Stuck items**: at `attempts >= MAX_ATTEMPTS (5)` the item is no longer fetched. `getStuckSyncCount()` feeds a "N changes could not sync - Retry" button on Home and Settings (consent users); `retryStuckSyncItems()` resets `attempts` and `next_attempt_at` to 0 and the screen flushes.
+- **Shop payload merge**: shop updates are partial, so `addToSyncQueue('shop', ...)` merges all queued shop payloads for the id (oldest first) with the new one before replacing them. A later edit no longer drops fields of an earlier unsynced one.
+
+---
+
+## Device Lock
+
+`services/deviceLock.ts` holds an in-memory conflict flag plus `verifyActiveDevice()`.
+
+- `verifyActiveDevice()` reads `shops.active_device_id, ai_consent` and returns `'conflict'` only when `ai_consent` is true and a non-null `active_device_id` differs from this device; `'ok'` otherwise; `'unknown'` on offline, error or no row. `ok`/`conflict` results are cached 60s; `unknown` is never cached. It sets the conflict flag.
+- `flushSyncQueue` returns early if the flag is set, and also when `verifyActiveDevice()` is not `'ok'` (conflict **or unknown**, retried on the next trigger). Background pulls (`pullIfStale`) and `autoRestoreIfEmpty` return early when the flag is set; they do not call `verifyActiveDevice` themselves, so a pull is not blocked by `'unknown'` alone.
+- `checkShopStatus` (foreground) calls `verifyActiveDevice({ maxAgeMs: 0 })` and raises the conflict screen via `markDeviceConflict(true)` (sets the flag and UI state together). Settings "enable cloud backup" is wired to the same callback.
+- The `shop` upsert no longer writes `active_device_id`, so editing shop details can no longer steal the session from the active device.
+- **`claimSession`** (Device Conflict screen "use this device"): update `shops.active_device_id` to this device; if that errors, stay on the conflict screen. On success clear the flag, then `restoreFromCloud()` once (take the other device's final state) and then `flushSyncQueue()`.
+- **Known limits**: this is still client-enforced. The previous session's JWT stays valid, so a modified or offline client can still write; a device that was offline can write until its next successful check; and a cached `'ok'` leaves a stale-ok window of up to 60s. Real enforcement needs server-side session revocation.
+
+---
+
+## Login and DB Open
+
+- `autoRestoreIfEmpty()` (`authService.ts`) runs on fresh login (`AuthContext.login`) and on session recovery: if not in conflict, consent is on and local `products` is empty, it emits restore `start`, runs `restoreFromCloud()`, then `complete` (or `error` when the result is `success: false`). It does not block login.
+- The `db` proxy in `sqlite.ts` now throws `Database not opened - call openUserDatabase first` instead of silently opening a `shopai_default.db`, so no user data can land in a shared default file.
+- Cloud consent defaults to off (`EditShopScreen` no longer defaults `aiConsent` to true when no shop info exists).
+
+---
+
+## Stock and Udhar Deltas
+
+`products.stock_quantity` and `customers.udhar_balance` no longer sync as absolute values (last write wins). They sync as `DELTA` queue items so two devices selling offline add up.
+
+- **Queueing** (`db.ts`): `withDelta` reads the local value before and after the write and queues `{ delta: after - before }` (rounded to 4 decimals, skipped when 0). Local clamping `MAX(0, ...)` is therefore respected. Covers sales (`insertBill` stock deduction, now synced; before only udhar was), manual stock edits, udhar payments and udhar adjustments.
+- **Flush**: `DELTA` calls RPC `shopai_adjust_stock(p_product_id, p_delta)` or `shopai_adjust_udhar(p_customer_id, p_delta)` (migration `supabase/migrations/20261026100000_shopai_stock_udhar_deltas.sql`). Both are `SECURITY INVOKER` (RLS scopes the row to the shop), clamp the result at `greatest(0, ...)`, and are granted to `authenticated` only.
+- **Dedupe / promotion** (`addToSyncQueue`): a DELTA never dedupes anything (deltas are additive). An INSERT deletes all queued entries for the row including DELTAs, because its absolute snapshot already contains them. An UPDATE that finds a queued INSERT is promoted to INSERT so the first upload keeps the absolute stock/udhar. Other UPDATE/DELETE writes keep queued DELTAs.
+- **UPDATE payloads strip** `stock_quantity` (products) and `udhar_balance` (customers); absolute values travel only on INSERT.
+- **Ordering**: the flush skips a DELTA while an earlier INSERT for the same row is still queued (it would hit no cloud row, then be overwritten by the older snapshot). Skipped items stay queued.
+- **DEPLOY ORDER**: apply the migration to the live Supabase project BEFORE shipping the app build that queues `DELTA`; otherwise the RPC does not exist and deltas fail.
+- **Testing**: the pgTAP test `supabase/tests/database/shopai_deltas.test.sql` has NOT been run (no Docker available when written). Run `supabase test db` where Docker is available.
+- **Known limits**: the server-side clamp makes deltas non-commutative if a backed-off delta is overtaken by a later one (e.g. -5 then +5 on a row at 3 ends at 5, +5 then -5 ends at 3); 4-decimal rounding; old app builds still send absolute stock/udhar and can overwrite delta-managed totals.
+
+---
+
 ## Known Limitations & Design Decisions
 
 | Limitation | Impact | Decision |
 |-----------|--------|----------|
 | Last-write-wins (no conflict resolution) | Two devices editing same product simultaneously will silently overwrite | Acceptable for single-owner small shops |
 | No sync status indicator in UI | User can't see if data is pending sync | `getPendingSyncCount()` is available to build a badge |
-| Items dropped after 5 failed attempts | Persistent sync errors lose data silently | Log to console; consider user notification in future |
+| Items stop retrying after 5 permanent failures | Change stays local until the user taps Retry | Surfaced on Home/Settings via `getStuckSyncCount()`; Retry resets them |
 | Bills are immutable | Cannot edit or cancel a bill after creation | Intentional: prevents audit trail tampering |
 | `suggestions_cache` never purged | Grows unbounded | Not synced; stale entries affect AI suggestions only |
-| `stock_quantity` in Supabase reflects sync time | Manual stock correction needed if offline deductions diverge | Upsert with absolute value on manual stock edit |
+| `stock_quantity` / `udhar_balance` sync as deltas | Offline sales on two devices now add up | See Stock and Udhar Deltas for limits |
 | No `updated_at` on categories/brands/customers in SQLite | Cannot detect stale sync items by timestamp | Queue deduplication provides equivalent safety |
+
+
+---
+
+## Manual verification checklist
+
+Not executed as part of the audit-fix work (needs two physical devices or emulators). Run before release.
+
+- [ ] Log in on devices A and B with the same shop. Sell the same product on both while offline, reconnect both: each shows `start - both sales`.
+- [ ] Delete a product on A: it disappears on B after B's next pull.
+- [ ] Edit the shop name on A while B holds the device lock: A is blocked (conflict) and B's lock is unchanged.
+- [ ] On B, tap "use this device": B restores once, flushes, and A then shows the conflict screen at its next foreground.
+- [ ] Force a permanent sync failure: after 5 attempts the Retry banner shows on Home/Settings; Retry clears it once the cause is fixed.
+- [ ] Fresh install and login on an account with data (including more than 1000 bills): everything restores, including pack, discount and display quantity fields.
