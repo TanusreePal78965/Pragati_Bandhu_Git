@@ -864,9 +864,7 @@ export const queueAllLocalData = (): void => {
   const brands = db.getAllSync('SELECT * FROM brands') as any[];
   for (const row of brands) addToSyncQueue('brands', 'INSERT', row.id, row);
 
-  const products = db.getAllSync(
-    'SELECT id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, updated_at FROM products'
-  ) as any[];
+  const products = db.getAllSync('SELECT * FROM products') as any[];
   for (const row of products) addToSyncQueue('products', 'INSERT', row.id, row);
 
   const customers = db.getAllSync(

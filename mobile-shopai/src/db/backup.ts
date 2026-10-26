@@ -123,8 +123,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     for (const row of data.products ?? []) {
       db.runSync(
         `INSERT OR REPLACE INTO products
-           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, track_stock, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, name, category_id, brand_id, purchase_price, selling_price, stock_quantity, min_stock_threshold, uom, track_stock, purchase_uom, units_per_pack, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id, row.name,
           row.category_id ?? null,
@@ -135,6 +135,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           row.min_stock_threshold ?? 5,
           row.uom ?? 'Pcs',
           row.track_stock ?? 1,
+          row.purchase_uom ?? null,
+          row.units_per_pack ?? null,
           row.updated_at ?? new Date().toISOString(),
         ]
       );
@@ -154,8 +156,8 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     for (const row of data.bills ?? []) {
       db.runSync(
         `INSERT OR REPLACE INTO bills
-           (id, customer_id, customer_name, payment_mode, total_amount, total_items, bill_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (id, customer_id, customer_name, payment_mode, total_amount, total_items, discount_percent, discount_amount, discount_type, bill_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id,
           row.customer_id ?? null,
@@ -163,6 +165,9 @@ export const importFromJson = (data: BackupData): ImportSummary => {
           row.payment_mode ?? 'cash',
           row.total_amount,
           row.total_items,
+          row.discount_percent ?? 0,
+          row.discount_amount ?? 0,
+          row.discount_type ?? 'none',
           row.bill_date ?? new Date().toISOString(),
         ]
       );
@@ -173,13 +178,14 @@ export const importFromJson = (data: BackupData): ImportSummary => {
     for (const row of data.billItems ?? []) {
       db.runSync(
         `INSERT OR REPLACE INTO bill_items
-           (id, bill_id, product_id, product_name, qty, unit_price, line_total, purchase_price)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, bill_id, product_id, product_name, qty, unit_price, line_total, purchase_price, display_qty)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.id, row.bill_id,
           row.product_id, row.product_name,
           row.qty, row.unit_price, row.line_total,
-          row.purchase_price ?? 0
+          row.purchase_price ?? 0,
+          row.display_qty ?? null,
         ]
       );
       summary.billItems++;
