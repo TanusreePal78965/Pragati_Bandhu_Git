@@ -4,6 +4,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { getOrCreateDeviceId, getStoredShopId, getHasConsent } from '../utils/storage';
 
 const MAX_ATTEMPTS = 5;
+const BACKOFF_BASE_MS = 30000;
+const BACKOFF_MAX_MS = 3600000;
 let isFlushing = false;
 
 interface SyncItem {
@@ -15,12 +17,39 @@ interface SyncItem {
   attempts: number;
 }
 
+/**
+ * Transient errors (offline, expired auth, throttling, server trouble) say nothing
+ * about the row itself, so they must not burn an attempt. Anything else is permanent.
+ */
+export const classifySyncError = (e: unknown): 'transient' | 'permanent' => {
+  const err = (e ?? {}) as { name?: string; message?: unknown; status?: unknown; code?: unknown };
+  const message = typeof err.message === 'string' ? err.message : '';
+  if (e instanceof TypeError || err.name === 'TypeError') return 'transient';
+  if (message.includes('Network request failed') || message.includes('JWT expired')) return 'transient';
+  if (err.code === 'PGRST301') return 'transient';
+  const status = Number(err.status);
+  if (status === 401 || status === 408 || status === 429 || status >= 500) return 'transient';
+  return 'permanent';
+};
+
 export const addToSyncQueue = (
   tableName: string,
   operation: string,
   dataId: string,
   payload: any
 ) => {
+  // Shop updates are partial; a later one must not drop fields from an earlier unsynced one.
+  if (tableName === 'shop') {
+    const olds = db.getAllSync(
+      'SELECT payload FROM sync_queue WHERE table_name = ? AND data_id = ? ORDER BY id ASC',
+      [tableName, dataId]
+    ) as { payload: string | null }[];
+    let merged: any = {};
+    for (const o of olds) {
+      try { merged = { ...merged, ...JSON.parse(o.payload ?? '{}') }; } catch (_) {}
+    }
+    payload = { ...merged, ...payload };
+  }
   // Remove any previously failed entries for the same record before inserting a fresh one,
   // so exhausted-attempt items don't silently block re-syncs.
   db.runSync(
@@ -46,6 +75,21 @@ export const getPendingSyncCount = (): number => {
     [MAX_ATTEMPTS]
   ) as { count: number } | null;
   return result?.count ?? 0;
+};
+
+export const getStuckSyncCount = (): number => {
+  const result = db.getFirstSync(
+    'SELECT COUNT(*) as count FROM sync_queue WHERE attempts >= ?',
+    [MAX_ATTEMPTS]
+  ) as { count: number } | null;
+  return result?.count ?? 0;
+};
+
+export const retryStuckSyncItems = (): void => {
+  db.runSync(
+    'UPDATE sync_queue SET attempts = 0, next_attempt_at = 0 WHERE attempts >= ?',
+    [MAX_ATTEMPTS]
+  );
 };
 
 export type PendingIds = Record<string, Set<string>>;
@@ -85,8 +129,8 @@ export const flushSyncQueue = async () => {
     if (!state.isConnected) return;
 
     const queue = db.getAllSync(
-      'SELECT * FROM sync_queue WHERE attempts < ? ORDER BY id ASC',
-      [MAX_ATTEMPTS]
+      'SELECT * FROM sync_queue WHERE attempts < ? AND next_attempt_at <= ? ORDER BY id ASC',
+      [MAX_ATTEMPTS, Date.now()]
     ) as SyncItem[];
 
     if (queue.length === 0) return;
@@ -98,10 +142,15 @@ export const flushSyncQueue = async () => {
         db.runSync('DELETE FROM sync_queue WHERE id = ?', [item.id]);
       } catch (e) {
         console.error(`[syncQueue] Failed to sync ${item.table_name}/${item.operation} id=${item.data_id}:`, e);
-        // Failure — increment attempts; item will be retried next flush
+        // Transient: leave the row untouched and stop — the rest would fail the same way.
+        if (classifySyncError(e) === 'transient') break;
+        const attempts = item.attempts + 1;
+        const delay = Math.min(BACKOFF_BASE_MS * 2 ** attempts, BACKOFF_MAX_MS);
+        const err = e as { message?: unknown };
+        const lastError = String(typeof err?.message === 'string' ? err.message : e).slice(0, 500);
         db.runSync(
-          'UPDATE sync_queue SET attempts = attempts + 1 WHERE id = ?',
-          [item.id]
+          'UPDATE sync_queue SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE id = ?',
+          [attempts, Date.now() + delay, lastError, item.id]
         );
       }
     }

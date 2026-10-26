@@ -154,7 +154,9 @@ export function initTables(database: SQLite.SQLiteDatabase): void {
       data_id TEXT NOT NULL,
       payload TEXT,
       created_at TEXT DEFAULT (datetime('now')),
-      attempts INTEGER DEFAULT 0
+      attempts INTEGER DEFAULT 0,
+      next_attempt_at INTEGER DEFAULT 0,
+      last_error TEXT
     );
 
     CREATE TABLE IF NOT EXISTS shop (
@@ -172,6 +174,8 @@ export function initTables(database: SQLite.SQLiteDatabase): void {
   `);
 
   // Additive migrations — safe to run on every open (ALTER TABLE fails silently if column exists)
+  try { database.runSync('ALTER TABLE sync_queue ADD COLUMN next_attempt_at INTEGER DEFAULT 0'); } catch (_) {}
+  try { database.runSync('ALTER TABLE sync_queue ADD COLUMN last_error TEXT'); } catch (_) {}
   try { database.runSync('ALTER TABLE shop ADD COLUMN is_active INTEGER DEFAULT 1'); } catch (_) {}
   try { database.runSync('ALTER TABLE shop ADD COLUMN allow_out_of_stock_billing INTEGER DEFAULT 0'); } catch (_) {}
   try { database.runSync('ALTER TABLE products ADD COLUMN track_stock INTEGER DEFAULT 1'); } catch (_) {}

@@ -19,7 +19,7 @@ import ScreenHeader from "../../components/common/ScreenHeader";
 import { getTodaySales, getLowStockProducts, getAllProducts, getRecentBills, getShop, updateShop, getSalesByRange, Bill, Product } from "../../db/db";
 import { toUtcDate } from "../../utils/dateUtils";
 import { useAlert } from "../../context/AlertContext";
-import { getPendingSyncCount, flushSyncQueue } from "../../db/syncQueue";
+import { getPendingSyncCount, flushSyncQueue, getStuckSyncCount, retryStuckSyncItems } from "../../db/syncQueue";
 import { getShopInfo, StoredShopInfo } from "../../utils/storage";
 
 import { haptics } from "../../utils/haptics";
@@ -36,6 +36,7 @@ export default function HomeScreen() {
     const [allowOutOfStock, setAllowOutOfStock] = useState(false);
     const [shopInfo, setShopInfoState] = useState<StoredShopInfo | null>(null);
     const [syncPendingCount, setSyncPendingCount] = useState(0);
+    const [stuckSyncCount, setStuckSyncCount] = useState(0);
     const [isSyncing, setIsSyncing] = useState(false);
 
     const getIsoDate = (d: Date) => d.toISOString().split("T")[0];
@@ -74,6 +75,7 @@ export default function HomeScreen() {
                 setHasAiConsent(shop?.aiConsent === true);
                 setShopInfoState(info);
                 setSyncPendingCount(getPendingSyncCount());
+                setStuckSyncCount(getStuckSyncCount());
             }
         };
         load();
@@ -90,6 +92,18 @@ export default function HomeScreen() {
         return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
     };
 
+    const handleRetryStuck = async () => {
+        setIsSyncing(true);
+        try {
+            retryStuckSyncItems();
+            await flushSyncQueue();
+        } finally {
+            setSyncPendingCount(getPendingSyncCount());
+            setStuckSyncCount(getStuckSyncCount());
+            setIsSyncing(false);
+        }
+    };
+
     const handleSyncNow = async () => {
         setIsSyncing(true);
         const beforeCount = getPendingSyncCount();
@@ -98,6 +112,7 @@ export default function HomeScreen() {
         } finally {
             const afterCount = getPendingSyncCount();
             setSyncPendingCount(afterCount);
+            setStuckSyncCount(getStuckSyncCount());
             setIsSyncing(false);
             const synced = beforeCount - afterCount;
             if (synced > 0 && afterCount === 0) {
@@ -243,6 +258,20 @@ export default function HomeScreen() {
                                 : syncPendingCount > 0
                                     ? `Sync Now (${syncPendingCount} pending)`
                                     : "Sync Now"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {Boolean(shopInfo?.aiConsent) && stuckSyncCount > 0 && (
+                    <TouchableOpacity
+                        style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+                        onPress={handleRetryStuck}
+                        disabled={isSyncing}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="alert-circle-outline" size={20} color="#B45309" />
+                        <Text style={styles.syncButtonText}>
+                            {`${stuckSyncCount} change${stuckSyncCount > 1 ? "s" : ""} could not sync — Retry`}
                         </Text>
                     </TouchableOpacity>
                 )}
